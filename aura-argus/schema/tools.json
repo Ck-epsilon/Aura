@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "aura-argus 0.1.0",
+  "tools": {
+    "openai": [
+      {
+        "type": "function",
+        "function": {
+          "name": "aura_search",
+          "description": "Retrieve citable passages from registered official sources for one technical or factual question. Prefer over a generic web search for API docs, pricing, config, lifecycle, and error-code questions. Returns evidence passages with source URLs; mode=none means the question is outside the registry.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "question": { "type": "string", "description": "Natural-language question." },
+              "maxSources": { "type": "integer", "minimum": 1, "maximum": 6, "default": 3 }
+            },
+            "required": ["question"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "aura_search_batch",
+          "description": "Run multiple independent questions in one call. Keeps per-question results, bounded concurrency, and a shared page cache; at most 20 questions.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "questions": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 20 },
+              "concurrency": { "type": "integer", "minimum": 1, "maximum": 8, "default": 3 }
+            },
+            "required": ["questions"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "aura_fetch",
+          "description": "Fetch one public HTTP(S) URL and return clean Markdown with title, length, and truncation flag. Private/loopback targets are blocked by default.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": { "type": "string", "description": "HTTP(S) URL." },
+              "maxChars": { "type": "integer", "minimum": 100, "maximum": 200000, "default": 20000 }
+            },
+            "required": ["url"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "aura_sources",
+          "description": "List registered entities and their official sources, so the caller knows whether search has authoritative coverage.",
+          "parameters": { "type": "object", "properties": {} }
+        }
+      }
+    ],
+    "anthropic": [
+      {
+        "name": "aura_search",
+        "description": "Retrieve citable passages from registered official sources for one technical or factual question. Prefer over a generic web search for API docs, pricing, config, lifecycle, and error-code questions. Returns evidence passages with source URLs; mode=none means the question is outside the registry.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "question": { "type": "string", "description": "Natural-language question." },
+            "maxSources": { "type": "integer", "minimum": 1, "maximum": 6, "default": 3 }
+          },
+          "required": ["question"]
+        }
+      },
+      {
+        "name": "aura_search_batch",
+        "description": "Run multiple independent questions in one call. Keeps per-question results, bounded concurrency, and a shared page cache; at most 20 questions.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "questions": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 20 },
+            "concurrency": { "type": "integer", "minimum": 1, "maximum": 8, "default": 3 }
+          },
+          "required": ["questions"]
+        }
+      },
+      {
+        "name": "aura_fetch",
+        "description": "Fetch one public HTTP(S) URL and return clean Markdown with title, length, and truncation flag. Private/loopback targets are blocked by default.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "url": { "type": "string", "description": "HTTP(S) URL." },
+            "maxChars": { "type": "integer", "minimum": 100, "maximum": 200000, "default": 20000 }
+          },
+          "required": ["url"]
+        }
+      },
+      {
+        "name": "aura_sources",
+        "description": "List registered entities and their official sources, so the caller knows whether search has authoritative coverage.",
+        "input_schema": { "type": "object", "properties": {} }
+      }
+    ]
+  },
+  "mapping": {
+    "cli": "aura-argus search \"<question>\" --json",
+    "mcp": "aura-argus mcp",
+    "http": "POST http://127.0.0.1:8787/search",
+    "library": "import { search } from 'aura-argus'"
+  }
+}
