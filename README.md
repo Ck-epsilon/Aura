@@ -92,13 +92,16 @@ Last verified: **2026-10-22**. Network-dependent checks are not part of CI. The 
 | AuraArgus `0.1.2` | `npm test` | 51 / 51 |
 | | `node eval/run.mjs` | 31 questions; 141 / 141 hard checks |
 | | `node eval/verify.mjs` | 34 / 34 registered sources reachable |
-| | Package install + MCP | 4 tools; `initialize` and `tools/list` verified |
+| | Public npm install (`npm i -g aura-argus@0.1.2`) | 4 tools; `initialize` and `tools/list` verified; CLI `version` and `search` verified |
 | AuraCardea `1.1.0` | `node tools/check-kinds.mjs` | 19 / 19 discovered kinds have a rule |
 | | `npm pack` | 7 files; 23.7 kB packed |
 | | Host import, client syntax, `npm install` | verified |
-| | DSH UI smoke | manual check required; no automated browser test is included |
+| | Public profile install (`dsh plugin ... aura-cardea@1.1.0`) | package resolves as `aura-cardea`; bundle metadata present |
+| | DSH UI after restart | pending manual restart of the running `dsh web` |
 
 Two AuraArgus soft checks are intentionally disabled because web fallback is opt-in; they are reported separately from the hard suite and are not counted as passes.
+
+The public packages were installed from the npm registry on 2026-10-22. The running `dsh web` process predates the configuration change; the public AuraCardea bundle and the public AuraArgus adapter take effect after a restart. No automated DSH UI test is included.
 
 Reproduction:
 

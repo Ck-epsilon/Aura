@@ -92,13 +92,16 @@ dsh plugin --profile web add aura-cardea
 | AuraArgus `0.1.2` | `npm test` | 51 / 51 |
 | | `node eval/run.mjs` | 31 题；141 / 141 项硬检查 |
 | | `node eval/verify.mjs` | 34 / 34 个注册源可达 |
-| | 包安装 + MCP | 4 个工具；`initialize` 与 `tools/list` 已验证 |
+| | 公开 npm 安装（`npm i -g aura-argus@0.1.2`） | 4 个工具；`initialize` 与 `tools/list` 已验证；CLI `version` 与 `search` 已验证 |
 | AuraCardea `1.1.0` | `node tools/check-kinds.mjs` | 19 / 19 个已发现的 kind 均有规则 |
 | | `npm pack` | 7 个文件；打包后 23.7 kB |
 | | host 导入、client 语法、`npm install` | 已验证 |
-| | DSH UI 冒烟 | 需手动检查；未包含自动化浏览器测试 |
+| | 公开 profile 安装（`dsh plugin ... aura-cardea@1.1.0`） | 包以 `aura-cardea` 解析；bundle 元数据存在 |
+| | 重启后的 DSH UI | 待运行中的 `dsh web` 手动重启后验证 |
 
 AuraArgus 的 2 项 soft 检查因网页回退为显式开启而默认停用；它们与硬检查分开报告，不计入通过数。
+
+公开包已于 2026-10-22 从 npm registry 安装。当前运行中的 `dsh web` 进程早于本次配置变更；公开 AuraCardea bundle 与公开 AuraArgus adapter 需重启后生效。未包含自动化 DSH UI 测试。
 
 复现命令：
 
