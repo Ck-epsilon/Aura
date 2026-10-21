@@ -81,6 +81,10 @@ dsh plugin --profile web add aura-cardea
 
 **适用范围。** AuraCardea 仅适用于 DSH。它不新增检索工具、不改变模型输出，也不提供可移植的聊天界面。它依赖 DSH 的聊天 DOM 契约，而该契约可能随 DSH 版本变化；包内提供 `tools/check-kinds.mjs` 用于检测新增的节点类型。
 
+![AuraCardea 在 DSH 中的界面：按类折叠后的工具调用](docs/assets/aura-cardea-ui.png)
+
+*AuraCardea 在 DSH 0.2.x 中运行（公开 npm 包）。一轮中的工具调用、思考、编辑与读取按类折叠；类别行显示计数、失败标记与耗时。*
+
 ---
 
 ## 自测结果
@@ -97,11 +101,12 @@ dsh plugin --profile web add aura-cardea
 | | `npm pack` | 7 个文件；打包后 23.7 kB |
 | | host 导入、client 语法、`npm install` | 已验证 |
 | | 公开 profile 安装（`dsh plugin ... aura-cardea@1.1.0`） | 包以 `aura-cardea` 解析；bundle 元数据存在 |
-| | 重启后的 DSH UI | 待运行中的 `dsh web` 手动重启后验证 |
+| | 重启后的 DSH UI | 公开 bundle 已加载；折叠视图已验证（见上方截图） |
+| | 重启后的 DSH MCP + web provider | MCP `search` 返回注册源证据；`web_search` 返回同一官方源 |
 
 AuraArgus 的 2 项 soft 检查因网页回退为显式开启而默认停用；它们与硬检查分开报告，不计入通过数。
 
-公开包已于 2026-10-22 从 npm registry 安装。当前运行中的 `dsh web` 进程早于本次配置变更；公开 AuraCardea bundle 与公开 AuraArgus adapter 需重启后生效。未包含自动化 DSH UI 测试。
+公开包已于 2026-10-22 从 npm registry 安装，并已重启 `dsh web`；上方截图来自该次运行。DSH MCP `search` 返回了注册源证据，DSH web provider 返回了同一官方源。AuraCardea 的界面仍为人工检查，未包含自动化浏览器测试。
 
 复现命令：
 

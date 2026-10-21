@@ -81,6 +81,10 @@ Restart `dsh web`. When the package is installed as a bundle through a configure
 
 **Scope.** AuraCardea is DSH-specific. It does not add retrieval tools, alter model output, or provide a portable chat UI. It depends on DSH's chat DOM contracts, which can change between DSH versions; `tools/check-kinds.mjs` is included to detect new node kinds.
 
+![AuraCardea in DSH: intermediate tool calls folded by kind](docs/assets/aura-cardea-ui.png)
+
+*AuraCardea running in DSH 0.2.x from the published npm package. One turn's tool calls, reasoning, edits, and reads are folded by kind; each category row carries counts, failure markers, and duration.*
+
 ---
 
 ## Verification
@@ -97,11 +101,12 @@ Last verified: **2026-10-22**. Network-dependent checks are not part of CI. The 
 | | `npm pack` | 7 files; 23.7 kB packed |
 | | Host import, client syntax, `npm install` | verified |
 | | Public profile install (`dsh plugin ... aura-cardea@1.1.0`) | package resolves as `aura-cardea`; bundle metadata present |
-| | DSH UI after restart | pending manual restart of the running `dsh web` |
+| | DSH UI after restart | public bundle loaded; folded view verified (screenshot above) |
+| | DSH MCP + web provider after restart | MCP `search` returned registry evidence; `web_search` returned the same official source |
 
 Two AuraArgus soft checks are intentionally disabled because web fallback is opt-in; they are reported separately from the hard suite and are not counted as passes.
 
-The public packages were installed from the npm registry on 2026-10-22. The running `dsh web` process predates the configuration change; the public AuraCardea bundle and the public AuraArgus adapter take effect after a restart. No automated DSH UI test is included.
+The public packages were installed from the npm registry on 2026-10-22 and `dsh web` was restarted. The screenshot above is from that run. The DSH MCP `search` call returned registry evidence, and the DSH web provider returned the same official source. AuraCardea's UI is still manually inspected; no automated browser test is included.
 
 Reproduction:
 
