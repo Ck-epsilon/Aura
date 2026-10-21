@@ -2,4 +2,5 @@ node_modules/
 .tmp/
 .polaris/
 *.tgz
+dist/
 .DS_Store
