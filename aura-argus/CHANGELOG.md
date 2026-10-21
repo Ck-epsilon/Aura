@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 — 2026-10-21
+
+### Changed
+
+- Repository metadata now points at the Aura monorepo (`Ck-epsilon/Aura`, directory `aura-argus`).
+- ZCode integration docs corrected: first-party MCP via `~/.zcode/cli/config.json` `mcp.servers`.
+- No runtime behavior changes.
+
 ## 0.1.0 — 2026-10-21
 
 Initial public beta.

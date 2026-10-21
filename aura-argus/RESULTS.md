@@ -90,8 +90,8 @@
 
 ## 发布（2026-10-21）
 
-- npm：`aura-argus@0.1.0` 已发布；registry `latest=0.1.0`，tarball `https://registry.npmjs.org/aura-argus/-/aura-argus-0.1.0.tgz`；安装后 `aura-argus version` = 0.1.0，MCP initialize/tools-list = 4 tools + instructions。
-- GitHub：`Ck-epsilon/Aura` 已创建（public，main，description "Aura source monorepo"）；AuraArgus 代码是否作为 `aura-argus/` 子目录推入待定。
+- npm：`aura-argus@0.1.0` 已发布；`0.1.1` 修复 repository 元数据并指向 Aura monorepo。registry `latest` 以 npm 为准；tarball `https://registry.npmjs.org/aura-argus/-/aura-argus-0.1.1.tgz`。安装后 `aura-argus version` / MCP initialize/tools-list 已验证。
+- GitHub：`Ck-epsilon/Aura` 已创建（public，main，"Aura source monorepo"）；源码在 `aura-argus/` 子目录（commit `aba2f5f` 起）。
 - 发布用 7 天 granular token（bypass 2FA）；发布后应吊销，后续改用 trusted publishing。
 
 ## 交付形态

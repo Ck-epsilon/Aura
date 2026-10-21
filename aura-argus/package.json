@@ -1,6 +1,6 @@
 {
   "name": "aura-argus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent-native retrieval layer: route questions to primary sources, return citable passages. No API key, no per-call billing.",
   "type": "module",
   "license": "MIT",
@@ -36,7 +36,14 @@
   "engines": {
     "node": ">=20"
   },
-  "keywords": ["search", "retrieval", "agent", "mcp", "keyless", "rag"],
+  "keywords": [
+    "search",
+    "retrieval",
+    "agent",
+    "mcp",
+    "keyless",
+    "rag"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/Ck-epsilon/Aura",
