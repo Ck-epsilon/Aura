@@ -1,0 +1,57 @@
+{
+  "name": "aura-cardea",
+  "version": "1.1.0",
+  "displayName": "AuraCardea",
+  "description": "AuraCardea — folds one Turn's intermediate chat rows (tool calls, reasoning, context injections, retries) into one line per kind, with live status, success/failure counts, per-kind duration and inline details.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "tools/check-kinds.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "author": "Ck-epsilon",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ck-epsilon/Aura",
+    "directory": "aura-cardea"
+  },
+  "homepage": "https://github.com/Ck-epsilon/Aura/tree/main/aura-cardea#readme",
+  "bugs": {
+    "url": "https://github.com/Ck-epsilon/Aura/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "dsh-bundle",
+    "chat-ui",
+    "tool-calls",
+    "fold"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

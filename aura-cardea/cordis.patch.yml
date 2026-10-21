@@ -1,0 +1,7 @@
+# AuraCardea bundle layer.
+#
+# The package itself is the host/client plugin; this patch only inserts the
+# row that lets the Loader discover the package's `dsh.client` bundle.
+- insert:
+    - id: client-aura-cardea
+      name: 'aura-cardea'
