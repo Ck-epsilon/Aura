@@ -1,30 +1,39 @@
 # Aura
 
-> 一组小而专的工具。每个工具独立安装，不要求一起使用。
+[![aura-argus on npm](https://img.shields.io/npm/v/aura-argus?label=aura-argus&color=2f81f7)](https://www.npmjs.com/package/aura-argus)
+[![aura-cardea on npm](https://img.shields.io/npm/v/aura-cardea?label=aura-cardea&color=2f81f7)](https://www.npmjs.com/package/aura-cardea)
+[![license: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
+[![node: >=20](https://img.shields.io/badge/node-%E2%89%A520-339933)](https://nodejs.org/)
 
-Aura 是一个 **monorepo**，不是一个大而全的平台。这里放的是若干个边界清晰、可以单独取用的小工具：它们共享同一套工程约定，但各自有独立的 `package.json`、README、版本和发布节奏。
+[中文](README.zh.md)
 
-共同点只有四条：
+Aura is a monorepo for independently installable tools. It is a distribution and maintenance boundary, not a shared runtime: each package has its own manifest, version, tests, and release cadence.
 
-- **本地优先**：默认不依赖云端账号，不把数据交给第三方
-- **无 key 起步**：能不用 API key 就不用
-- **可被 agent 调用**：CLI / HTTP / MCP / 库，按需提供
-- **MIT**：代码可读、可改、可自托管
+The shared constraints are deliberate:
+
+- **Local-first.** No mandatory cloud account; data stays on the machine unless a tool explicitly retrieves a source.
+- **Keyless where possible.** AuraArgus and AuraCardea require no API key.
+- **Agent-callable.** CLI, HTTP, MCP, and library surfaces are provided where they make sense.
+- **MIT.** The code is readable, modifiable, and self-hostable.
 
 ---
 
-## 工具
+## Projects
 
-### AuraArgus
+### AuraArgus — source-routed retrieval
 
-**给 agent 的检索层。** 把技术问题路由到注册的官方源，抓回页面，返回可引用的原文段落；也可以把任意 URL 转成干净的 Markdown。
+AuraArgus routes a technical question to a registered official source, retrieves the page, extracts relevant passages, and returns an evidence bundle with URLs and scores. It also converts a URL into clean Markdown.
 
-- 18 个实体 / 34 个官方源
-- 零 API key、零按次计费、零运行时依赖
-- Node.js ≥ 20
-- CLI、HTTP、MCP stdio、Node 库四种入口
-- npm：[`aura-argus`](https://www.npmjs.com/package/aura-argus)
-- 源码：[`aura-argus/`](aura-argus/README.md)
+- 18 entities / 34 official sources currently registered.
+- No API key, no per-call billing, zero runtime dependencies.
+- Node.js ≥ 20; Windows, macOS, and Linux.
+- CLI, HTTP, MCP stdio, and Node library surfaces.
+- npm: [`aura-argus`](https://www.npmjs.com/package/aura-argus)
+- Source: [`aura-argus/`](aura-argus/README.md)
+
+![Actual AuraArgus CLI output](docs/assets/aura-argus-output.svg)
+
+*Actual output from v0.1.2, trimmed for display. The command and the retrieved passage are unmodified.*
 
 ```bash
 npm i -g aura-argus
@@ -32,7 +41,7 @@ aura-argus search "SearXNG 对 429 的冷却时间是多少秒？" --json
 aura-argus fetch https://docs.searxng.org/dev/search_api.html --max-chars 4000
 ```
 
-给 MCP 客户端：
+MCP client configuration:
 
 ```json
 {
@@ -45,21 +54,22 @@ aura-argus fetch https://docs.searxng.org/dev/search_api.html --max-chars 4000
 }
 ```
 
-### AuraCardea
+**Scope.** AuraArgus is a registry-bound retrieval layer, not a general-purpose search engine. Unregistered entities return no evidence by default. Web fallback is opt-in and can be blocked by anti-bot pages. It does not log in, bypass CAPTCHAs, or generate an answer; the caller's model writes the answer from the returned passages.
 
-**DSH Web 的对话折叠插件。** 把一轮对话里与正文无关的中间态——工具调用、思考、上下文注入、重试——按类折成一行；需要时再展开看参数、输出、耗时和失败原因。
+### AuraCardea — DSH chat fold
 
-- 只接管 `conversation.chat.node` 的 `turn-process` 一个渲染位
-- 按类聚合、成功/失败计数、退出码、耗时、图片缩略图
-- DSH 0.2.x Web profile；Node.js ≥ 20
-- npm：[`aura-cardea`](https://www.npmjs.com/package/aura-cardea)
-- 源码：[`aura-cardea/`](aura-cardea/README.md)
+AuraCardea is a web client plugin for DeepSeek Harness. It replaces the `conversation.chat.node` `turn-process` renderer and folds the intermediate rows of a turn — tool calls, reasoning, context injections, retries — into one row per kind. Category rows show success/failure counts and total duration; expanding a category reveals individual calls, parameters, output, exit codes, and image thumbnails.
+
+- DSH 0.2.x web profile; Node.js ≥ 20.
+- npm: [`aura-cardea`](https://www.npmjs.com/package/aura-cardea)
+- Source: [`aura-cardea/`](aura-cardea/README.md)
+- Package shape: `dsh.bundle` with `cordis.patch.yml`, plus `dsh.client` for the browser half.
 
 ```bash
 dsh plugin --profile web add aura-cardea
 ```
 
-然后在 `~/.dsh/profiles/web/cordis.patch.yml` 末尾加：
+Then add the mount row to `~/.dsh/profiles/web/cordis.patch.yml`:
 
 ```yaml
 - insert:
@@ -67,17 +77,78 @@ dsh plugin --profile web add aura-cardea
       name: 'aura-cardea'
 ```
 
-重启 `dsh web`。如果通过插件市场的 Discover 安装 bundle，`cordis.patch.yml` 会自动挂载，不需要手改。
+Restart `dsh web`. When the package is installed as a bundle through a configured plugin market, the bundle patch performs the mount automatically.
 
-> 更多 Aura 工具在筹备中；这里只列已经可安装的。
+**Scope.** AuraCardea is DSH-specific. It does not add retrieval tools, alter model output, or provide a portable chat UI. It depends on DSH's chat DOM contracts, which can change between DSH versions; `tools/check-kinds.mjs` is included to detect new node kinds.
 
 ---
 
-## 只取一个工具
+## Verification
 
-不需要 clone 整个仓库：
+Last verified: **2026-10-22**. Network-dependent checks are not part of CI. The evaluation is a fixed internal regression set, not a public benchmark.
 
-### 稀疏检出（保留 git 历史）
+| Package | Check | Result |
+|---|---|---|
+| AuraArgus `0.1.2` | `npm test` | 51 / 51 |
+| | `node eval/run.mjs` | 31 questions; 141 / 141 hard checks |
+| | `node eval/verify.mjs` | 34 / 34 registered sources reachable |
+| | Package install + MCP | 4 tools; `initialize` and `tools/list` verified |
+| AuraCardea `1.1.0` | `node tools/check-kinds.mjs` | 19 / 19 discovered kinds have a rule |
+| | `npm pack` | 7 files; 23.7 kB packed |
+| | Host import, client syntax, `npm install` | verified |
+| | DSH UI smoke | manual check required; no automated browser test is included |
+
+Two AuraArgus soft checks are intentionally disabled because web fallback is opt-in; they are reported separately from the hard suite and are not counted as passes.
+
+Reproduction:
+
+```bash
+cd aura-argus
+npm test
+node eval/run.mjs
+node eval/verify.mjs
+
+cd ../aura-cardea
+npm pack
+node tools/check-kinds.mjs <dsh-node-modules>/@deepseek-ai
+```
+
+---
+
+## How it compares
+
+### AuraArgus: scope comparison, not a benchmark
+
+| Dimension | AuraArgus | General search API | Keyless SERP | Documentation chatbot |
+|---|---|---|---|---|
+| Coverage | Registered entities: 18 / 34 sources | Broad web | Broad web | A selected documentation corpus |
+| Credentials | None | API key | None | Usually an account or key |
+| Billing | None | Per request | None | Varies |
+| Output | Passages with URL and score | Snippets with URL | Links and snippets | Generated prose |
+| Strength | Traceable official-source evidence | Recall and freshness | No key | Fluent synthesis |
+| Main limitation | Not a general web index | Cost, key management | Stability and anti-bot blocking | Provenance is indirect |
+
+AuraArgus is not positioned as a replacement for general web search. It is appropriate when the question belongs to a registered entity and the caller needs citable passages from the official source. For open-web recall, a general search API remains the appropriate tool.
+
+### AuraCardea: presentation layer, not a chat platform
+
+| Dimension | AuraCardea | DSH default chat rendering |
+|---|---|---|
+| Scope | DSH 0.2.x web | DSH web |
+| Intermediate rows | Folded by kind with counts, timings, and inline details | Shown as individual rows |
+| Portability | DSH-only | DSH-only |
+| Model behavior | Unchanged | Unchanged |
+| Telemetry | None added | Not applicable |
+
+AuraCardea does not claim to improve model quality. It changes the density and scanability of an existing turn, at the cost of coupling to DSH's chat DOM.
+
+---
+
+## Repository access
+
+Installing a package does not require cloning this repository. For source inspection:
+
+### Sparse checkout
 
 ```bash
 git clone --filter=blob:none --sparse https://github.com/Ck-epsilon/Aura.git
@@ -85,17 +156,15 @@ cd Aura
 git sparse-checkout set aura-cardea
 ```
 
-把 `aura-cardea` 换成 `aura-argus` 即可取另一个。
+Replace `aura-cardea` with `aura-argus` for the other package.
 
-### degit（不要历史）
+### degit
 
 ```bash
 npx degit Ck-epsilon/Aura/aura-cardea aura-cardea
 ```
 
-### 直接安装
-
-大多数时候用户根本不需要源码：
+### Package managers
 
 ```bash
 npm i -g aura-argus
@@ -104,17 +173,19 @@ npm i aura-cardea
 
 ---
 
-## 仓库结构
+## Repository layout
 
 ```text
 Aura/
   README.md
+  README.zh.md
   LICENSE
-  aura-argus/          # 检索层：CLI / HTTP / MCP / Node 库
-  aura-cardea/         # DSH Web 对话折叠插件
+  docs/assets/
+  aura-argus/          # retrieval: CLI / HTTP / MCP / Node library
+  aura-cardea/         # DSH web client plugin
 ```
 
-每个子目录都是一个独立包，`package.json` 里用 `repository.directory` 指回本仓库：
+Each package is independently publishable. Its manifest points back to this repository:
 
 ```json
 "repository": {
@@ -126,43 +197,30 @@ Aura/
 
 ---
 
-## 约定
+## Conventions
 
-- **npm 名**：`aura-<product>`，例如 `aura-argus`、`aura-cardea`
-- **产品名**：`AuraXxx`，例如 AuraArgus、AuraCardea
-- **版本**：每个包独立 semver；推荐 tag 形如 `aura-cardea-v1.1.0`
-- **DSH 插件**：同时声明 `dsh.bundle` 与 `dsh.client`；用 `engines.dsh` 标兼容范围
-- **不共享运行时**：不为了“统一”强行抽公共包；重复三行比过早抽象好
-- **仓库不强制 workspace**：每个工具可以单独 `npm test`、单独发布
+- **npm name:** `aura-<product>` (`aura-argus`, `aura-cardea`).
+- **Product name:** `AuraXxx` in prose and UI.
+- **Versioning:** independent semver per package; recommended tags are `aura-cardea-v1.1.0`.
+- **DSH packages:** declare both `dsh.bundle` and `dsh.client`; use `engines.dsh` for the supported DSH range.
+- **No shared runtime:** packages do not depend on each other. A small amount of duplication is preferred to a premature shared abstraction.
+- **No mandatory root workspace:** each package can be tested and released on its own.
 
 ---
 
-## 状态
+## Status
 
-| 工具 | npm | 环境 | 说明 |
+| Package | Version | Runtime | Notes |
 |---|---|---|---|
-| AuraArgus | `0.1.2` | Node ≥ 20 | 默认 registry-only；`--fallback` 才开网页兜底 |
-| AuraCardea | `1.1.0` | DSH 0.2.x Web | bundle + client；手动或 Discover 安装 |
+| AuraArgus | `0.1.2` | Node.js ≥ 20 | Registry-only by default; web fallback is opt-in |
+| AuraCardea | `1.1.0` | DSH 0.2.x web | Bundle + client; manual or market installation |
+
+No additional packages are published from this repository at this time.
 
 ---
 
-## 开发
+## License and third-party notices
 
-```bash
-cd aura-argus
-npm test
+Original code in this repository is released under the MIT License; see [`LICENSE`](LICENSE) and each package's `LICENSE` file.
 
-cd ../aura-cardea
-npm pack
-node tools/check-kinds.mjs <dsh-node_modules>/@deepseek-ai
-```
-
-两个包都是零依赖或仅依赖宿主运行时；改动后优先跑各自的离线测试，再跑联网评测（AuraArgus）或 DSH 冒烟（AuraCardea）。
-
----
-
-## License
-
-代码使用 MIT，见根目录 [`LICENSE`](LICENSE) 与各子包的 `LICENSE`。
-
-各子包内涉及的第三方名称、商标与作品，归各自权利人所有；MIT 只覆盖本仓库原创代码，不授予任何第三方 IP 许可。
+Third-party names, trademarks, and works referenced by a package remain the property of their respective owners. The MIT license covers original code only and does not grant any license to third-party intellectual property.
