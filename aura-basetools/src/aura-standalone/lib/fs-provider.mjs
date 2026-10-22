@@ -62,7 +62,9 @@ export function fingerprintOf(buffer, stat) {
   const tail = buffer.length > SAMPLE ? buffer.subarray(buffer.length - SAMPLE) : Buffer.alloc(0)
   const hash = crypto.createHash('sha256').update(head).update(tail).update(String(buffer.length)).digest('hex').slice(0, 16)
   // ctime 不能由普通写者回拨；把它纳入版本，能抓住“改中间 + 恢复 mtime”的改写。
-  return `${buffer.length}:${Math.trunc(stat.mtimeMs)}:${Math.trunc(stat.ctimeMs ?? 0)}:${hash}`
+  // 优先用 ctimeNs：Linux 上写入与 utimes 可能落在同一毫秒，ctimeMs 截断后看起来没变。
+  const ctime = stat.ctimeNs !== undefined ? stat.ctimeNs.toString() : String(Math.trunc(stat.ctimeMs ?? 0))
+  return `${buffer.length}:${Math.trunc(stat.mtimeMs)}:${ctime}:${hash}`
 }
 
 /** 只读一段；短读时返回实际读到的字节，不补零。 */
@@ -87,7 +89,8 @@ function fingerprintFile(file, stat) {
     const tailLength = stat.size > SAMPLE ? Math.min(SAMPLE, stat.size - SAMPLE) : 0
     const tail = tailLength > 0 ? readExact(fd, tailLength, stat.size - tailLength) : Buffer.alloc(0)
     const hash = crypto.createHash('sha256').update(head).update(tail).update(String(stat.size)).digest('hex').slice(0, 16)
-    return `${stat.size}:${Math.trunc(stat.mtimeMs)}:${Math.trunc(stat.ctimeMs ?? 0)}:${hash}`
+    const ctime = stat.ctimeNs !== undefined ? stat.ctimeNs.toString() : String(Math.trunc(stat.ctimeMs ?? 0))
+    return `${stat.size}:${Math.trunc(stat.mtimeMs)}:${ctime}:${hash}`
   } finally {
     if (fd !== undefined) {
       try { fs.closeSync(fd) } catch { /* 不覆盖原始错误 */ }
