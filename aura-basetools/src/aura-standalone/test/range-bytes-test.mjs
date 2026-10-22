@@ -441,7 +441,10 @@ say('F 极端尺寸：0 字节 / 单行 100 KB / 3000 行 / 256 KiB 阈值两侧
     const before = call(['read', '--file', f.path, '--mode', 'lines', '--lines', '1,1'])
     check(before.ok === true && typeof before.version === 'string', `阈值 ${n} 字节：read 给令牌`)
     const res = editLine(f.path, 1, 'EDITED')
-    check(res.ok === true && res.__exit === 0, `阈值 ${n} 字节：改第 1 行成功（exit=${res.__exit}）`)
+    check(
+      res.ok === true && res.__exit === 0,
+      `阈值 ${n} 字节：改第 1 行成功（exit=${res.__exit}；${JSON.stringify({ ok: res.ok, code: res.code, error: res.error, transaction: res.transaction, rollback: res.rollback, stderr: String(res.__stderr ?? '').slice(0, 160) })}）`,
+    )
     check((res.result?.unverified_region === true) === expectUnverified,
       `阈值 ${n} 字节：unverified_region ${expectUnverified ? '出现' : '不出现'}（实测 ${res.result?.unverified_region}）`)
     check(fs.readFileSync(f.path).equals(utf8('EDITED')), `阈值 ${n} 字节：写回逐字节 == EDITED（6 字节）`)
