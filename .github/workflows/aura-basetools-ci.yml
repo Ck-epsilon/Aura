@@ -38,7 +38,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Core file-tool suites
         run: |
-          node src/locator-lab/write-verify-test.mjs
+          # write-verify 依赖 DSH 壳的 peer；CI 只跑不依赖宿主的引擎/独立面。
           node src/locator-lab/byte-fidelity-test.mjs
           node src/locator-lab/stale-gate-test.mjs
           node src/aura-standalone/test/standalone-test.mjs
