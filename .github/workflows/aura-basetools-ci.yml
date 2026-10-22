@@ -38,11 +38,8 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Core file-tool suites
-        run: |
-          # write-verify 依赖 DSH 壳的 peer；CI 只跑不依赖宿主的引擎/独立面。
-          node src/locator-lab/byte-fidelity-test.mjs
-          node src/locator-lab/stale-gate-test.mjs
-          node src/aura-standalone/test/standalone-test.mjs
+        # 独立面测试不依赖 DSH peer；引擎壳套件（byte/stale/write-verify）需要宿主，留在本地/DSH 环境跑。
+        run: node src/aura-standalone/test/standalone-test.mjs
       - name: Build bundle
         run: node build/make-bundle.mjs --pack
       - name: Packaged / byte-boundary suites
