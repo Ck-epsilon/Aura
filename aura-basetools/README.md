@@ -2,7 +2,12 @@
 
 给 AI coding agent 用的文件读写工具：`aura_read`（按意图取景：符号目录 / 接口 / 窗口 / 搜索 / 差异）与
 `aura_edit`（按意图寻址：符号名 / 行号 / 唯一词 / 记忆原文；逐字节保真、陈旧区域闸门、落盘后回读校验）。
-**一个包，四条路进**：DSH 插件 · MCP 服务（Codex / Claude Code / Cursor）· CLI · 一键安装器。
+**0.7.0 起拆成两个 npm 包**：
+
+- `aura-basetools`：引擎 + CLI + MCP，**不依赖 DSH**；
+- `aura-basetools-dsh`：DSH 的 `aura_read` / `aura_edit` 适配器，依赖 core。
+
+DSH 插件 · MCP 服务（Codex / Claude Code / Cursor）· CLI 三条入口共用同一份引擎。
 
 ## 目录
 
