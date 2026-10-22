@@ -24,6 +24,7 @@ jobs:
         os:
           - windows-latest
           - ubuntu-latest
+          - macos-latest
         node:
           - 20
           - 22
