@@ -527,13 +527,17 @@ const byteDiff = (got, want) => {
  *     后 8 位（内容 + 区间）照旧参与比对。
  */
 const normalizeGolden = (text, dir) => {
-  const escaped = JSON.stringify(dir).slice(1, -1)
-  const posix = dir.split(path.sep).join('/')
-  return String(text)
-    .split(escaped)
-    .join('<DIR>')
-    .split(posix)
-    .join('<DIR>')
+  // macOS 的 /var/... 常是 /private/var/... 的符号链接；CLI 写出的是 realpath，
+  // 场景目录却是 mkdtemp 的原始写法——两种都必须收敛成 <DIR>。
+  const variants = new Set([dir])
+  try { variants.add(fs.realpathSync(dir)) } catch { /* 目录已消失时只保留原写法 */ }
+  let out = String(text)
+  for (const variant of variants) {
+    const escaped = JSON.stringify(variant).slice(1, -1)
+    const posix = variant.split(path.sep).join('/')
+    out = out.split(escaped).join('<DIR>').split(posix).join('<DIR>')
+  }
+  return out
     .replace(/(<DIR>)[\\/]+/g, '$1/')
     .replace(/h[0-9a-f]{4}(?=[0-9a-f]{8}:)/g, 'h<ID>')
 }
@@ -1209,9 +1213,15 @@ say('MT-L 句柄寻址：同一份柄、同一次改动 —— 三面同 tier �
   const triEng = await ops.applyEditToProvider(triProvider, { displayPath: triFile, hunks: [{ handle: triEngRead.handle, line: 2, replace: LINE2 }] })
   const triEngDisk = bytesOf(triFile)
 
+  /**
+   * 柄 = h + 4 位身份标签（账本键） + 8 位内容摘要 + 行区间。
+   * 三个面各自一份账本，身份标签**本来就该不同**（M④ 已钉住）；这里比的是内容段。
+   * 旧断言拿整串比，在 macOS 的 /var → /private/var 真身上才暴露：它要求三个账本合成一份。
+   */
+  const handleBody = (handle) => String(handle).slice(5)
   check(
-    triCliHandle === triMcpRead.handle && triMcpRead.handle === triEngRead.handle,
-    `L⑤ 三面拿到的是同一个柄（CLI=${triCliHandle}／MCP=${triMcpRead.handle}／引擎=${triEngRead.handle}）`,
+    handleBody(triCliHandle) === handleBody(triMcpRead.handle) && handleBody(triMcpRead.handle) === handleBody(triEngRead.handle),
+    `L⑤ 三面柄的内容段相同（CLI=${triCliHandle}／MCP=${triMcpRead.handle}／引擎=${triEngRead.handle}）`,
   )
   check(
     tierOf(triCli) === 'handle line 2' && tierOf(triMcp) === tierOf(triCli) && tierOf(triEng) === tierOf(triCli),
