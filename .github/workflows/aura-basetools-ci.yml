@@ -21,11 +21,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - windows-latest
-          - macos-latest
-        node:
-          - 22
+        include:
+          - os: windows-latest
+            node: 22
+          - os: macos-26
+            node: 22
+          - os: macos-15
+            node: 22
     defaults:
       run:
         working-directory: aura-basetools
