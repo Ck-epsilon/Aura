@@ -529,10 +529,13 @@ const byteDiff = (got, want) => {
 const normalizeGolden = (text, dir) => {
   // macOS 的 /var/... 常是 /private/var/... 的符号链接；CLI 写出的是 realpath，
   // 场景目录却是 mkdtemp 的原始写法——两种都必须收敛成 <DIR>。
-  const variants = new Set([dir])
-  try { variants.add(fs.realpathSync(dir)) } catch { /* 目录已消失时只保留原写法 */ }
+  const variants = [dir]
+  try { variants.push(fs.realpathSync(dir)) } catch { /* 目录已消失时只保留原写法 */ }
+  // 长路径先替换：macOS 的 /var/... 是 /private/var/... 的别名；
+  // 先换短路径会把 /private 留下来（实测得到 "/private<DIR>"）。
+  const unique = [...new Set(variants)].sort((a, b) => b.length - a.length)
   let out = String(text)
-  for (const variant of variants) {
+  for (const variant of unique) {
     const escaped = JSON.stringify(variant).slice(1, -1)
     const posix = variant.split(path.sep).join('/')
     out = out.split(escaped).join('<DIR>').split(posix).join('<DIR>')
