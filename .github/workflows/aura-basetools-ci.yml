@@ -41,6 +41,11 @@ jobs:
         run: node src/aura-standalone/test/standalone-test.mjs
       - name: Build bundle
         run: node build/make-bundle.mjs --pack
+      - name: Build split npm packages
+        run: node build/make-split-packages.mjs --pack
+      - name: Verify core package is DSH-free
+        run: |
+          node -e "const p=require('./dist/npm/aura-basetools/package.json'); if(p.peerDependencies||p.dsh) throw new Error('core package still depends on DSH'); if(!p.exports['./locator-lab/*']) throw new Error('missing locator-lab export')"
       - name: Packaged / byte-boundary suites
         run: |
           node dist/aura-basetools/test/standalone-test.mjs
