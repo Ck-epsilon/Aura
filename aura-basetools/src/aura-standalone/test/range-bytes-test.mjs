@@ -40,11 +40,15 @@ const cache = path.join(tmp, 'cache') // 观测缓存也放测试目录，绝不
 const env = { ...process.env, AURA_CACHE_DIR: cache }
 const run = (args) => spawnSync(process.execPath, [bin, ...args], { cwd: tmp, encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 })
 const json = (res) => {
+  const text = String(res.stdout ?? '')
   try {
-    return JSON.parse(res.stdout.trim().split('\n').pop())
-  } catch {
-    // 把 stderr 一起带出来：否则失败只剩一句"不是 JSON"，诊断不了
-    return { ok: false, error: `stdout 不是 JSON：${JSON.stringify(res.stdout)} ${String(res.stderr ?? '').trim().split('\n').slice(0, 3).join(' / ')}` }
+    return JSON.parse(text.trim().split('\n').pop())
+  } catch (error) {
+    // 把 stderr / 长度 / 结尾一起带出来：否则失败只剩一句“不是 JSON”，诊断不了
+    return {
+      ok: false,
+      error: `stdout 不是 JSON（${error?.message}；len=${text.length}；tail=${JSON.stringify(text.slice(-120))}）：${JSON.stringify(text)} ${String(res.stderr ?? '').trim().split('\n').slice(0, 3).join(' / ')}`,
+    }
   }
 }
 /** 一次调用：回执 + 退出码 + stderr（退出码是判据的一半，不能丢）。 */
@@ -436,18 +440,22 @@ say('F 极端尺寸：0 字节 / 单行 100 KB / 3000 行 / 256 KiB 阈值两侧
 
   // 阈值精确到字节：262144（= 256 KiB）入缓存、262145 不入 ⇒ 回执的降级标注正好在这一字节上翻转
   for (const [n, expectUnverified] of [[262144, false], [262145, true]]) {
-    const src = utf8('a'.repeat(n))
+    // 第一行保持小，总字节数精确落在阈值上；否则 edit 回执会把 262 KB 的
+    // actual 原样带出来——在 macOS 的 spawnSync 上会撑成无法解析的超长行。
+    const src = utf8(`a\n${'b'.repeat(n - 3)}\n`)
+    const expected = utf8(`EDITED\n${'b'.repeat(n - 3)}\n`)
     const f = write(`threshold_${n}.md`, src)
     const before = call(['read', '--file', f.path, '--mode', 'lines', '--lines', '1,1'])
     check(before.ok === true && typeof before.version === 'string', `阈值 ${n} 字节：read 给令牌`)
     const res = editLine(f.path, 1, 'EDITED')
     check(
       res.ok === true && res.__exit === 0,
-      `阈值 ${n} 字节：改第 1 行成功（exit=${res.__exit}；${JSON.stringify({ ok: res.ok, code: res.code, error: res.error, transaction: res.transaction, rollback: res.rollback, stderr: String(res.__stderr ?? '').slice(0, 160) })}）`,
+      `阈值 ${n} 字节：改第 1 行成功（exit=${res.__exit}）`,
+      JSON.stringify({ ok: res.ok, code: res.code, error: res.error, transaction: res.transaction, rollback: res.rollback, stderr: String(res.__stderr ?? '').slice(0, 160) }),
     )
     check((res.result?.unverified_region === true) === expectUnverified,
       `阈值 ${n} 字节：unverified_region ${expectUnverified ? '出现' : '不出现'}（实测 ${res.result?.unverified_region}）`)
-    check(fs.readFileSync(f.path).equals(utf8('EDITED')), `阈值 ${n} 字节：写回逐字节 == EDITED（6 字节）`)
+    check(fs.readFileSync(f.path).equals(expected), `阈值 ${n} 字节：写回逐字节 == 预期（${expected.length} 字节）`)
   }
 }
 
