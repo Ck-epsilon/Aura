@@ -534,6 +534,7 @@ const normalizeGolden = (text, dir) => {
     .join('<DIR>')
     .split(posix)
     .join('<DIR>')
+    .replace(/(<DIR>)[\\/]+/g, '$1/')
     .replace(/h[0-9a-f]{4}(?=[0-9a-f]{8}:)/g, 'h<ID>')
 }
 
@@ -682,7 +683,10 @@ say('MT-J 单目标零回归：12 个 CLI 调用的 stdout 与黄金集逐字节
       check(false, `MT-J ${call.name}：黄金集里没有这一条`)
       continue
     }
-    const diff = byteDiff(got.stdout, golden.stdout)
+    // 黄金集里 <DIR> 后的分隔符可能是采集平台的写法；CLI 的 path 在两平台不同，
+    // 只归一这个位置，不碰正文里的转义。
+    const goldenStdout = golden.stdout.replace(/(<DIR>)[\\/]+/g, '$1/')
+    const diff = byteDiff(got.stdout, goldenStdout)
     check(got.exit === golden.exit && diff === null, `MT-J ${call.name}：stdout 逐字节相同（exit=${golden.exit}）`, diff ?? `exit ${got.exit} ≠ ${golden.exit}`)
   }
 }
