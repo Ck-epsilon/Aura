@@ -29,6 +29,8 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 
 const SAMPLE = 4096
+/** 小文件走全文哈希；大文件才退回头尾采样。 */
+const FULL_HASH_LIMIT = 16 * 1024 * 1024
 export const DEFAULT_MAX_TEXT_BYTES = 512 * 1024 * 1024
 
 /** 读文件（返回 Buffer）；文件不存在 / 不是普通文件 / 超限抛带 code 的错误。 */
@@ -58,13 +60,20 @@ function readOrThrow(target, maxBytes) {
 
 /** 版本指纹：size + mtimeMs + 头尾采样哈希。 */
 export function fingerprintOf(buffer, stat) {
-  const head = buffer.subarray(0, SAMPLE)
-  const tail = buffer.length > SAMPLE ? buffer.subarray(buffer.length - SAMPLE) : Buffer.alloc(0)
-  const hash = crypto.createHash('sha256').update(head).update(tail).update(String(buffer.length)).digest('hex').slice(0, 16)
+  const hash = crypto.createHash('sha256')
+  if (buffer.length <= FULL_HASH_LIMIT) {
+    // 小文件全文哈希：中间改写即使 mtime/ctime 都没变也能被发现。
+    hash.update(buffer)
+  } else {
+    const head = buffer.subarray(0, SAMPLE)
+    const tail = buffer.length > SAMPLE ? buffer.subarray(buffer.length - SAMPLE) : Buffer.alloc(0)
+    hash.update(head).update(tail).update(String(buffer.length))
+  }
+  const digest = hash.digest('hex').slice(0, 16)
   // ctime 不能由普通写者回拨；把它纳入版本，能抓住“改中间 + 恢复 mtime”的改写。
   // 优先用 ctimeNs：Linux 上写入与 utimes 可能落在同一毫秒，ctimeMs 截断后看起来没变。
   const ctime = stat.ctimeNs !== undefined ? stat.ctimeNs.toString() : String(Math.trunc(stat.ctimeMs ?? 0))
-  return `${buffer.length}:${Math.trunc(stat.mtimeMs)}:${ctime}:${hash}`
+  return `${buffer.length}:${Math.trunc(stat.mtimeMs)}:${ctime}:${digest}`
 }
 
 /** 只读一段；短读时返回实际读到的字节，不补零。 */
@@ -85,6 +94,9 @@ function fingerprintFile(file, stat) {
   let fd
   try {
     fd = fs.openSync(file, 'r')
+    if (stat.size <= FULL_HASH_LIMIT) {
+      return fingerprintOf(fs.readFileSync(file), stat)
+    }
     const head = readExact(fd, Math.min(SAMPLE, stat.size), 0)
     const tailLength = stat.size > SAMPLE ? Math.min(SAMPLE, stat.size - SAMPLE) : 0
     const tail = tailLength > 0 ? readExact(fd, tailLength, stat.size - tailLength) : Buffer.alloc(0)
