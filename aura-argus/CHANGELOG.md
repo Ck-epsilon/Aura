@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-10-23
+
+### Added
+
+- Registry expanded to **49 entities / 95 official sources**, including TypeScript, Next.js, Vite, Deno, Bun, Tailwind CSS, Prisma, Supabase, Cloudflare, Stripe, OpenAI, Anthropic, npm, pnpm, ESLint, Vitest, Playwright, Terraform, AWS, Java, .NET, PHP, Laravel, Django, FastAPI, Rails, Git, Bash, PowerShell, C++/cppreference and CMake.
+- `--site <domain>` / MCP `site` / HTTP `site`: restrict retrieval to one domain, discover its sitemap or home links, and fetch page bodies as evidence instead of only search snippets.
+- Deeper Markdown extraction: code fences keep indentation; table cells keep `|` boundaries; registry search uses Markdown instead of flattened line text.
+- Tests for site normalization, code/table preservation, and expanded routing.
+
 ## 0.1.2 — 2026-10-21
 
 ### Changed

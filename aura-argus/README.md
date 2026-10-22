@@ -19,10 +19,10 @@ AuraArgus 是一个本地运行的检索工具，给 agent、脚本或你自己�
 ## 它不是什么
 
 - 不是通用搜索引擎，也不是问答机器人；它返回**证据**，答案由调用方的模型写
-- 不追求“全网覆盖”：覆盖率 = 注册表（目前 18 个实体 / 34 个官方源）
+- 不追求“全网覆盖”：默认覆盖率 = 注册表（目前 **49 个实体 / 95 个官方源**）；需要站内检索时可用 `--site <domain>` 把边界限定到指定站点
 - 不做 JS 渲染、不登登录墙、不绕验证码、不做代理池
 - 默认 **registry-only**：未注册的实体返回 `mode: "none"`，不会硬编一个答案
-- 360/搜狗兜底是 opt-in（`--fallback`），可能被反爬，默认关闭
+- `--fallback` / `--site` 是显式 opt-in；360/搜狗可能被反爬，站内 `--site` 还会尝试官方 sitemap 发现并抓正文
 
 ---
 
@@ -89,7 +89,7 @@ aura-argus search "Tavily 一个 credit 多少钱？" --json
 | mode | 含义 |
 |---|---|
 | `registry` | 命中注册表，抓的是官方源 |
-| `web-fallback` | 只有显式 `--fallback` 才出现；360/搜狗兜底，较弱 |
+| `web-fallback` | 显式 `--fallback` 或 `--site` 才出现；`--site` 会优先抓该域 sitemap/正文，比纯摘要强 |
 | `none` | 注册表没有覆盖，或所有源都失败 |
 
 失败时还会带 `error`：
@@ -110,6 +110,7 @@ CLI 退出码：`0` 有证据、`2` 无证据、`3` 参数/URL 错误、`4` 抓�
 aura-argus search "问题" --json          # 证据包（机器读）
 aura-argus search "问题" --text          # 人眼可读
 aura-argus search "问题" --max-sources 3
+aura-argus search "问题" --site docs.example.com  # 站内检索：只信这个域，抓正文作证据
 aura-argus fetch <url> --max-chars 4000  # 干净 Markdown
 aura-argus sources                       # 注册表
 aura-argus doctor                        # 源健康检查
@@ -121,7 +122,9 @@ aura-argus doctor                        # 源健康检查
 echo '["q1","q2","q3"]' | aura-argus search --batch --concurrency 3 --json
 ```
 
-默认 registry-only；要开网页兜底加 `--fallback`。默认拒绝本机/私网地址；确实要抓本地页面时加 `--allow-private`。
+默认 registry-only；要开网页兜底加 `--fallback`，要把范围钉到一个域用 `--site`。默认拒绝本机/私网地址；确实要抓本地页面时加 `--allow-private`。
+
+深度文档：`fetch` 和站内检索会保留标题、代码围栏（含缩进）与表格单元格边界，而不是把整页压成一行。
 
 ### 2. MCP（给 Claude Desktop / Cursor / Cline / Codex / Hermes / ZCode 等）
 
@@ -206,15 +209,16 @@ const page = await fetchDocument('https://docs.searxng.org/dev/search_api.html',
 
 ## 覆盖范围
 
-目前注册表：**18 个实体 / 34 个官方源**。
+目前注册表：**49 个实体 / 95 个官方源**。
 
 | 类别 | 实体 |
 |---|---|
 | LLM / 搜索 API | DeepSeek、Tavily、SearXNG、Google CSE、Bing |
-| 语言与运行时 | Python、Node.js、Go、Rust、MDN（JavaScript） |
-| 框架 | React、Vue |
-| 基础设施 / 数据 | Docker、Kubernetes、nginx、PostgreSQL、Redis |
-| 代码托管 | GitHub（REST / Actions） |
+| 语言与运行时 | Python、Node.js、Go、Rust、MDN、TypeScript、Deno、Bun、Java、.NET、PHP、Bash、PowerShell、C++（cppreference） |
+| 框架 / 工具 | React、Vue、Next.js、Vite、Tailwind CSS、Django、FastAPI、Laravel、Rails、ESLint、Vitest、Playwright、CMake |
+| 数据 / 基础设施 | Docker、Kubernetes、nginx、PostgreSQL、Redis、Prisma、Supabase、Cloudflare、Terraform、AWS |
+| API / 商业服务 | GitHub、npm、pnpm、Stripe、OpenAI、Anthropic |
+| 其他 | Git |
 
 加一个源（`src/registry.json`）：
 
@@ -237,7 +241,8 @@ node eval/verify-registry.mjs   # 联网检查源是否可达
 
 ## 边界与安全
 
-- **覆盖率 = 注册表**。没收录的实体默认没有证据；不要把它当通用搜索。
+- **默认覆盖率 = 注册表**。没收录的实体默认没有证据；不要把它当通用搜索。
+- **站内边界**：`--site <domain>` 只查该域，并优先用官方 sitemap/正文；不是任意全网搜索。
 - **单实体路由**。一个问题命中一个实体；跨实体问题拆成多问。
 - **不绕访问控制**：不登录、不绕付费墙、不破验证码、不做代理池。
 - **默认拒绝私网**：loopback、RFC1918、link-local、metadata 地址、`::1`、`fc00::/7`、`fe80::/10` 等都会被拦；DNS 解析后复查，重定向逐跳复检。
@@ -264,8 +269,8 @@ node eval/verify-registry.mjs   # 联网检查源是否可达
 **公司网络/代理下抓不到？**  
 Node 内置 fetch 默认不读 `HTTP_PROXY` / `HTTPS_PROXY`。需要的话设置 `NODE_EXTRA_CA_CERTS`，或让网络层走系统代理；这不是 AuraArgus 自己的代理池。
 
-**`--fallback` 为什么经常没结果？**  
-360/搜狗对自动请求会跳验证码/返回 403，兜底本来就不稳定，且默认关闭。优先用注册表；未覆盖的实体建议直接加源。
+**`--fallback` 为什么经常没结果？**
+360/搜狗对自动请求会跳验证码/返回 403，兜底本来就不稳定，且默认关闭。优先用注册表；未覆盖的实体建议直接加源，或使用 `--site <domain>` 让工具从该站 sitemap/正文找证据。
 
 ---
 

@@ -69,8 +69,8 @@ export function createRequestHandler({ token = null, allowPrivate = false } = {}
             'GET /health': 'health + version',
             'GET /sources': 'registered entities',
             'GET /search?q=&maxSources=': 'evidence bundle',
-            'POST /search': '{ "question": "...", "maxSources": 3 }',
-            'POST /search/batch': '{ "questions": ["..."], "concurrency": 3 }',
+          'POST /search': '{ "question": "...", "maxSources": 3, "site": "docs.example.com" }',
+            'POST /search/batch': '{ "questions": ["..."], "concurrency": 3, "site": "docs.example.com" }',
             'GET /fetch?url=&maxChars=': 'clean page text',
             'POST /fetch': '{ "url": "...", "maxChars": 20000 }',
           },
@@ -93,6 +93,7 @@ export function createRequestHandler({ token = null, allowPrivate = false } = {}
           maxSources: Number(body.maxSources ?? 3),
           cache: body.cache !== false,
           fallback: body.fallback === true,
+          site: typeof body.site === 'string' ? body.site : undefined,
           budgetMs: Number(body.budgetMs ?? 45_000),
         });
         send(res, 200, { ok: true, results });
@@ -106,7 +107,8 @@ export function createRequestHandler({ token = null, allowPrivate = false } = {}
         const maxSources = Number(body.maxSources ?? url.searchParams.get('maxSources') ?? 3);
         const fallbackParam = url.searchParams.get('fallback');
         const fallback = body.fallback === true || fallbackParam === '1' || fallbackParam === 'true';
-        const result = await search(question, { maxSources, cache: body.cache !== false, fallback });
+        const site = typeof body.site === 'string' ? body.site : (url.searchParams.get('site') ?? undefined);
+        const result = await search(question, { maxSources, cache: body.cache !== false, fallback, site });
         send(res, result.error ? 502 : 200, { ok: !result.error, ...result });
         return;
       }

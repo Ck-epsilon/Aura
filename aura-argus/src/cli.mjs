@@ -8,7 +8,7 @@ import { runMcp } from './lib/mcp.mjs';
 const USAGE = `aura-argus ${version}
 
 Usage:
-  aura-argus search <question...> [--max-sources 3] [--json|--text] [--no-cache] [--fallback] [--timeout ms]
+  aura-argus search <question...> [--max-sources 3] [--json|--text] [--no-cache] [--fallback] [--site domain] [--timeout ms]
   echo '["q1","q2"]' | aura-argus search --batch [--concurrency 3]
   aura-argus fetch <url> [--max-chars 20000] [--format markdown|text] [--json] [--allow-private]
   aura-argus sources
@@ -90,6 +90,7 @@ async function main() {
         maxSources: Number(flags['max-sources'] ?? flags.maxSources ?? 3),
         cache: !flags['no-cache'],
         fallback: flags.fallback === true && flags['no-fallback'] !== true,
+        site: typeof flags.site === 'string' ? flags.site : undefined,
         timeoutMs: Number(flags.timeout ?? 12_000),
         budgetMs: Number(flags.budget ?? 0),
       });
@@ -105,6 +106,7 @@ async function main() {
       maxSources: Number(flags['max-sources'] ?? flags.maxSources ?? 3),
       cache: !flags['no-cache'],
       fallback: flags.fallback === true && flags['no-fallback'] !== true,
+      site: typeof flags.site === 'string' ? flags.site : undefined,
       timeoutMs: Number(flags.timeout ?? 12_000),
     });
     if (flags.text) console.log(searchText(result));

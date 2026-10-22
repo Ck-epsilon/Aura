@@ -31,7 +31,9 @@ export function htmlToLines(html) {
   let s = html
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<(script|style|noscript|svg|template|iframe|nav|header|footer|aside)\b[\s\S]*?<\/\1>/gi, ' ');
-  s = s.replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote|pre|dt|dd|td)>/gi, '\n');
+  // 表格单元格保留分隔符，否则一行里的数值会被拼成 "10025" 这类不可读字符串。
+  s = s.replace(/<\/(td|th)>/gi, ' | ');
+  s = s.replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote|pre|dt|dd)>/gi, '\n');
   s = s.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' ');
   s = decodeEntities(s);
   return s.split(/\n+/).map((x) => x.replace(/[ \t\u00a0]+/g, ' ').trim()).filter(Boolean);
@@ -43,20 +45,36 @@ export function htmlToMarkdown(html) {
     .replace(/<head\b[\s\S]*?<\/head>/gi, ' ')
     .replace(/<(script|style|noscript|svg|template|iframe|nav|footer|header|aside)\b[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<div[^>]*(?:class|id)="[^"]*(?:sphinxsidebar|sidebar|related|breadcrumb|navigation|footer|header|menu)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, ' ');
+  // 代码块先于普通标签处理：保留换行，否则代码里的缩进/行结构会被压成一段。
+  s = s.replace(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi, (match, inner) => {
+    const code = decodeEntities(stripTags(inner)).replace(/^[ \t]+|[ \t]+$/g, '').replace(/^\n+|\n+$/g, '');
+    return `\n\`\`\`\n${code}\n\`\`\`\n`;
+  });
   s = s.replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (match, level, inner) => `\n${'#'.repeat(Number(level))} ${collapse(stripTags(inner))}\n`);
+  s = s.replace(/<\/(td|th)>/gi, ' | ').replace(/<\/tr>/gi, '\n');
   s = s.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (match, inner) => `\n- ${collapse(stripTags(inner))}\n`);
   s = s.replace(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (match, href, inner) => {
     const text = collapse(stripTags(inner));
     if (!text || /^(#|javascript:)/i.test(href)) return text;
     return `[${text}](${href.replace(/&amp;/g, '&')})`;
   });
-  s = s.replace(/<\/(p|div|section|article|tr|blockquote|pre|dt|dd|td)>/gi, '\n');
+  s = s.replace(/<\/(p|div|section|article|blockquote|pre|dt|dd)>/gi, '\n');
   s = s.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' ');
   s = decodeEntities(s);
   const chrome = /^(menu|expand|light mode|dark mode|back to top|skip to content|search syntax|configured engines|about searxng|why use a private instance|previous|next|from here you can search these documents)$/i;
+  let inCode = false;
   return s
     .split('\n')
-    .map((x) => x.replace(/[ \t\u00a0]+/g, ' ').trim())
+    .map((x) => {
+      const trimmed = x.trim();
+      if (/^```/.test(trimmed)) {
+        inCode = !inCode;
+        return trimmed;
+      }
+      // 代码块内保留前导空格（缩进是语义）；正文仍折叠空白。
+      if (inCode) return x.replace(/[ \t]+$/g, '');
+      return x.replace(/[ \t\u00a0]+/g, ' ').trim();
+    })
     .filter((line) => !chrome.test(line.trim()) && !/^(auto light\/dark|view this page|edit this page|\[view this page\]|\[edit this page\]|©|copyright)/i.test(line.trim()))
     .map((line) => line.replace(/\s*¶\s*$/, ''))
     .join('\n')

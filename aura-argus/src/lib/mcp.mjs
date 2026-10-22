@@ -10,7 +10,7 @@ const SERVER_INSTRUCTIONS = `AuraArgus is a keyless retrieval layer over registe
 - Prefer the AuraArgus search tool (your client may prefix the tool name with this server) over a generic web search for technical or factual questions about a registered entity; it returns citable passages with source URLs.
 - Use the AuraArgus search_batch tool for multiple independent questions; results stay attributed per question (max 20).
 - Use the AuraArgus fetch tool for clean Markdown, and the AuraArgus sources tool to see coverage.
-- Outside the registry, search returns no evidence; never invent URLs. A 360/Sogou fallback exists only as an explicit opt-in on the CLI/HTTP/library.`;
+- Outside the registry, search returns no evidence unless a site scope is set or a fallback is explicitly requested; never invent URLs. A 360/Sogou fallback exists only as an explicit opt-in on the CLI/HTTP/library.`;
 
 function toolList() {
   return [
@@ -22,6 +22,7 @@ function toolList() {
         properties: {
           question: { type: 'string', description: 'Natural-language question.' },
           maxSources: { type: 'integer', minimum: 1, maximum: 6, default: 3 },
+          site: { type: 'string', description: 'Restrict to one domain and fetch the top matching pages as evidence (e.g. docs.example.com).' },
         },
         required: ['question'],
       },
@@ -34,6 +35,7 @@ function toolList() {
         properties: {
           questions: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 20 },
           concurrency: { type: 'integer', minimum: 1, maximum: 8, default: 3 },
+          site: { type: 'string', description: 'Restrict every question to one domain.' },
         },
         required: ['questions'],
       },
@@ -67,14 +69,14 @@ function fail(id, code, message) {
 
 async function callTool(name, args) {
   if (name === 'search') {
-    const result = await search(String(args.question || ''), { maxSources: args.maxSources ?? 3 });
+    const result = await search(String(args.question || ''), { maxSources: args.maxSources ?? 3, site: args.site });
     return { content: [{ type: 'text', text: JSON.stringify(result) }], isError: Boolean(result.error) };
   }
   if (name === 'search_batch') {
     const questions = Array.isArray(args.questions) ? args.questions : [];
     if (questions.length === 0) throw new Error('questions must contain at least one item');
     if (questions.length > BATCH_LIMIT) throw new Error(`questions must contain at most ${BATCH_LIMIT} items`);
-    const results = await searchBatch(questions, { concurrency: args.concurrency ?? 3, budgetMs: 35_000 });
+    const results = await searchBatch(questions, { concurrency: args.concurrency ?? 3, site: args.site, budgetMs: 35_000 });
     return { content: [{ type: 'text', text: JSON.stringify({ results }) }], isError: false };
   }
   if (name === 'fetch') {

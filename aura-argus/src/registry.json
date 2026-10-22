@@ -3,264 +3,1543 @@
   "note": "实体 → 官方源。covers 只用于排序；命中实体后默认抓该实体的全部源（上限 maxSources）。",
   "entities": {
     "deepseek": {
-      "aliases": ["deepseek", "深度求索"],
+      "aliases": [
+        "deepseek",
+        "深度求索"
+      ],
       "sources": [
         {
           "url": "https://api-docs.deepseek.com/guides/search",
           "title": "Search & Fetch",
-          "covers": ["search", "api", "pricing", "qps", "billing", "price", "successful", "requests", "limit"]
+          "covers": [
+            "search",
+            "api",
+            "pricing",
+            "qps",
+            "billing",
+            "price",
+            "successful",
+            "requests",
+            "limit"
+          ]
         },
         {
           "url": "https://api-docs.deepseek.com/quick_start/pricing",
           "title": "Models & Pricing",
-          "covers": ["pricing", "billing", "price"]
+          "covers": [
+            "pricing",
+            "billing",
+            "price"
+          ]
         }
       ],
-      "discovery": { "type": "sitemap", "url": "https://api-docs.deepseek.com/sitemap.xml" }
+      "discovery": {
+        "type": "sitemap",
+        "url": "https://api-docs.deepseek.com/sitemap.xml"
+      }
     },
     "searxng": {
-      "aliases": ["searxng", "searx"],
+      "aliases": [
+        "searxng",
+        "searx"
+      ],
       "sources": [
         {
           "url": "https://docs.searxng.org/admin/settings/settings_search.html",
           "title": "SearXNG search settings",
-          "covers": ["settings", "formats", "json", "suspended", "429", "requests", "default", "time", "seconds"]
+          "covers": [
+            "settings",
+            "formats",
+            "json",
+            "suspended",
+            "429",
+            "requests",
+            "default",
+            "time",
+            "seconds"
+          ]
         },
         {
           "url": "https://docs.searxng.org/dev/search_api.html",
           "title": "SearXNG Search API",
-          "covers": ["api", "json", "format"]
+          "covers": [
+            "api",
+            "json",
+            "format"
+          ]
         }
       ],
-      "discovery": { "type": "index", "url": "https://docs.searxng.org/admin/settings/index.html" }
+      "discovery": {
+        "type": "index",
+        "url": "https://docs.searxng.org/admin/settings/index.html"
+      }
     },
     "tavily": {
-      "aliases": ["tavily"],
+      "aliases": [
+        "tavily"
+      ],
       "sources": [
         {
           "url": "https://www.tavily.com/pricing",
           "title": "Tavily pricing",
-          "covers": ["pricing", "credit", "credits", "free", "plan"]
+          "covers": [
+            "pricing",
+            "credit",
+            "credits",
+            "free",
+            "plan"
+          ]
         },
         {
           "url": "https://docs.tavily.com/",
           "title": "Tavily docs",
-          "covers": ["api", "credits", "pricing", "docs"]
+          "covers": [
+            "api",
+            "credits",
+            "pricing",
+            "docs"
+          ]
         }
       ]
     },
     "google-cse": {
-"aliases": ["google custom search", "custom search json", "google cse", "谷歌自定义搜索", "google"],
+      "aliases": [
+        "google custom search",
+        "custom search json",
+        "google cse",
+        "谷歌自定义搜索",
+        "google"
+      ],
       "sources": [
         {
           "url": "https://developers.google.cn/custom-search/v1/overview",
           "title": "Custom Search JSON API",
-          "covers": ["custom", "search", "json", "api", "shutdown", "free", "customers", "quota"]
+          "covers": [
+            "custom",
+            "search",
+            "json",
+            "api",
+            "shutdown",
+            "free",
+            "customers",
+            "quota"
+          ]
         }
       ]
     },
     "bing": {
-      "aliases": ["bing", "必应", "bing search api"],
+      "aliases": [
+        "bing",
+        "必应",
+        "bing search api"
+      ],
       "sources": [
         {
           "url": "https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement",
           "title": "Bing Search APIs retiring",
-          "covers": ["retirement", "migration", "grounding", "bing", "api", "lifecycle"]
+          "covers": [
+            "retirement",
+            "migration",
+            "grounding",
+            "bing",
+            "api",
+            "lifecycle"
+          ]
         }
       ]
     },
     "python": {
-      "aliases": ["python", "python3", "python 3"],
+      "aliases": [
+        "python",
+        "python3",
+        "python 3"
+      ],
       "sources": [
         {
           "url": "https://docs.python.org/3/library/asyncio.html",
           "title": "Python asyncio",
-          "covers": ["asyncio", "async", "await", "gather", "event", "loop", "library"]
+          "covers": [
+            "asyncio",
+            "async",
+            "await",
+            "gather",
+            "event",
+            "loop",
+            "library"
+          ]
         },
         {
           "url": "https://docs.python.org/3/whatsnew/3.14.html",
           "title": "What's New in Python 3.14",
-          "covers": ["whatsnew", "version", "release", "features", "3.14"]
+          "covers": [
+            "whatsnew",
+            "version",
+            "release",
+            "features",
+            "3.14"
+          ]
         },
         {
           "url": "https://docs.python.org/3/library/asyncio-task.html",
           "title": "Python asyncio tasks",
-          "covers": ["gather", "await", "task", "coroutine", "asyncio"]
+          "covers": [
+            "gather",
+            "await",
+            "task",
+            "coroutine",
+            "asyncio"
+          ]
         }
       ]
     },
     "node": {
-"aliases": ["node.js", "nodejs", "node api", "node"],
+      "aliases": [
+        "node.js",
+        "nodejs",
+        "node api",
+        "node"
+      ],
       "sources": [
         {
           "url": "https://nodejs.org/api/http.html",
           "title": "Node.js HTTP docs",
-          "covers": ["api", "http", "server", "request", "module", "documentation"]
+          "covers": [
+            "api",
+            "http",
+            "server",
+            "request",
+            "module",
+            "documentation"
+          ]
         },
         {
           "url": "https://nodejs.org/api/fs.html",
           "title": "Node.js FS docs",
-          "covers": ["api", "fs", "file", "readfile", "stream", "module"]
+          "covers": [
+            "api",
+            "fs",
+            "file",
+            "readfile",
+            "stream",
+            "module"
+          ]
         },
         {
           "url": "https://nodejs.org/en/about/previous-releases",
           "title": "Node.js releases",
-          "covers": ["release", "lts", "version", "download", "node"]
+          "covers": [
+            "release",
+            "lts",
+            "version",
+            "download",
+            "node"
+          ]
         }
       ]
     },
     "github": {
-      "aliases": ["github", "github api", "github actions"],
+      "aliases": [
+        "github",
+        "github api",
+        "github actions"
+      ],
       "sources": [
         {
           "url": "https://docs.github.com/en/rest",
           "title": "GitHub REST API",
-          "covers": ["rest", "api", "authentication", "rate", "limit", "endpoints"]
+          "covers": [
+            "rest",
+            "api",
+            "authentication",
+            "rate",
+            "limit",
+            "endpoints"
+          ]
         },
         {
           "url": "https://docs.github.com/en/actions",
           "title": "GitHub Actions",
-          "covers": ["actions", "workflow", "runner", "ci"]
+          "covers": [
+            "actions",
+            "workflow",
+            "runner",
+            "ci"
+          ]
         },
         {
           "url": "https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api",
           "title": "Authenticating to the REST API",
-          "covers": ["authentication", "authorization", "token", "rest", "api"]
+          "covers": [
+            "authentication",
+            "authorization",
+            "token",
+            "rest",
+            "api"
+          ]
         }
       ]
     },
     "mdn": {
-      "aliases": ["mdn", "mozilla developer network"],
+      "aliases": [
+        "mdn",
+        "mozilla developer network"
+      ],
       "sources": [
         {
           "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference",
           "title": "MDN JavaScript reference",
-          "covers": ["javascript", "reference", "array", "promise", "fetch", "mdn"]
+          "covers": [
+            "javascript",
+            "reference",
+            "array",
+            "promise",
+            "fetch",
+            "mdn"
+          ]
         },
         {
           "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise",
           "title": "Promise - MDN",
-          "covers": ["promise", "then", "catch", "resolve", "reject"]
+          "covers": [
+            "promise",
+            "then",
+            "catch",
+            "resolve",
+            "reject"
+          ]
         }
       ]
     },
     "react": {
-      "aliases": ["react", "reactjs", "react.js"],
+      "aliases": [
+        "react",
+        "reactjs",
+        "react.js"
+      ],
       "sources": [
         {
           "url": "https://react.dev/reference/react",
           "title": "React API reference",
-          "covers": ["react", "hooks", "usestate", "useeffect", "reference", "component"]
+          "covers": [
+            "react",
+            "hooks",
+            "usestate",
+            "useeffect",
+            "reference",
+            "component"
+          ]
         },
         {
           "url": "https://react.dev/reference/react/useState",
           "title": "useState",
-          "covers": ["usestate", "state", "hook", "usage"]
+          "covers": [
+            "usestate",
+            "state",
+            "hook",
+            "usage"
+          ]
         }
       ]
     },
     "vue": {
-      "aliases": ["vue", "vuejs", "vue.js"],
+      "aliases": [
+        "vue",
+        "vuejs",
+        "vue.js"
+      ],
       "sources": [
         {
           "url": "https://vuejs.org/guide/introduction.html",
           "title": "Vue guide",
-          "covers": ["vue", "guide", "component", "reactivity", "installation"]
+          "covers": [
+            "vue",
+            "guide",
+            "component",
+            "reactivity",
+            "installation"
+          ]
         },
         {
           "url": "https://vuejs.org/guide/essentials/reactivity-fundamentals.html",
           "title": "Vue reactivity fundamentals",
-          "covers": ["reactivity", "reactive", "ref", "effect", "reactive state"]
+          "covers": [
+            "reactivity",
+            "reactive",
+            "ref",
+            "effect",
+            "reactive state"
+          ]
         }
       ]
     },
     "rust": {
-      "aliases": ["rust", "rustlang"],
+      "aliases": [
+        "rust",
+        "rustlang"
+      ],
       "sources": [
         {
           "url": "https://doc.rust-lang.org/book/",
           "title": "The Rust Programming Language",
-          "covers": ["rust", "book", "ownership", "borrowing", "cargo", "installation"]
+          "covers": [
+            "rust",
+            "book",
+            "ownership",
+            "borrowing",
+            "cargo",
+            "installation"
+          ]
         },
         {
           "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html",
           "title": "What is Ownership?",
-          "covers": ["ownership", "borrow", "move", "reference", "rule"]
+          "covers": [
+            "ownership",
+            "borrow",
+            "move",
+            "reference",
+            "rule"
+          ]
         }
       ]
     },
     "go": {
-"aliases": ["golang", "go language", "go.dev", "go"],
+      "aliases": [
+        "golang",
+        "go language",
+        "go.dev",
+        "go"
+      ],
       "sources": [
         {
           "url": "https://go.dev/doc/",
           "title": "Go documentation",
-          "covers": ["golang", "documentation", "tutorial", "install", "module"]
+          "covers": [
+            "golang",
+            "documentation",
+            "tutorial",
+            "install",
+            "module"
+          ]
         }
       ]
     },
     "docker": {
-      "aliases": ["docker", "docker compose"],
+      "aliases": [
+        "docker",
+        "docker compose"
+      ],
       "sources": [
         {
           "url": "https://docs.docker.com/engine/install/",
           "title": "Install Docker Engine",
-          "covers": ["docker", "install", "engine", "container", "linux"]
+          "covers": [
+            "docker",
+            "install",
+            "engine",
+            "container",
+            "linux"
+          ]
         }
       ]
     },
     "postgres": {
-      "aliases": ["postgres", "postgresql"],
+      "aliases": [
+        "postgres",
+        "postgresql"
+      ],
       "sources": [
         {
           "url": "https://www.postgresql.org/docs/current/",
           "title": "PostgreSQL documentation",
-          "covers": ["postgresql", "postgres", "sql", "install", "documentation", "version"]
+          "covers": [
+            "postgresql",
+            "postgres",
+            "sql",
+            "install",
+            "documentation",
+            "version"
+          ]
         },
         {
           "url": "https://www.postgresql.org/docs/current/sql-createtable.html",
           "title": "CREATE TABLE",
-          "covers": ["create table", "table", "sql", "column"]
+          "covers": [
+            "create table",
+            "table",
+            "sql",
+            "column"
+          ]
         }
       ]
     },
     "nginx": {
-      "aliases": ["nginx"],
+      "aliases": [
+        "nginx"
+      ],
       "sources": [
         {
           "url": "https://nginx.org/en/docs/",
           "title": "nginx documentation",
-          "covers": ["nginx", "install", "configuration", "module", "directive"]
+          "covers": [
+            "nginx",
+            "install",
+            "configuration",
+            "module",
+            "directive"
+          ]
         }
       ]
     },
     "kubernetes": {
-      "aliases": ["kubernetes", "k8s"],
+      "aliases": [
+        "kubernetes",
+        "k8s"
+      ],
       "sources": [
         {
           "url": "https://kubernetes.io/docs/home/",
           "title": "Kubernetes documentation",
-          "covers": ["kubernetes", "k8s", "pod", "deployment", "install"]
+          "covers": [
+            "kubernetes",
+            "k8s",
+            "pod",
+            "deployment",
+            "install"
+          ]
         }
       ]
     },
     "redis": {
-      "aliases": ["redis"],
+      "aliases": [
+        "redis"
+      ],
       "sources": [
         {
           "url": "https://redis.io/docs/latest/",
           "title": "Redis documentation",
-          "covers": ["redis", "install", "commands", "data types", "configuration"]
+          "covers": [
+            "redis",
+            "install",
+            "commands",
+            "data types",
+            "configuration"
+          ]
         },
         {
           "url": "https://redis.io/docs/latest/commands/set/",
           "title": "Redis SET command",
-          "covers": ["set", "get", "command", "key", "value"]
+          "covers": [
+            "set",
+            "get",
+            "command",
+            "key",
+            "value"
+          ]
         },
         {
           "url": "https://redis.io/docs/latest/commands/",
           "title": "Redis commands",
-          "covers": ["command", "commands", "set", "get", "list"]
+          "covers": [
+            "command",
+            "commands",
+            "set",
+            "get",
+            "list"
+          ]
+        }
+      ]
+    },
+    "typescript": {
+      "aliases": [
+        "typescript",
+        "ts",
+        "tsc",
+        "typescript 文档",
+        "tsconfig"
+      ],
+      "sources": [
+        {
+          "url": "https://www.typescriptlang.org/docs/handbook/intro.html",
+          "title": "TypeScript Handbook",
+          "covers": [
+            "typescript",
+            "types",
+            "generics",
+            "tsconfig",
+            "compiler",
+            "type",
+            "interface"
+          ]
+        },
+        {
+          "url": "https://www.typescriptlang.org/tsconfig/",
+          "title": "TSConfig Reference",
+          "covers": [
+            "tsconfig",
+            "compiler",
+            "config",
+            "module",
+            "target",
+            "strict"
+          ]
+        }
+      ]
+    },
+    "nextjs": {
+      "aliases": [
+        "nextjs",
+        "next.js",
+        "next js"
+      ],
+      "sources": [
+        {
+          "url": "https://nextjs.org/docs",
+          "title": "Next.js Docs",
+          "covers": [
+            "nextjs",
+            "app router",
+            "routing",
+            "server",
+            "client",
+            "fetch",
+            "cache",
+            "deploy"
+          ]
+        },
+        {
+          "url": "https://nextjs.org/docs/app/building-your-application/configuring",
+          "title": "Next.js Configuring",
+          "covers": [
+            "config",
+            "environment",
+            "typescript",
+            "eslint",
+            "images"
+          ]
+        }
+      ]
+    },
+    "vite": {
+      "aliases": [
+        "vite",
+        "vitejs",
+        "vite 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://vite.dev/guide/",
+          "title": "Vite Guide",
+          "covers": [
+            "vite",
+            "build",
+            "dev server",
+            "plugin",
+            "config",
+            "hmr"
+          ]
+        },
+        {
+          "url": "https://vite.dev/config/",
+          "title": "Vite Config",
+          "covers": [
+            "config",
+            "build",
+            "server",
+            "resolve",
+            "plugins"
+          ]
+        }
+      ]
+    },
+    "deno": {
+      "aliases": [
+        "deno",
+        "deno 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://docs.deno.com/runtime/",
+          "title": "Deno Runtime",
+          "covers": [
+            "deno",
+            "runtime",
+            "permissions",
+            "typescript",
+            "modules",
+            "deploy"
+          ]
+        },
+        {
+          "url": "https://docs.deno.com/runtime/fundamentals/",
+          "title": "Deno Fundamentals",
+          "covers": [
+            "deno",
+            "permissions",
+            "imports",
+            "environment",
+            "testing"
+          ]
+        }
+      ]
+    },
+    "bun": {
+      "aliases": [
+        "bun",
+        "bunjs",
+        "bun 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://bun.sh/docs",
+          "title": "Bun Docs",
+          "covers": [
+            "bun",
+            "runtime",
+            "package manager",
+            "test",
+            "bundler",
+            "sqlite"
+          ]
+        },
+        {
+          "url": "https://bun.sh/docs/runtime",
+          "title": "Bun Runtime",
+          "covers": [
+            "bun",
+            "runtime",
+            "api",
+            "http",
+            "file"
+          ]
+        }
+      ]
+    },
+    "tailwind": {
+      "aliases": [
+        "tailwind",
+        "tailwindcss",
+        "tailwind css",
+        "tw"
+      ],
+      "sources": [
+        {
+          "url": "https://tailwindcss.com/docs",
+          "title": "Tailwind CSS Docs",
+          "covers": [
+            "tailwind",
+            "css",
+            "utility",
+            "class",
+            "responsive",
+            "dark mode",
+            "config"
+          ]
+        },
+        {
+          "url": "https://tailwindcss.com/docs/installation",
+          "title": "Tailwind Installation",
+          "covers": [
+            "install",
+            "tailwind",
+            "vite",
+            "postcss",
+            "cli"
+          ]
+        }
+      ]
+    },
+    "prisma": {
+      "aliases": [
+        "prisma",
+        "prisma orm"
+      ],
+      "sources": [
+        {
+          "url": "https://www.prisma.io/docs",
+          "title": "Prisma Docs",
+          "covers": [
+            "prisma",
+            "orm",
+            "schema",
+            "migration",
+            "client",
+            "database",
+            "query"
+          ]
+        },
+        {
+          "url": "https://www.prisma.io/docs/orm",
+          "title": "Prisma ORM",
+          "covers": [
+            "prisma",
+            "orm",
+            "model",
+            "relation",
+            "migrate"
+          ]
+        }
+      ]
+    },
+    "supabase": {
+      "aliases": [
+        "supabase",
+        "supabase 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://supabase.com/docs",
+          "title": "Supabase Docs",
+          "covers": [
+            "supabase",
+            "postgres",
+            "auth",
+            "storage",
+            "realtime",
+            "edge functions",
+            "rls"
+          ]
+        },
+        {
+          "url": "https://supabase.com/docs/guides",
+          "title": "Supabase Guides",
+          "covers": [
+            "auth",
+            "database",
+            "storage",
+            "realtime",
+            "rls",
+            "api"
+          ]
+        }
+      ]
+    },
+    "cloudflare": {
+      "aliases": [
+        "cloudflare",
+        "cloudflare workers",
+        "cf workers"
+      ],
+      "sources": [
+        {
+          "url": "https://developers.cloudflare.com/",
+          "title": "Cloudflare Docs",
+          "covers": [
+            "cloudflare",
+            "workers",
+            "pages",
+            "r2",
+            "d1",
+            "wrangler",
+            "dns"
+          ]
+        },
+        {
+          "url": "https://developers.cloudflare.com/workers/",
+          "title": "Cloudflare Workers",
+          "covers": [
+            "workers",
+            "wrangler",
+            "runtime",
+            "fetch",
+            "bindings",
+            "deploy"
+          ]
+        }
+      ]
+    },
+    "stripe": {
+      "aliases": [
+        "stripe",
+        "stripe api",
+        "stripe 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://docs.stripe.com/",
+          "title": "Stripe Docs",
+          "covers": [
+            "stripe",
+            "payment",
+            "api",
+            "webhook",
+            "subscription",
+            "checkout"
+          ]
+        },
+        {
+          "url": "https://docs.stripe.com/api",
+          "title": "Stripe API",
+          "covers": [
+            "api",
+            "payment intent",
+            "customer",
+            "price",
+            "webhook"
+          ]
+        }
+      ]
+    },
+    "openai": {
+      "aliases": [
+        "openai",
+        "openai api",
+        "chatgpt api",
+        "openai 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://platform.openai.com/docs/",
+          "title": "OpenAI API Docs",
+          "covers": [
+            "openai",
+            "api",
+            "model",
+            "chat",
+            "responses",
+            "embeddings",
+            "pricing"
+          ]
+        },
+        {
+          "url": "https://openai.com/api/pricing/",
+          "title": "OpenAI API Pricing",
+          "covers": [
+            "pricing",
+            "price",
+            "token",
+            "model",
+            "billing"
+          ]
+        }
+      ]
+    },
+    "anthropic": {
+      "aliases": [
+        "anthropic",
+        "claude api",
+        "anthropic api",
+        "claude"
+      ],
+      "sources": [
+        {
+          "url": "https://docs.anthropic.com/en/docs/",
+          "title": "Anthropic Docs",
+          "covers": [
+            "anthropic",
+            "claude",
+            "api",
+            "messages",
+            "tool use",
+            "prompt"
+          ]
+        },
+        {
+          "url": "https://www.anthropic.com/pricing",
+          "title": "Anthropic Pricing",
+          "covers": [
+            "pricing",
+            "price",
+            "token",
+            "billing",
+            "claude"
+          ]
+        }
+      ]
+    },
+    "npm": {
+      "aliases": [
+        "npm",
+        "npm cli",
+        "npm 文档",
+        "package.json"
+      ],
+      "sources": [
+        {
+          "url": "https://docs.npmjs.com/",
+          "title": "npm Docs",
+          "covers": [
+            "npm",
+            "install",
+            "publish",
+            "package",
+            "registry",
+            "cli"
+          ]
+        },
+        {
+          "url": "https://docs.npmjs.com/cli/v10/configuring-npm/package-json",
+          "title": "package.json",
+          "covers": [
+            "package.json",
+            "scripts",
+            "dependencies",
+            "exports",
+            "engines"
+          ]
+        }
+      ]
+    },
+    "pnpm": {
+      "aliases": [
+        "pnpm",
+        "pnpm 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://pnpm.io/motivation",
+          "title": "pnpm Motivation",
+          "covers": [
+            "pnpm",
+            "install",
+            "store",
+            "workspace",
+            "symlink"
+          ]
+        },
+        {
+          "url": "https://pnpm.io/package_json",
+          "title": "pnpm package.json",
+          "covers": [
+            "package.json",
+            "dependencies",
+            "workspace",
+            "peer"
+          ]
+        }
+      ]
+    },
+    "eslint": {
+      "aliases": [
+        "eslint",
+        "eslint 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://eslint.org/docs/latest/",
+          "title": "ESLint Docs",
+          "covers": [
+            "eslint",
+            "lint",
+            "rule",
+            "config",
+            "flat config",
+            "plugin"
+          ]
+        },
+        {
+          "url": "https://eslint.org/docs/latest/use/configure/",
+          "title": "ESLint Configure",
+          "covers": [
+            "config",
+            "flat config",
+            "eslint.config.js",
+            "rule"
+          ]
+        }
+      ]
+    },
+    "vitest": {
+      "aliases": [
+        "vitest",
+        "vitest 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://vitest.dev/guide/",
+          "title": "Vitest Guide",
+          "covers": [
+            "vitest",
+            "test",
+            "mock",
+            "config",
+            "coverage"
+          ]
+        },
+        {
+          "url": "https://vitest.dev/config/",
+          "title": "Vitest Config",
+          "covers": [
+            "config",
+            "test",
+            "coverage",
+            "environment"
+          ]
+        }
+      ]
+    },
+    "playwright": {
+      "aliases": [
+        "playwright",
+        "playwright 文档",
+        "playwright test"
+      ],
+      "sources": [
+        {
+          "url": "https://playwright.dev/docs/intro",
+          "title": "Playwright Intro",
+          "covers": [
+            "playwright",
+            "test",
+            "browser",
+            "locator",
+            "config"
+          ]
+        },
+        {
+          "url": "https://playwright.dev/docs/api/class-playwright",
+          "title": "Playwright API",
+          "covers": [
+            "api",
+            "browser",
+            "page",
+            "locator",
+            "request"
+          ]
+        }
+      ]
+    },
+    "terraform": {
+      "aliases": [
+        "terraform",
+        "tf",
+        "hashicorp terraform"
+      ],
+      "sources": [
+        {
+          "url": "https://developer.hashicorp.com/terraform/docs",
+          "title": "Terraform Docs",
+          "covers": [
+            "terraform",
+            "provider",
+            "resource",
+            "state",
+            "module",
+            "plan"
+          ]
+        },
+        {
+          "url": "https://developer.hashicorp.com/terraform/language",
+          "title": "Terraform Language",
+          "covers": [
+            "hcl",
+            "variable",
+            "module",
+            "resource",
+            "output",
+            "expression"
+          ]
+        }
+      ]
+    },
+    "aws": {
+      "aliases": [
+        "aws",
+        "amazon web services",
+        "aws cli"
+      ],
+      "sources": [
+        {
+          "url": "https://docs.aws.amazon.com/",
+          "title": "AWS Docs",
+          "covers": [
+            "aws",
+            "iam",
+            "s3",
+            "ec2",
+            "lambda",
+            "cloudformation",
+            "cli"
+          ]
+        },
+        {
+          "url": "https://docs.aws.amazon.com/cli/latest/userguide/",
+          "title": "AWS CLI",
+          "covers": [
+            "cli",
+            "command",
+            "credential",
+            "profile",
+            "config"
+          ]
+        }
+      ]
+    },
+    "java": {
+      "aliases": [
+        "java",
+        "jdk",
+        "java 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://docs.oracle.com/en/java/",
+          "title": "Java Docs",
+          "covers": [
+            "java",
+            "jdk",
+            "class",
+            "interface",
+            "jvm",
+            "module"
+          ]
+        },
+        {
+          "url": "https://docs.oracle.com/en/java/javase/21/docs/api/",
+          "title": "Java SE API",
+          "covers": [
+            "api",
+            "class",
+            "method",
+            "java.util",
+            "java.lang"
+          ]
+        }
+      ]
+    },
+    "dotnet": {
+      "aliases": [
+        "dotnet",
+        ".net",
+        "c#",
+        "csharp",
+        "dotnet"
+      ],
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/dotnet/",
+          "title": ".NET Docs",
+          "covers": [
+            ".net",
+            "dotnet",
+            "c#",
+            "asp.net",
+            "runtime",
+            "cli"
+          ]
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/dotnet/api/",
+          "title": ".NET API",
+          "covers": [
+            "api",
+            "class",
+            "method",
+            "namespace",
+            "c#"
+          ]
+        }
+      ]
+    },
+    "php": {
+      "aliases": [
+        "php",
+        "php 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://www.php.net/manual/en/",
+          "title": "PHP Manual",
+          "covers": [
+            "php",
+            "function",
+            "array",
+            "class",
+            "type",
+            "ini"
+          ]
+        },
+        {
+          "url": "https://www.php.net/manual/en/language.types.php",
+          "title": "PHP Types",
+          "covers": [
+            "type",
+            "array",
+            "string",
+            "int",
+            "bool",
+            "null"
+          ]
+        }
+      ]
+    },
+    "laravel": {
+      "aliases": [
+        "laravel",
+        "laravel 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://laravel.com/docs/",
+          "title": "Laravel Docs",
+          "covers": [
+            "laravel",
+            "eloquent",
+            "routing",
+            "middleware",
+            "artisan",
+            "blade"
+          ]
+        },
+        {
+          "url": "https://laravel.com/docs/11.x",
+          "title": "Laravel 11",
+          "covers": [
+            "laravel",
+            "eloquent",
+            "routing",
+            "migration",
+            "validation"
+          ]
+        }
+      ]
+    },
+    "django": {
+      "aliases": [
+        "django",
+        "django 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/en/stable/",
+          "title": "Django Docs",
+          "covers": [
+            "django",
+            "model",
+            "view",
+            "template",
+            "orm",
+            "admin",
+            "migration"
+          ]
+        },
+        {
+          "url": "https://docs.djangoproject.com/en/stable/topics/",
+          "title": "Django Topics",
+          "covers": [
+            "database",
+            "http",
+            "forms",
+            "auth",
+            "testing",
+            "cache"
+          ]
+        }
+      ]
+    },
+    "fastapi": {
+      "aliases": [
+        "fastapi",
+        "fast api",
+        "fastapi 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://fastapi.tiangolo.com/",
+          "title": "FastAPI Docs",
+          "covers": [
+            "fastapi",
+            "pydantic",
+            "path",
+            "query",
+            "dependency",
+            "async"
+          ]
+        },
+        {
+          "url": "https://fastapi.tiangolo.com/tutorial/",
+          "title": "FastAPI Tutorial",
+          "covers": [
+            "tutorial",
+            "request",
+            "response",
+            "body",
+            "dependency",
+            "security"
+          ]
+        }
+      ]
+    },
+    "rails": {
+      "aliases": [
+        "rails",
+        "ruby on rails",
+        "ror"
+      ],
+      "sources": [
+        {
+          "url": "https://guides.rubyonrails.org/",
+          "title": "Rails Guides",
+          "covers": [
+            "rails",
+            "ruby",
+            "activerecord",
+            "routing",
+            "controller",
+            "migration"
+          ]
+        },
+        {
+          "url": "https://api.rubyonrails.org/",
+          "title": "Rails API",
+          "covers": [
+            "api",
+            "class",
+            "method",
+            "activerecord",
+            "actioncontroller"
+          ]
+        }
+      ]
+    },
+    "git": {
+      "aliases": [
+        "git",
+        "git 文档",
+        "git-scm"
+      ],
+      "sources": [
+        {
+          "url": "https://git-scm.com/docs",
+          "title": "Git Reference",
+          "covers": [
+            "git",
+            "commit",
+            "branch",
+            "merge",
+            "rebase",
+            "remote",
+            "config"
+          ]
+        },
+        {
+          "url": "https://git-scm.com/book/en/v2",
+          "title": "Pro Git",
+          "covers": [
+            "git",
+            "branch",
+            "merge",
+            "workflow",
+            "remote",
+            "tag"
+          ]
+        }
+      ]
+    },
+    "bash": {
+      "aliases": [
+        "bash",
+        "bash 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://www.gnu.org/software/bash/manual/bash.html",
+          "title": "Bash Manual",
+          "covers": [
+            "bash",
+            "shell",
+            "variable",
+            "function",
+            "pipe",
+            "redirect",
+            "script"
+          ]
+        }
+      ]
+    },
+    "powershell": {
+      "aliases": [
+        "powershell",
+        "pwsh",
+        "powershell 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/powershell/",
+          "title": "PowerShell Docs",
+          "covers": [
+            "powershell",
+            "pwsh",
+            "cmdlet",
+            "pipeline",
+            "module",
+            "script"
+          ]
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/powershell/module/",
+          "title": "PowerShell Module Reference",
+          "covers": [
+            "cmdlet",
+            "module",
+            "parameter",
+            "syntax"
+          ]
+        }
+      ]
+    },
+    "cppreference": {
+      "aliases": [
+        "cppreference",
+        "c++",
+        "cpp",
+        "c reference"
+      ],
+      "sources": [
+        {
+          "url": "https://en.cppreference.com/w/",
+          "title": "cppreference",
+          "covers": [
+            "c++",
+            "cpp",
+            "std",
+            "template",
+            "class",
+            "reference"
+          ]
+        },
+        {
+          "url": "https://en.cppreference.com/w/cpp",
+          "title": "C++ Reference",
+          "covers": [
+            "cpp",
+            "std",
+            "vector",
+            "string",
+            "algorithm",
+            "template"
+          ]
+        }
+      ]
+    },
+    "cmake": {
+      "aliases": [
+        "cmake",
+        "cmake 文档"
+      ],
+      "sources": [
+        {
+          "url": "https://cmake.org/cmake/help/latest/",
+          "title": "CMake Docs",
+          "covers": [
+            "cmake",
+            "target",
+            "command",
+            "variable",
+            "install",
+            "build"
+          ]
+        },
+        {
+          "url": "https://cmake.org/cmake/help/latest/manual/cmake-language.7.html",
+          "title": "CMake Language",
+          "covers": [
+            "syntax",
+            "variable",
+            "list",
+            "function",
+            "macro"
+          ]
         }
       ]
     }

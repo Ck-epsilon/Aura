@@ -9,6 +9,7 @@ import { mergeBlocks, selectPassages } from '../src/lib/extract.mjs';
 import { validateUrl } from '../src/lib/fetch.mjs';
 import { ArgusError, CODES } from '../src/lib/errors.mjs';
 import { matchEntity, expandTerms, listEntities, registryVersion, rankSources } from '../src/lib/registry.mjs';
+import { normalizeSite } from '../src/lib/fallback.mjs';
 import { Cache } from '../src/lib/cache.mjs';
 
 test('entity decoding and collapse', () => {
@@ -26,6 +27,27 @@ test('html to markdown emits headings and lists', () => {
   assert.match(md, /^## Sub/m);
   assert.match(md, /\[link\]\(https:\/\/x\.test\)/);
   assert.match(md, /- item/);
+});
+
+test('markdown preserves code indentation and table cell boundaries', () => {
+  const md = htmlToMarkdown('<pre><code>if (x) {\n  y()\n}</code></pre><table><tr><td>QPS</td><td>100</td></tr></table>');
+  assert.match(md, /```\nif \(x\) \{\n  y\(\)\n\}/);
+  assert.match(md, /QPS \| 100 \|/);
+});
+
+test('site scope normalizes domains and rejects invalid values', () => {
+  assert.equal(normalizeSite('https://www.docs.example.com/path'), 'docs.example.com');
+  assert.equal(normalizeSite('docs.example.com'), 'docs.example.com');
+  assert.equal(normalizeSite(null), null);
+  assert.throws(() => normalizeSite('not a domain'), (error) => error.code === 'BAD_REQUEST');
+});
+
+test('expanded registry routes new official entities', () => {
+  assert.equal(matchEntity('TypeScript 泛型')?.id, 'typescript');
+  assert.equal(matchEntity('Next.js app router')?.id, 'nextjs');
+  assert.equal(matchEntity('Stripe webhook')?.id, 'stripe');
+  assert.equal(matchEntity('Git rebase')?.id, 'git');
+  assert.ok(listEntities().length >= 40);
 });
 
 test('title, links and sitemap locs', () => {

@@ -5,14 +5,34 @@
     "version": "0.1.0",
     "description": "Local, keyless retrieval over registered official sources. Returns evidence passages with source URLs. Bind to 127.0.0.1 by default; set a bearer token when exposing the server."
   },
-  "servers": [{ "url": "http://127.0.0.1:8787" }],
-  "security": [{}, { "bearerAuth": [] }],
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787"
+    }
+  ],
+  "security": [
+    {},
+    {
+      "bearerAuth": []
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
         "operationId": "health",
         "summary": "Health and version",
-        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Health" } } } } }
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/sources": {
@@ -20,8 +40,19 @@
         "operationId": "sources",
         "summary": "Registered entities and sources",
         "responses": {
-          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Sources" } } } },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sources"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
@@ -30,26 +61,114 @@
         "operationId": "searchGet",
         "summary": "Search one question",
         "parameters": [
-          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "maxSources", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 6, "default": 3 } },
-          { "name": "fallback", "in": "query", "required": false, "schema": { "type": "boolean", "default": false }, "description": "Opt in to the 360/Sogou web fallback (weaker, anti-bot sensitive)." }
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "maxSources",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6,
+              "default": 3
+            }
+          },
+          {
+            "name": "fallback",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Opt in to the 360/Sogou web fallback (weaker, anti-bot sensitive)."
+          },
+          {
+            "name": "site",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Restrict to one domain; fetch its sitemap/body as evidence."
+          }
         ],
         "responses": {
-          "200": { "description": "Evidence bundle", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SearchResult" } } } },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "502": { "description": "All registered sources failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SearchResult" } } } }
+          "200": {
+            "description": "Evidence bundle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "502": {
+            "description": "All registered sources failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            }
+          }
         }
       },
       "post": {
         "operationId": "searchPost",
         "summary": "Search one question",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SearchRequest" } } } },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Evidence bundle", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SearchResult" } } } },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "502": { "description": "All registered sources failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SearchResult" } } } }
+          "200": {
+            "description": "Evidence bundle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "502": {
+            "description": "All registered sources failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -57,11 +176,33 @@
       "post": {
         "operationId": "searchBatch",
         "summary": "Search up to 50 questions with bounded concurrency",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BatchRequest" } } } },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Per-question results", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BatchResponse" } } } },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": {
+            "description": "Per-question results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
@@ -70,175 +211,505 @@
         "operationId": "fetchGet",
         "summary": "Fetch one URL as Markdown",
         "parameters": [
-          { "name": "url", "in": "query", "required": true, "schema": { "type": "string", "format": "uri" } },
-          { "name": "maxChars", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 100, "maximum": 200000, "default": 20000 } }
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          {
+            "name": "maxChars",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 200000,
+              "default": 20000
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Document", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FetchResult" } } } },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "502": { "$ref": "#/components/responses/BadGateway" }
+          "200": {
+            "description": "Document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FetchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
         }
       },
       "post": {
         "operationId": "fetchPost",
         "summary": "Fetch one URL as Markdown",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FetchRequest" } } } },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FetchRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Document", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FetchResult" } } } },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "502": { "$ref": "#/components/responses/BadGateway" }
+          "200": {
+            "description": "Document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FetchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
         }
       }
     }
   },
   "components": {
     "securitySchemes": {
-      "bearerAuth": { "type": "http", "scheme": "bearer", "description": "Only when the server was started with --token." }
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Only when the server was started with --token."
+      }
     },
     "responses": {
-      "BadRequest": { "description": "Bad request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "Unauthorized": { "description": "Missing or invalid token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "BadGateway": { "description": "Upstream retrieval failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+      "BadRequest": {
+        "description": "Bad request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid token",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "BadGateway": {
+        "description": "Upstream retrieval failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
     },
     "schemas": {
       "Health": {
         "type": "object",
-        "required": ["ok", "name", "version", "sources"],
+        "required": [
+          "ok",
+          "name",
+          "version",
+          "sources"
+        ],
         "properties": {
-          "ok": { "type": "boolean" },
-          "name": { "type": "string" },
-          "version": { "type": "string" },
-          "sources": { "type": "integer" },
-          "uptimeMs": { "type": "integer" }
+          "ok": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "integer"
+          },
+          "uptimeMs": {
+            "type": "integer"
+          }
         }
       },
       "Sources": {
         "type": "object",
-        "required": ["ok", "version", "entities"],
+        "required": [
+          "ok",
+          "version",
+          "entities"
+        ],
         "properties": {
-          "ok": { "type": "boolean" },
-          "version": { "type": "string" },
-          "entities": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+          "ok": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
         }
       },
       "SearchRequest": {
         "type": "object",
-        "required": ["question"],
+        "required": [
+          "question"
+        ],
         "properties": {
-          "question": { "type": "string" },
-          "maxSources": { "type": "integer", "minimum": 1, "maximum": 6, "default": 3 },
-          "fallback": { "type": "boolean", "default": false },
-          "cache": { "type": "boolean", "default": true }
+          "question": {
+            "type": "string"
+          },
+          "maxSources": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "default": 3
+          },
+          "fallback": {
+            "type": "boolean",
+            "default": false
+          },
+          "cache": {
+            "type": "boolean",
+            "default": true
+          },
+          "site": {
+            "type": "string",
+            "description": "Restrict to one domain."
+          }
         }
       },
       "BatchRequest": {
         "type": "object",
-        "required": ["questions"],
+        "required": [
+          "questions"
+        ],
         "properties": {
-          "questions": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 50 },
-          "concurrency": { "type": "integer", "minimum": 1, "maximum": 8, "default": 3 },
-          "maxSources": { "type": "integer", "minimum": 1, "maximum": 6, "default": 3 },
-          "fallback": { "type": "boolean", "default": false },
-          "cache": { "type": "boolean", "default": true },
-          "budgetMs": { "type": "integer", "minimum": 0, "default": 45000 }
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 50
+          },
+          "concurrency": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "default": 3
+          },
+          "maxSources": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "default": 3
+          },
+          "fallback": {
+            "type": "boolean",
+            "default": false
+          },
+          "cache": {
+            "type": "boolean",
+            "default": true
+          },
+          "budgetMs": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 45000
+          },
+          "site": {
+            "type": "string",
+            "description": "Restrict every question to one domain."
+          }
         }
       },
       "BatchResponse": {
         "type": "object",
-        "required": ["ok", "results"],
+        "required": [
+          "ok",
+          "results"
+        ],
         "properties": {
-          "ok": { "type": "boolean" },
-          "results": { "type": "array", "items": { "$ref": "#/components/schemas/SearchResult" } }
+          "ok": {
+            "type": "boolean"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
+          }
         }
       },
       "FetchRequest": {
         "type": "object",
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "properties": {
-          "url": { "type": "string", "format": "uri" },
-          "maxChars": { "type": "integer", "minimum": 100, "maximum": 200000, "default": 20000 }
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "maxChars": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 200000,
+            "default": 20000
+          }
         }
       },
       "Passage": {
         "type": "object",
-        "required": ["text", "score"],
-        "properties": { "text": { "type": "string" }, "score": { "type": "number" } }
+        "required": [
+          "text",
+          "score"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          }
+        }
       },
       "Evidence": {
         "type": "object",
-        "required": ["url", "passages"],
+        "required": [
+          "url",
+          "passages"
+        ],
         "properties": {
-          "url": { "type": "string" },
-          "title": { "type": "string" },
-          "site": { "type": "string" },
-          "passages": { "type": "array", "items": { "$ref": "#/components/schemas/Passage" } }
+          "url": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "site": {
+            "type": "string"
+          },
+          "passages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Passage"
+            }
+          }
         }
       },
       "Attempt": {
         "type": "object",
-        "required": ["url", "ok"],
+        "required": [
+          "url",
+          "ok"
+        ],
         "properties": {
-          "url": { "type": "string" },
-          "ok": { "type": "boolean" },
-          "ms": { "type": "integer" },
-          "passages": { "type": "integer" },
-          "tries": { "type": "integer" },
-          "status": { "type": "integer" },
-          "error": { "type": "string" },
-          "message": { "type": "string" }
+          "url": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "ms": {
+            "type": "integer"
+          },
+          "passages": {
+            "type": "integer"
+          },
+          "tries": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
         }
       },
       "SearchResult": {
         "type": "object",
-        "required": ["schemaVersion", "question", "evidence", "attempts"],
+        "required": [
+          "schemaVersion",
+          "question",
+          "evidence",
+          "attempts"
+        ],
         "properties": {
-          "ok": { "type": "boolean" },
-          "schemaVersion": { "type": "integer" },
-          "question": { "type": "string" },
-          "entity": { "type": ["string", "null"] },
-          "mode": { "type": "string", "enum": ["registry", "web-fallback", "none"] },
-          "evidence": { "type": "array", "items": { "$ref": "#/components/schemas/Evidence" } },
-          "attempts": { "type": "array", "items": { "$ref": "#/components/schemas/Attempt" } },
+          "ok": {
+            "type": "boolean"
+          },
+          "schemaVersion": {
+            "type": "integer"
+          },
+          "question": {
+            "type": "string"
+          },
+          "entity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "registry",
+              "web-fallback",
+              "none"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            }
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attempt"
+            }
+          },
           "error": {
             "type": "object",
-            "properties": { "code": { "type": "string" }, "message": { "type": "string" }, "attempts": { "type": "integer" } }
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "attempts": {
+                "type": "integer"
+              }
+            }
           },
-          "note": { "type": "string" },
-          "tookMs": { "type": "integer" },
-          "cached": { "type": "boolean" }
+          "note": {
+            "type": "string"
+          },
+          "tookMs": {
+            "type": "integer"
+          },
+          "cached": {
+            "type": "boolean"
+          }
         }
       },
       "FetchResult": {
         "type": "object",
-        "required": ["schemaVersion", "url", "text", "chars", "truncated"],
+        "required": [
+          "schemaVersion",
+          "url",
+          "text",
+          "chars",
+          "truncated"
+        ],
         "properties": {
-          "ok": { "type": "boolean" },
-          "schemaVersion": { "type": "integer" },
-          "url": { "type": "string" },
-          "finalUrl": { "type": "string" },
-          "status": { "type": "integer" },
-          "title": { "type": "string" },
-          "text": { "type": "string" },
-          "chars": { "type": "integer" },
-          "truncated": { "type": "boolean" },
-          "contentType": { "type": "string" },
-          "tookMs": { "type": "integer" }
+          "ok": {
+            "type": "boolean"
+          },
+          "schemaVersion": {
+            "type": "integer"
+          },
+          "url": {
+            "type": "string"
+          },
+          "finalUrl": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "chars": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "tookMs": {
+            "type": "integer"
+          }
         }
       },
       "Error": {
         "type": "object",
-        "required": ["ok", "error"],
+        "required": [
+          "ok",
+          "error"
+        ],
         "properties": {
-          "ok": { "type": "boolean", "const": false },
+          "ok": {
+            "type": "boolean",
+            "const": false
+          },
           "error": {
             "type": "object",
-            "required": ["code", "message"],
-            "properties": { "code": { "type": "string" }, "message": { "type": "string" }, "details": { "type": "object", "additionalProperties": true } }
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
           }
         }
       }
     }
   }
 }
+

@@ -2,10 +2,10 @@
 import { Cache } from './cache.mjs';
 import { ArgusError, CODES } from './errors.mjs';
 import { fetchRaw } from './fetch.mjs';
-import { extractLinks, extractTitle, extractXmlLocs, htmlToLines } from './text.mjs';
+import { extractLinks, extractTitle, extractXmlLocs, htmlToMarkdown } from './text.mjs';
 import { selectPassages } from './extract.mjs';
 import { expandTerms, matchEntity, rankSources, registryVersion } from './registry.mjs';
-import { webFallback } from './fallback.mjs';
+import { normalizeSite, webFallback } from './fallback.mjs';
 import { defaultCacheDir } from './paths.mjs';
 
 let sharedCache = null;
@@ -72,7 +72,8 @@ async function fetchSource(source, terms, timeoutMs, useCache) {
   const started = Date.now();
   try {
     const page = await getPage(source.url, timeoutMs, useCache);
-    const lines = htmlToLines(page.text);
+    // Markdown 保留标题、代码围栏与表格分隔；纯行文本会把代码缩进和表头丢掉。
+    const lines = htmlToMarkdown(page.text).split('\n').filter((line) => line.trim());
     const passages = selectPassages(lines, terms);
     return {
       attempt: { url: source.url, ok: true, ms: Date.now() - started, passages: passages.length, tries: page.tries ?? 1 },
@@ -103,7 +104,7 @@ async function fetchSource(source, terms, timeoutMs, useCache) {
 
 /**
  * @param {string} question
- * @param {{ maxSources?: number, cache?: boolean, fallback?: boolean, timeoutMs?: number }} [options]
+ * @param {{ maxSources?: number, cache?: boolean, fallback?: boolean, site?: string, timeoutMs?: number }} [options]
  */
 export async function search(question, options = {}) {
   const started = Date.now();
@@ -111,16 +112,17 @@ export async function search(question, options = {}) {
   if (!trimmed) throw new ArgusError(CODES.BAD_REQUEST, 'question is required');
   const maxSources = Math.max(1, Math.min(6, Number(options.maxSources ?? 3)));
   const timeoutMs = Number(options.timeoutMs ?? 12_000);
-  const useFallback = options.fallback === true;
+  const site = normalizeSite(options.site);
+  const useFallback = options.fallback === true || site !== null;
   const useCache = options.cache !== false;
   const cache = getCache(options);
-  const cacheKey = cache ? Cache.key(['search', registryVersion, trimmed, maxSources, useFallback]) : null;
+  const cacheKey = cache ? Cache.key(['search', registryVersion, trimmed, maxSources, useFallback, site ?? '']) : null;
   if (cache && cacheKey) {
     const hit = cache.get(cacheKey);
     if (hit) return { ...hit, cached: true, tookMs: Date.now() - started };
   }
 
-  const entity = matchEntity(trimmed);
+  const entity = site === null ? matchEntity(trimmed) : null;
   let result;
   if (entity) {
     const terms = expandTerms(trimmed);
@@ -172,7 +174,7 @@ export async function search(question, options = {}) {
       cached: false,
     };
   } else if (useFallback) {
-    const evidence = await webFallback(trimmed);
+    const evidence = await webFallback(trimmed, { site });
     result = {
       schemaVersion: 1,
       question: trimmed,
@@ -180,6 +182,7 @@ export async function search(question, options = {}) {
       mode: evidence.length ? 'web-fallback' : 'none',
       evidence,
       attempts: [],
+      ...(site ? { site } : {}),
       tookMs: Date.now() - started,
       cached: false,
     };
