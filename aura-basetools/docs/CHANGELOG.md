@@ -8,6 +8,13 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.7.0：核心/DSH 拆包
+
+- `aura-basetools` 只含引擎 + CLI + MCP，没有 DSH peer；`aura-basetools-dsh` 是 DSH 适配器，依赖 core。
+- core 的 `exports` 开放 `locator-lab/*`，DSH 壳以包名 import，不再靠同一目录布局。
+- CI 增加 split 构建与“core 无 DSH”断言；核验 Windows + macOS 15/26。
+- 发布 `aura-basetools@0.7.0`、`aura-basetools-dsh@0.7.0`。
+
 ## 0.6.19：写入边界收紧 + 写事务
 
 - 写事务：`edit` 在第一次写入前记录原始字节；成功后 `--transaction` 返回 id，`aura undo` / `--id` / `--force` 可恢复；多目标部分失败时回滚已落地文件。
@@ -22,7 +29,7 @@
 - 临时文件写后 fsync 再 rename；不支持 fsync 的 FS 退化为尽力而为。
 - 新增独立面 N1–N6：mode、symlink、hardlink、range、大小上限、缓存权限。
 - 删除外部 AuraPolaris 差分测试；它不属于文件工具的发布门，也不再依赖用户级 hook 路径。
-- 新增 Windows/Linux CI（Node 20/22/24）覆盖核心文件工具与打包后验收。
+- 新增 Windows/macOS CI（Node 22）覆盖独立面与打包后验收。
 - 独立面 O1–O8：单/多目标 transaction、undo、外部改动拒绝、部分失败回滚、锁冲突。
 
 ## 0.6.2 → 0.6.9：契约与分发连续推进（同夜多版）
