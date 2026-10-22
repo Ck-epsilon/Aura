@@ -1,0 +1,15 @@
+{
+  "name": "dsh-tool-patch",
+  "version": "0.6.19",
+  "private": true,
+  "description": "Anchored multi-hunk patch tool for the DeepSeek Harness: declare intent + a drift-tolerant anchor, and the host owns matching, disambiguation, atomic commit and rollback.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/schemastery": "*"
+  }
+}

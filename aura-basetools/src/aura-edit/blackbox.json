@@ -1,0 +1,7 @@
+{
+  "pkg": "dsh-skill-filesystem",
+  "drift": "去掉一行注释",
+  "anchorLines": 2,
+  "anchor": "\t\t\tif (oldest.done) break;\n\t\t\tconst [projectRoot, paths] = oldest.value;",
+  "at": 228
+}

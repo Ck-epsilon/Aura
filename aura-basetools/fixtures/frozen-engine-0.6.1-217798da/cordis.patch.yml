@@ -1,0 +1,13 @@
+# 由 aura-tools/build/make-bundle.mjs 生成 —— 不要手改（改源：src/aura-read/ · src/aura-edit/ · src/locator-lab/）。
+#
+# `name` 用 **patch 相对路径**：加载器把 ./ 与 ../ 转成相对本文件的 file URL
+# （dsh-app-boot/README.md:59），因此包装在 Windows / macOS / Linux、装在任意目录都成立。
+#
+# 内置 read / write / edit / read_image 一个都没停用：只加不减。
+# read_image 没有 Aura 替代品，停用 tool-fs 会净损失读图能力。
+- insert:
+    - id: tool-aura-read
+      name: './aura-read/index.js'
+
+    - id: tool-aura-edit
+      name: './aura-edit/index.js'

@@ -1,0 +1,13 @@
+# 验证用补丁叠加层：把 Aura 读写工具作为宿主层两行插进去。
+#
+# 用法（不改任何持久配置）：
+#   dsh --profile headless --patch ./aura-overlay.yml "你的任务"
+#
+# 这里的 specifier 与预设里的行**逐字一致**，因此本叠加层能跑通
+# = 预设里那两行也能跑通。
+
+- insert:
+    - id: tool-aura-read
+      name: 'E:\workspaces\deepseekharness\aura-read\index.js'
+    - id: tool-aura-edit
+      name: 'E:\workspaces\deepseekharness\aura-edit\index.js'

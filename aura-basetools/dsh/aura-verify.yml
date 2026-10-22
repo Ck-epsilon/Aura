@@ -1,0 +1,13 @@
+# 与 auravesta 预设里那两行**逐字一致**的验证叠加层。
+#
+# 用途：在不重启 dsh、不改持久配置的前提下，证明预设里那两行能被真实加载器
+# 解析、import 并执行 apply。本叠加层跑通 = 预设那两行跑通。
+#
+#   dsh --profile headless --patch ./dsh/aura-verify.yml "你的任务"
+
+- insert:
+    - id: tool-aura-read
+      name: '../src/aura-read/index.js'
+
+    - id: tool-aura-edit
+      name: '../src/aura-edit/index.js'

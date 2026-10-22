@@ -1,0 +1,43 @@
+{
+ "fixture": "frozen-engine-0.6.1-217798da",
+ "what": "升级前那一份现网引擎的逐字节副本（0.6.1，构建戳 0.6.1+217798da5117）",
+ "version": "0.6.1",
+ "treeHash": "217798da5117394474de1cebd309bb69338b1986306720ee5c52e8e254a8f61a",
+ "buildStamp": "0.6.1+217798da5117",
+ "source": {
+  "path": "C:\\Users\\cxk\\.aura\\pkg\\previous\\aura-tools",
+  "what": "安装器的 --rollback 对调目标（升级前的那一份现网）。它不是安装路径 node_modules/aura-tools，所以 C29 只读复制，不碰它",
+  "treeHash": "217798da5117394474de1cebd309bb69338b1986306720ee5c52e8e254a8f61a",
+  "verifiedIdenticalAt": "2026-10-14T15:27:37.380Z"
+ },
+ "takenAt": "2026-10-14T15:27:37.381Z",
+ "takenBy": "C29（fs-contract-v2 波 9）",
+ "thisTreeHashCovers": "本目录下全部普通文件（逐文件 sha256 按相对路径升序拼接后取 sha256）——与 dist/aura-tools 同一个算法，清单不含任何后加的说明文件",
+ "engineModules": [
+  "locator-lab/write-path.mjs",
+  "locator-lab/read-core.mjs",
+  "locator-lab/locator-api.mjs"
+ ],
+ "fileCount": 19,
+ "files": {
+  "README.md": "6aadaf54edfe6a3e0d22ae7e394ef87d6145168988e1098320c920fea791f6e2",
+  "aura-edit/index.js": "e01e2ec91fd050a969a633207dfbb341c76545a1d7270afeb318f0e3a0da9fae",
+  "aura-read/index.js": "28784ca203a324b72a199da3be8e1e1c4828f805d9aea5700fe9627d829cd746",
+  "bin/aura-mcp.mjs": "8dff1d27334adcea8be93c31c46f73d23f025711d33a4a1ff80c7b4a553d1db9",
+  "bin/aura.mjs": "8dcdb2327cdabe7f1647942a822f063ce9498537bd669a0833ed29bbd3abfdc2",
+  "cordis.patch.yml": "fe1981fb2bec1913312d1dc1109c61f5240d32329afc0ae1fc369650447a182e",
+  "install.mjs": "20460201e94e06dd2facf169b61134cfffcb1d7e9f7849a578972bf812d883ae",
+  "lib/fs-provider.mjs": "4f4524fe93f7dc9e09f032552eb58fc9ed97b0e98dd18ee683175d9d49953c3a",
+  "lib/observation-store.mjs": "d08f981dea9e595c578f7d031a2c2bd6097234ef23a07a98a6cdb0fbb9a3da0c",
+  "lib/ops.mjs": "a5ae1f21efe18402276c9c0925df212d2e3beb88f9559f5ce1ca1aa7a77ec494",
+  "locator-lab/anchor-core.mjs": "61fecf674c3fff52b73d0b40b3754b2e848e62c34fc8441123778f0865ec0032",
+  "locator-lab/args.mjs": "81192ebc12123e45103bf59839c0c6741ae0149bbc2df6bd733a518c6dfa86cf",
+  "locator-lab/locator-api.mjs": "02d808f493e5ab9abd6d9a151888d0e4fc4c1b39e34e62f03abe9e6663f26da5",
+  "locator-lab/read-core.mjs": "5749005c47381991dff546c137dc4b2a6c3e4b556d8c31cc860693d98daec90b",
+  "locator-lab/repo-map.mjs": "7b82bdaa843354de21ddd8c62292357c4f01eca4449c2fb9dd09a01127c205ec",
+  "locator-lab/struct-core.mjs": "8f5a9bf7117df9e3ac04a5cfd6c85feea7ea51380faf1d5c07a16ed96db62d78",
+  "locator-lab/write-path.mjs": "a61a29e5df2992798a058f142e1d37b45b3417e75df97e6f201c91b6c3e44529",
+  "package.json": "4de6ebc3db3c065ecfa1bb1962d522b510b7f60f42f33ef58f9305fe3b92180e",
+  "test/standalone-test.mjs": "8ca4f781e81f6d14c1773ffbd5880dd75f1c8146efeffdb4f1bd5f4b3193339a"
+ }
+}

@@ -1,0 +1,14 @@
+Read E:\workspaces\deepseekharness\patch-plugin\e2e-fixture.js first with the read tool.
+
+Then make exactly three patch calls on that file, and report each tool result verbatim.
+
+(A) Address by line number. Put the line 7 string literal back to zero:
+    hunks: [{ lines: [7], expect: "  if (value === 0) return { kind: 'nothing' };", replace: "  if (value === 0) return { kind: 'zero' };" }]
+
+(B) Address by a single word. Add a trailing comment to the negative branch:
+    hunks: [{ line_cue: "magnitude: -value", replace: "  if (value < 0) return { kind: 'negative', magnitude: -value }; // negative branch" }]
+
+(C) Address by symbol name. Rewrite the whole function with one leading comment line added inside it:
+    hunks: [{ target: "classify", replace: "function classify(value) {\n  // centered on zero\n  if (value === 0) return { kind: 'zero' };\n  if (value < 0) return { kind: 'negative', magnitude: -value }; // negative branch\n  return { kind: 'positive', magnitude: value };\n}" }]
+
+Report all three tool results verbatim, then stop.

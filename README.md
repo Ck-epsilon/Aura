@@ -232,3 +232,4 @@ No additional packages are published from this repository at this time.
 Original code in this repository is released under the MIT License; see [`LICENSE`](LICENSE) and each package's `LICENSE` file.
 
 Third-party names, trademarks, and works referenced by a package remain the property of their respective owners. The MIT license covers original code only and does not grant any license to third-party intellectual property.
+- [aura-basetools](aura-basetools/README.md) — byte-fidelity read/edit engine with write transactions and undo; CLI and MCP.

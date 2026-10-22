@@ -1,0 +1,9 @@
+# 实验用：不碰任何 preset，只在进程组合层（profile 的 patch 层）插入 Aura 两个插件。
+# 目的：验证「standard 预设的会话」能否因此看到 aura_read / aura_edit。
+# standard 预设是进程级常驻组合，其工具行注册进宿主 tools 注册表且不需要 realm，
+# 因此从更外层的 patch 层插入同名同形状的行应当被同一注册表接纳。
+- insert:
+    - id: tool-aura-read
+      name: '../src/aura-read/index.js'
+    - id: tool-aura-edit
+      name: '../src/aura-edit/index.js'

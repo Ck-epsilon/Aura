@@ -1,0 +1,50 @@
+name: aura-basetools
+
+on:
+  push:
+    paths:
+      - 'aura-basetools/**'
+      - '.github/workflows/aura-basetools-ci.yml'
+  pull_request:
+    paths:
+      - 'aura-basetools/**'
+      - '.github/workflows/aura-basetools-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: node-${{ matrix.node }} · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+        node:
+          - 20
+          - 22
+          - 24
+    defaults:
+      run:
+        working-directory: aura-basetools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Core file-tool suites
+        run: |
+          node src/locator-lab/write-verify-test.mjs
+          node src/locator-lab/byte-fidelity-test.mjs
+          node src/locator-lab/stale-gate-test.mjs
+          node src/aura-standalone/test/standalone-test.mjs
+      - name: Build bundle
+        run: node build/make-bundle.mjs --pack
+      - name: Packaged / byte-boundary suites
+        run: |
+          node dist/aura-basetools/test/standalone-test.mjs
+          node src/aura-standalone/test/range-bytes-test.mjs
