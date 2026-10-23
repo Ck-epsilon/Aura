@@ -122,7 +122,8 @@ async function getPage(url, ctx) {
 async function discover(spec, terms, ctx) {
   if (!spec) return [];
   try {
-    const page = await getPage(spec.url, ctx);
+    const discoveryTimeoutMs = Math.min(Number(ctx.timeoutMs) || 8000, 1800);
+    const page = await getPage(spec.url, { ...ctx, timeoutMs: discoveryTimeoutMs });
     const items = spec.type === 'sitemap'
       ? extractXmlLocs(page.text).map((url) => ({ url }))
       : extractLinks(page.text, spec.url);
@@ -189,7 +190,11 @@ async function fetchSource(source, terms, ctx) {
   const marker = source.fallback === true ? { fallback: true } : {};
   const via = source.via ? { via: source.via } : {};
   try {
-    const page = await getPage(source.url, ctx);
+    // A single slow official page must not set the query tail: the search budget is
+    // shared, so cap each registry fetch at 2.0 s and let the remaining sources /
+    // fallback answer. The hard query budget is still enforced by the caller.
+    const sourceTimeoutMs = Math.min(Number(ctx.timeoutMs) || 8000, 2000);
+    const page = await getPage(source.url, { ...ctx, timeoutMs: sourceTimeoutMs });
     const extractStarted = Date.now();
     // Markdown 保留标题、代码围栏与表格分隔；纯行文本会把代码缩进和表头丢掉。
     const lines = htmlToMarkdown(page.text).split('\n').filter((line) => line.trim());

@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-23T20:13:05.320Z",
+  "at": "2026-10-23T20:46:24.175Z",
   "source": "file:///E:/workspaces/Aura/aura-argus/eval/results.json",
   "questions": 73,
   "answerable": 73,
@@ -7,9 +7,9 @@
   "threshold": 0.9,
   "avgConfidence": 0.86,
   "avgFacetRatio": 0.9,
-  "avgSources": 1.77,
-  "p50": 1035,
-  "p95": 2399,
+  "avgSources": 1.78,
+  "p50": 856,
+  "p95": 2443,
   "failures": [],
   "rows": [
     {
@@ -22,7 +22,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 621
+      "ms": 708
     },
     {
       "id": "decompose-price-qps",
@@ -34,7 +34,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 402
+      "ms": 322
     },
     {
       "id": "deepseek-price-en",
@@ -46,7 +46,7 @@
       "confidence": 0.89,
       "facetRatio": 0.8,
       "sources": 2,
-      "ms": 343
+      "ms": 397
     },
     {
       "id": "searxng-429",
@@ -58,7 +58,7 @@
       "confidence": 0.74,
       "facetRatio": 0.8,
       "sources": 1,
-      "ms": 592
+      "ms": 614
     },
     {
       "id": "searxng-json",
@@ -70,7 +70,7 @@
       "confidence": 0.96,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 169
+      "ms": 212
     },
     {
       "id": "tavily-price",
@@ -79,10 +79,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 1,
+      "confidence": 0.9,
       "facetRatio": 1,
-      "sources": 3,
-      "ms": 2835
+      "sources": 1,
+      "ms": 1031
     },
     {
       "id": "google-cse",
@@ -94,7 +94,7 @@
       "confidence": 0.63,
       "facetRatio": 0.5,
       "sources": 1,
-      "ms": 1629
+      "ms": 1022
     },
     {
       "id": "bing-retire",
@@ -103,10 +103,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 0.63,
-      "facetRatio": 0.5,
-      "sources": 1,
-      "ms": 1219
+      "confidence": 0.74,
+      "facetRatio": 0.75,
+      "sources": 3,
+      "ms": 2211
     },
     {
       "id": "bing-retire-en",
@@ -118,7 +118,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 221
+      "ms": 611
     },
     {
       "id": "python-asyncio",
@@ -130,7 +130,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 3,
-      "ms": 1035
+      "ms": 973
     },
     {
       "id": "python-314",
@@ -142,7 +142,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 406
+      "ms": 570
     },
     {
       "id": "node-http",
@@ -154,7 +154,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 1199
+      "ms": 1024
     },
     {
       "id": "node-fs",
@@ -166,7 +166,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 457
+      "ms": 425
     },
     {
       "id": "github-rest",
@@ -178,7 +178,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 917
+      "ms": 772
     },
     {
       "id": "github-actions",
@@ -187,10 +187,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 0.9,
+      "confidence": 1,
       "facetRatio": 1,
-      "sources": 1,
-      "ms": 169
+      "sources": 3,
+      "ms": 367
     },
     {
       "id": "mdn-promise",
@@ -202,7 +202,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 1122
+      "ms": 663
     },
     {
       "id": "react-usestate",
@@ -214,7 +214,7 @@
       "confidence": 0.86,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 969
+      "ms": 886
     },
     {
       "id": "vue-reactivity",
@@ -226,7 +226,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 871
+      "ms": 734
     },
     {
       "id": "rust-ownership",
@@ -235,10 +235,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 0.99,
+      "confidence": 0.9,
       "facetRatio": 1,
-      "sources": 2,
-      "ms": 710
+      "sources": 1,
+      "ms": 748
     },
     {
       "id": "go-module",
@@ -250,7 +250,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 1112
+      "ms": 839
     },
     {
       "id": "docker-install",
@@ -262,7 +262,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 801
+      "ms": 571
     },
     {
       "id": "postgres-table",
@@ -274,7 +274,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1404
+      "ms": 863
     },
     {
       "id": "nginx-config",
@@ -286,7 +286,7 @@
       "confidence": 0.78,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 1127
+      "ms": 985
     },
     {
       "id": "k8s-pod",
@@ -298,7 +298,7 @@
       "confidence": 0.77,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 1132
+      "ms": 954
     },
     {
       "id": "redis-commands",
@@ -310,7 +310,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1173
+      "ms": 927
     },
     {
       "id": "alias-deepseek",
@@ -322,7 +322,7 @@
       "confidence": 0.94,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 505
+      "ms": 489
     },
     {
       "id": "alias-node",
@@ -334,7 +334,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1019
+      "ms": 1043
     },
     {
       "id": "alias-go",
@@ -346,7 +346,7 @@
       "confidence": 0.82,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 776
+      "ms": 830
     },
     {
       "id": "alias-k8s",
@@ -358,7 +358,7 @@
       "confidence": 0.6,
       "facetRatio": 0.6,
       "sources": 1,
-      "ms": 567
+      "ms": 561
     },
     {
       "id": "alias-bing",
@@ -367,10 +367,10 @@
       "answerable": true,
       "checksPassed": 4,
       "checksTotal": 4,
-      "confidence": 0.57,
-      "facetRatio": 0.667,
-      "sources": 1,
-      "ms": 1357
+      "confidence": 0.74,
+      "facetRatio": 0.833,
+      "sources": 3,
+      "ms": 2116
     },
     {
       "id": "aliyun-ecs",
@@ -382,7 +382,7 @@
       "confidence": 0.74,
       "facetRatio": 0.75,
       "sources": 2,
-      "ms": 733
+      "ms": 760
     },
     {
       "id": "wechat-phone",
@@ -394,7 +394,7 @@
       "confidence": 0.74,
       "facetRatio": 0.667,
       "sources": 2,
-      "ms": 367
+      "ms": 291
     },
     {
       "id": "qwen-price",
@@ -406,7 +406,7 @@
       "confidence": 0.98,
       "facetRatio": 1,
       "sources": 3,
-      "ms": 863
+      "ms": 908
     },
     {
       "id": "kimi-price",
@@ -418,7 +418,7 @@
       "confidence": 0.73,
       "facetRatio": 0.5,
       "sources": 3,
-      "ms": 1488
+      "ms": 1366
     },
     {
       "id": "hunyuan-price",
@@ -430,7 +430,7 @@
       "confidence": 0.43,
       "facetRatio": 0,
       "sources": 2,
-      "ms": 663
+      "ms": 696
     },
     {
       "id": "antd-table",
@@ -442,7 +442,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 3,
-      "ms": 1689
+      "ms": 1218
     },
     {
       "id": "spring-datasource",
@@ -453,8 +453,8 @@
       "checksTotal": 5,
       "confidence": 1,
       "facetRatio": 1,
-      "sources": 3,
-      "ms": 1003
+      "sources": 2,
+      "ms": 768
     },
     {
       "id": "mysql-innodb",
@@ -466,7 +466,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1067
+      "ms": 865
     },
     {
       "id": "multi-isolation",
@@ -478,7 +478,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1210
+      "ms": 845
     },
     {
       "id": "multi-react-vue",
@@ -490,7 +490,7 @@
       "confidence": 0.37,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 2122
+      "ms": 2443
     },
     {
       "id": "contract-confidence",
@@ -502,7 +502,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 3,
-      "ms": 1009
+      "ms": 1050
     },
     {
       "id": "azure-app",
@@ -514,7 +514,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 2393
+      "ms": 1860
     },
     {
       "id": "gcp-compute",
@@ -523,10 +523,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 0.92,
-      "facetRatio": 0.857,
+      "confidence": 0.74,
+      "facetRatio": 0.714,
       "sources": 2,
-      "ms": 2919
+      "ms": 10733
     },
     {
       "id": "mistral-price",
@@ -535,10 +535,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 0.72,
-      "facetRatio": 0.667,
-      "sources": 1,
-      "ms": 1257
+      "confidence": 1,
+      "facetRatio": 1,
+      "sources": 2,
+      "ms": 2958
     },
     {
       "id": "hf-transformers",
@@ -550,7 +550,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1168
+      "ms": 1242
     },
     {
       "id": "langchain-agent",
@@ -562,7 +562,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 1311
+      "ms": 969
     },
     {
       "id": "ollama-pull",
@@ -574,7 +574,7 @@
       "confidence": 0.95,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 967
+      "ms": 819
     },
     {
       "id": "mongodb-index",
@@ -583,10 +583,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 1,
-      "facetRatio": 1,
+      "confidence": 0.74,
+      "facetRatio": 0.8,
       "sources": 2,
-      "ms": 2399
+      "ms": 2581
     },
     {
       "id": "sqlite-wal",
@@ -598,7 +598,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1255
+      "ms": 1126
     },
     {
       "id": "elasticsearch-index",
@@ -607,10 +607,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 1,
-      "facetRatio": 1,
-      "sources": 2,
-      "ms": 1286
+      "confidence": 0.74,
+      "facetRatio": 0.8,
+      "sources": 3,
+      "ms": 856
     },
     {
       "id": "prometheus-promql",
@@ -622,7 +622,7 @@
       "confidence": 0.65,
       "facetRatio": 0.667,
       "sources": 1,
-      "ms": 1167
+      "ms": 842
     },
     {
       "id": "grafana-datasource",
@@ -631,10 +631,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 0.91,
-      "facetRatio": 1,
-      "sources": 3,
-      "ms": 3005
+      "confidence": 0.74,
+      "facetRatio": 0.75,
+      "sources": 1,
+      "ms": 998
     },
     {
       "id": "angular-signal",
@@ -646,7 +646,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 954
+      "ms": 726
     },
     {
       "id": "svelte-runes",
@@ -658,7 +658,7 @@
       "confidence": 0.91,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1172
+      "ms": 993
     },
     {
       "id": "pypi-publish",
@@ -670,7 +670,7 @@
       "confidence": 0.98,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1521
+      "ms": 1223
     },
     {
       "id": "ghsa-advisory",
@@ -682,7 +682,7 @@
       "confidence": 0.74,
       "facetRatio": 0.833,
       "sources": 3,
-      "ms": 1682
+      "ms": 1699
     },
     {
       "id": "flutter-page",
@@ -694,7 +694,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1034
+      "ms": 758
     },
     {
       "id": "node20-fs",
@@ -706,7 +706,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 949
+      "ms": 979
     },
     {
       "id": "ruby-block",
@@ -718,7 +718,7 @@
       "confidence": 0.93,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1152
+      "ms": 1249
     },
     {
       "id": "scala-case",
@@ -730,7 +730,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 1202
+      "ms": 1085
     },
     {
       "id": "cassandra-table",
@@ -742,7 +742,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 1262
+      "ms": 803
     },
     {
       "id": "ansible-playbook",
@@ -754,7 +754,7 @@
       "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1089
+      "ms": 1018
     },
     {
       "id": "istio-route",
@@ -763,10 +763,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 0.92,
+      "confidence": 0.9,
       "facetRatio": 1,
-      "sources": 2,
-      "ms": 972
+      "sources": 1,
+      "ms": 791
     },
     {
       "id": "argocd-sync",
@@ -778,7 +778,7 @@
       "confidence": 0.9,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 900
+      "ms": 550
     },
     {
       "id": "jest-mock",
@@ -790,7 +790,7 @@
       "confidence": 0.81,
       "facetRatio": 1,
       "sources": 1,
-      "ms": 782
+      "ms": 750
     },
     {
       "id": "cypress-wait",
@@ -799,10 +799,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 0.91,
+      "confidence": 1,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 896
+      "ms": 809
     },
     {
       "id": "pytest-param",
@@ -811,10 +811,10 @@
       "answerable": true,
       "checksPassed": 5,
       "checksTotal": 5,
-      "confidence": 0.96,
-      "facetRatio": 1,
+      "confidence": 0.74,
+      "facetRatio": 0.8,
       "sources": 2,
-      "ms": 872
+      "ms": 606
     },
     {
       "id": "flask-route",
@@ -826,7 +826,7 @@
       "confidence": 0.94,
       "facetRatio": 1,
       "sources": 3,
-      "ms": 1278
+      "ms": 1223
     },
     {
       "id": "express-middleware",
@@ -838,7 +838,7 @@
       "confidence": 0.84,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1428
+      "ms": 1373
     },
     {
       "id": "helm-chart",
@@ -850,7 +850,7 @@
       "confidence": 0.96,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 737
+      "ms": 716
     },
     {
       "id": "otel-span",
@@ -862,7 +862,7 @@
       "confidence": 0.96,
       "facetRatio": 1,
       "sources": 2,
-      "ms": 1113
+      "ms": 902
     },
     {
       "id": "no-sites-optout",
@@ -874,7 +874,7 @@
       "confidence": 0,
       "facetRatio": 0,
       "sources": 0,
-      "ms": 0
+      "ms": 1
     },
     {
       "id": "no-entity",

@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-23T20:13:01.883Z",
+  "at": "2026-10-23T20:46:23.280Z",
   "questions": 74,
   "hard": {
     "passed": 361,
@@ -10,14 +10,14 @@
     "total": 2
   },
   "latency": {
-    "p50": 1035,
-    "p95": 2408,
-    "p99": 3005,
-    "mean": 1103
+    "p50": 856,
+    "p95": 2443,
+    "p99": 10733,
+    "mean": 1092
   },
-  "avgChars": 4036,
-  "avgSources": 1.78,
-  "avgConfidence": 0.86,
+  "avgChars": 4174,
+  "avgSources": 1.8,
+  "avgConfidence": 0.85,
   "avgFacetRatio": 0.89,
   "indexHits": 0,
   "failures": [],
@@ -35,7 +35,7 @@
         "https://api-docs.deepseek.com/guides/search/",
         "https://api-docs.deepseek.com/quick_start/pricing/"
       ],
-      "ms": 621,
+      "ms": 708,
       "chars": 6289,
       "confidence": {
         "score": 1,
@@ -67,13 +67,13 @@
       },
       "timings": {
         "routeMs": 1,
-        "fetchMs": 612,
-        "extractMs": 3,
-        "selectMs": 7,
+        "fetchMs": 697,
+        "extractMs": 4,
+        "selectMs": 8,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 617
+        "totalMs": 704
       },
       "version": null,
       "cache": "none",
@@ -119,7 +119,7 @@
         "https://api-docs.deepseek.com/guides/search/",
         "https://api-docs.deepseek.com/quick_start/pricing/"
       ],
-      "ms": 402,
+      "ms": 322,
       "chars": 9086,
       "confidence": {
         "score": 1,
@@ -151,14 +151,14 @@
       },
       "timings": {
         "routeMs": 1,
-        "fetchMs": 399,
-        "extractMs": 1,
-        "selectMs": 6,
+        "fetchMs": 318,
+        "extractMs": 2,
+        "selectMs": 5,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "decomposeMs": 401,
-        "totalMs": 402
+        "decomposeMs": 320,
+        "totalMs": 321
       },
       "version": null,
       "cache": "none",
@@ -209,7 +209,7 @@
         "https://api-docs.deepseek.com/quick_start/pricing/",
         "https://api-docs.deepseek.com/guides/search/"
       ],
-      "ms": 343,
+      "ms": 397,
       "chars": 5881,
       "confidence": {
         "score": 0.89,
@@ -235,14 +235,14 @@
         "ratio": 0.8
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 333,
-        "extractMs": 1,
+        "routeMs": 1,
+        "fetchMs": 346,
+        "extractMs": 2,
         "selectMs": 2,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 333
+        "totalMs": 347
       },
       "version": null,
       "cache": "none",
@@ -282,7 +282,7 @@
       "sources": [
         "https://docs.searxng.org/admin/settings/settings_search.html"
       ],
-      "ms": 592,
+      "ms": 614,
       "chars": 2276,
       "confidence": {
         "score": 0.74,
@@ -308,14 +308,14 @@
         "ratio": 0.8
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 588,
-        "extractMs": 2,
-        "selectMs": 2,
+        "routeMs": 2,
+        "fetchMs": 601,
+        "extractMs": 1,
+        "selectMs": 3,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 591
+        "totalMs": 614
       },
       "version": null,
       "cache": "none",
@@ -356,7 +356,7 @@
         "https://docs.searxng.org/dev/search_api.html",
         "https://docs.searxng.org/admin/settings/settings_search.html"
       ],
-      "ms": 169,
+      "ms": 212,
       "chars": 4170,
       "confidence": {
         "score": 0.96,
@@ -380,13 +380,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 169,
-        "extractMs": 2,
+        "fetchMs": 211,
+        "extractMs": 1,
         "selectMs": 2,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 169
+        "totalMs": 211
       },
       "version": null,
       "cache": "none",
@@ -434,14 +434,12 @@
       ],
       "mode": "registry",
       "sources": [
-        "https://docs.tavily.com/documentation/api-credits",
-        "https://docs.tavily.com/",
-        "https://www.tavily.com/pricing"
+        "https://docs.tavily.com/documentation/api-credits"
       ],
-      "ms": 2835,
-      "chars": 6338,
+      "ms": 1031,
+      "chars": 1682,
       "confidence": {
-        "score": 1,
+        "score": 0.9,
         "label": "high"
       },
       "facets": {
@@ -463,14 +461,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 2553,
-        "extractMs": 8,
-        "selectMs": 5,
-        "followMs": 278,
+        "routeMs": 0,
+        "fetchMs": 1030,
+        "extractMs": 1,
+        "selectMs": 1,
+        "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 2834
+        "totalMs": 1031
       },
       "version": null,
       "cache": "none",
@@ -488,7 +486,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 3"
+          "detail": "got 1"
         },
         {
           "name": "price",
@@ -515,7 +513,7 @@
       "sources": [
         "https://developers.google.cn/custom-search/v1/overview?hl=zh-cn"
       ],
-      "ms": 1629,
+      "ms": 1022,
       "chars": 1594,
       "confidence": {
         "score": 0.63,
@@ -548,13 +546,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1626,
-        "extractMs": 0,
+        "fetchMs": 1019,
+        "extractMs": 1,
         "selectMs": 2,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1627
+        "totalMs": 1021
       },
       "version": null,
       "cache": "none",
@@ -597,40 +595,50 @@
       ],
       "mode": "registry",
       "sources": [
+        "https://learn.microsoft.com/en-us/azure/foundry-classic/agents/how-to/tools-classic/bing-grounding",
+        "https://learn.microsoft.com/en-us/lifecycle/faq/internet-explorer-microsoft-edge",
         "https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement"
       ],
-      "ms": 1219,
-      "chars": 1099,
+      "ms": 2211,
+      "chars": 9173,
       "confidence": {
-        "score": 0.63,
+        "score": 0.74,
         "label": "medium"
       },
       "facets": {
         "terms": [
+          "replacement",
           "retirement",
           "migration",
           "search",
-          "bing"
+          "bing",
+          "date",
+          "life",
+          "end"
         ],
         "covered": [
+          "migration",
           "search",
-          "bing"
+          "bing",
+          "date",
+          "life",
+          "end"
         ],
         "missing": [
-          "retirement",
-          "migration"
+          "replacement",
+          "retirement"
         ],
-        "ratio": 0.5
+        "ratio": 0.75
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 1219,
-        "extractMs": 0,
-        "selectMs": 1,
-        "followMs": 0,
+        "routeMs": 1,
+        "fetchMs": 1882,
+        "extractMs": 4,
+        "selectMs": 8,
+        "followMs": 325,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1219
+        "totalMs": 2210
       },
       "version": null,
       "cache": "none",
@@ -648,7 +656,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 1"
+          "detail": "got 3"
         },
         {
           "name": "date",
@@ -675,7 +683,7 @@
       "sources": [
         "https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement"
       ],
-      "ms": 221,
+      "ms": 611,
       "chars": 1099,
       "confidence": {
         "score": 0.9,
@@ -697,13 +705,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 218,
-        "extractMs": 1,
-        "selectMs": 0,
+        "fetchMs": 610,
+        "extractMs": 0,
+        "selectMs": 1,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 221
+        "totalMs": 611
       },
       "version": null,
       "cache": "none",
@@ -745,7 +753,7 @@
         "https://docs.python.org/3/whatsnew/3.14.html",
         "https://docs.python.org/3/library/asyncio.html"
       ],
-      "ms": 1035,
+      "ms": 973,
       "chars": 7817,
       "confidence": {
         "score": 1,
@@ -766,14 +774,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 1033,
-        "extractMs": 24,
-        "selectMs": 22,
+        "routeMs": 1,
+        "fetchMs": 971,
+        "extractMs": 25,
+        "selectMs": 20,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1035
+        "totalMs": 972
       },
       "version": null,
       "cache": "none",
@@ -819,7 +827,7 @@
         "https://docs.python.org/3/whatsnew/3.14.html",
         "https://docs.python.org/3/library/asyncio-task.html"
       ],
-      "ms": 406,
+      "ms": 570,
       "chars": 3296,
       "confidence": {
         "score": 1,
@@ -842,14 +850,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 405,
-        "extractMs": 23,
-        "selectMs": 22,
+        "routeMs": 1,
+        "fetchMs": 568,
+        "extractMs": 20,
+        "selectMs": 21,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 406
+        "totalMs": 570
       },
       "version": null,
       "cache": "none",
@@ -894,7 +902,7 @@
       "sources": [
         "https://nodejs.org/api/http.html"
       ],
-      "ms": 1199,
+      "ms": 1024,
       "chars": 4032,
       "confidence": {
         "score": 0.9,
@@ -920,13 +928,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1199,
-        "extractMs": 44,
-        "selectMs": 66,
+        "fetchMs": 1022,
+        "extractMs": 41,
+        "selectMs": 63,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1199
+        "totalMs": 1023
       },
       "version": null,
       "cache": "none",
@@ -972,7 +980,7 @@
         "https://nodejs.org/api/fs.html",
         "https://nodejs.org/api/http.html"
       ],
-      "ms": 457,
+      "ms": 425,
       "chars": 5321,
       "confidence": {
         "score": 1,
@@ -994,13 +1002,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 456,
-        "extractMs": 42,
-        "selectMs": 57,
+        "fetchMs": 425,
+        "extractMs": 41,
+        "selectMs": 56,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 457
+        "totalMs": 425
       },
       "version": null,
       "cache": "none",
@@ -1046,20 +1054,18 @@
         "https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api",
         "https://docs.github.com/en/rest"
       ],
-      "ms": 917,
-      "chars": 5781,
+      "ms": 772,
+      "chars": 5272,
       "confidence": {
         "score": 1,
         "label": "high"
       },
       "facets": {
         "terms": [
-          "authentication",
           "github",
           "rest"
         ],
         "covered": [
-          "authentication",
           "github",
           "rest"
         ],
@@ -1068,13 +1074,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 916,
-        "extractMs": 5,
-        "selectMs": 5,
+        "fetchMs": 771,
+        "extractMs": 6,
+        "selectMs": 4,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 917
+        "totalMs": 772
       },
       "version": null,
       "cache": "none",
@@ -1117,37 +1123,45 @@
       ],
       "mode": "registry",
       "sources": [
-        "https://docs.github.com/en/actions"
+        "https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api",
+        "https://docs.github.com/en/actions",
+        "https://docs.github.com/en/rest"
       ],
-      "ms": 169,
-      "chars": 2297,
+      "ms": 367,
+      "chars": 7680,
       "confidence": {
-        "score": 0.9,
+        "score": 1,
         "label": "high"
       },
       "facets": {
         "terms": [
+          "workflows",
           "workflow",
           "actions",
-          "github"
+          ".github",
+          "github",
+          "path"
         ],
         "covered": [
+          "workflows",
           "workflow",
           "actions",
-          "github"
+          ".github",
+          "github",
+          "path"
         ],
         "missing": [],
         "ratio": 1
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 169,
-        "extractMs": 2,
-        "selectMs": 1,
+        "fetchMs": 365,
+        "extractMs": 3,
+        "selectMs": 5,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 169
+        "totalMs": 366
       },
       "version": null,
       "cache": "none",
@@ -1165,7 +1179,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 1"
+          "detail": "got 3"
         },
         {
           "name": "workflow",
@@ -1192,7 +1206,7 @@
       "sources": [
         "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise"
       ],
-      "ms": 1122,
+      "ms": 663,
       "chars": 4549,
       "confidence": {
         "score": 0.9,
@@ -1213,14 +1227,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 1121,
+        "routeMs": 1,
+        "fetchMs": 661,
         "extractMs": 5,
-        "selectMs": 6,
+        "selectMs": 17,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1122
+        "totalMs": 663
       },
       "version": null,
       "cache": "none",
@@ -1265,7 +1279,7 @@
       "sources": [
         "https://react.dev/reference/react/useState"
       ],
-      "ms": 969,
+      "ms": 886,
       "chars": 2338,
       "confidence": {
         "score": 0.86,
@@ -1285,13 +1299,13 @@
       },
       "timings": {
         "routeMs": 1,
-        "fetchMs": 968,
+        "fetchMs": 885,
         "extractMs": 6,
         "selectMs": 3,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 969
+        "totalMs": 886
       },
       "version": null,
       "cache": "none",
@@ -1336,7 +1350,7 @@
       "sources": [
         "https://vuejs.org/guide/essentials/reactivity-fundamentals.html"
       ],
-      "ms": 871,
+      "ms": 734,
       "chars": 3006,
       "confidence": {
         "score": 0.9,
@@ -1358,13 +1372,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 870,
+        "fetchMs": 733,
         "extractMs": 2,
-        "selectMs": 2,
+        "selectMs": 3,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 870
+        "totalMs": 734
       },
       "version": null,
       "cache": "none",
@@ -1407,36 +1421,39 @@
       ],
       "mode": "registry",
       "sources": [
-        "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html",
-        "https://doc.rust-lang.org/book/"
+        "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
       ],
-      "ms": 710,
-      "chars": 4353,
+      "ms": 748,
+      "chars": 1760,
       "confidence": {
-        "score": 0.99,
+        "score": 0.9,
         "label": "high"
       },
       "facets": {
         "terms": [
           "ownership",
-          "rust"
+          "rules",
+          "rust",
+          "rule"
         ],
         "covered": [
           "ownership",
-          "rust"
+          "rules",
+          "rust",
+          "rule"
         ],
         "missing": [],
         "ratio": 1
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 708,
+        "fetchMs": 746,
         "extractMs": 2,
         "selectMs": 3,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 710
+        "totalMs": 747
       },
       "version": null,
       "cache": "none",
@@ -1454,7 +1471,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 2"
+          "detail": "got 1"
         },
         {
           "name": "ownership",
@@ -1481,7 +1498,7 @@
       "sources": [
         "https://go.dev/doc/"
       ],
-      "ms": 1112,
+      "ms": 839,
       "chars": 1752,
       "confidence": {
         "score": 0.9,
@@ -1499,13 +1516,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1112,
+        "fetchMs": 839,
         "extractMs": 1,
         "selectMs": 2,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1112
+        "totalMs": 839
       },
       "version": null,
       "cache": "none",
@@ -1550,7 +1567,7 @@
       "sources": [
         "https://docs.docker.com/engine/install/"
       ],
-      "ms": 801,
+      "ms": 571,
       "chars": 1780,
       "confidence": {
         "score": 0.9,
@@ -1570,13 +1587,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 800,
-        "extractMs": 0,
-        "selectMs": 1,
+        "fetchMs": 569,
+        "extractMs": 1,
+        "selectMs": 0,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 800
+        "totalMs": 570
       },
       "version": null,
       "cache": "none",
@@ -1622,7 +1639,7 @@
         "https://www.postgresql.org/docs/current/sql-createtable.html",
         "https://www.postgresql.org/docs/current/transaction-iso.html"
       ],
-      "ms": 1404,
+      "ms": 863,
       "chars": 5463,
       "confidence": {
         "score": 1,
@@ -1646,13 +1663,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1403,
-        "extractMs": 8,
+        "fetchMs": 863,
+        "extractMs": 7,
         "selectMs": 8,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1404
+        "totalMs": 863
       },
       "version": null,
       "cache": "none",
@@ -1697,7 +1714,7 @@
       "sources": [
         "https://nginx.org/en/docs/"
       ],
-      "ms": 1127,
+      "ms": 985,
       "chars": 2508,
       "confidence": {
         "score": 0.78,
@@ -1714,14 +1731,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 1126,
+        "routeMs": 1,
+        "fetchMs": 984,
         "extractMs": 1,
-        "selectMs": 2,
+        "selectMs": 1,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1127
+        "totalMs": 985
       },
       "version": null,
       "cache": "none",
@@ -1766,7 +1783,7 @@
       "sources": [
         "https://kubernetes.io/docs/home/"
       ],
-      "ms": 1132,
+      "ms": 954,
       "chars": 2282,
       "confidence": {
         "score": 0.77,
@@ -1786,13 +1803,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1130,
-        "extractMs": 3,
+        "fetchMs": 954,
+        "extractMs": 2,
         "selectMs": 1,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1131
+        "totalMs": 954
       },
       "version": null,
       "cache": "none",
@@ -1838,7 +1855,7 @@
         "https://redis.io/docs/latest/commands/set/",
         "https://redis.io/docs/latest/commands/"
       ],
-      "ms": 1173,
+      "ms": 927,
       "chars": 5428,
       "confidence": {
         "score": 1,
@@ -1858,13 +1875,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1173,
-        "extractMs": 29,
-        "selectMs": 21,
+        "fetchMs": 925,
+        "extractMs": 25,
+        "selectMs": 17,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1173
+        "totalMs": 927
       },
       "version": null,
       "cache": "none",
@@ -1910,7 +1927,7 @@
         "https://api-docs.deepseek.com/quick_start/pricing/",
         "https://api-docs.deepseek.com/guides/search/"
       ],
-      "ms": 505,
+      "ms": 489,
       "chars": 5708,
       "confidence": {
         "score": 0.94,
@@ -1931,14 +1948,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 503,
-        "extractMs": 2,
+        "routeMs": 1,
+        "fetchMs": 487,
+        "extractMs": 1,
         "selectMs": 4,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 504
+        "totalMs": 488
       },
       "version": null,
       "cache": "none",
@@ -1979,7 +1996,7 @@
         "https://nodejs.org/api/http.html",
         "https://nodejs.org/en/about/previous-releases"
       ],
-      "ms": 1019,
+      "ms": 1043,
       "chars": 4837,
       "confidence": {
         "score": 1,
@@ -2003,13 +2020,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1016,
-        "extractMs": 44,
-        "selectMs": 47,
+        "fetchMs": 1042,
+        "extractMs": 42,
+        "selectMs": 45,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1017
+        "totalMs": 1042
       },
       "version": null,
       "cache": "none",
@@ -2049,7 +2066,7 @@
       "sources": [
         "https://go.dev/doc/"
       ],
-      "ms": 776,
+      "ms": 830,
       "chars": 961,
       "confidence": {
         "score": 0.82,
@@ -2070,14 +2087,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 2,
-        "fetchMs": 773,
-        "extractMs": 1,
-        "selectMs": 2,
+        "routeMs": 1,
+        "fetchMs": 829,
+        "extractMs": 2,
+        "selectMs": 1,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 776
+        "totalMs": 830
       },
       "version": null,
       "cache": "none",
@@ -2117,7 +2134,7 @@
       "sources": [
         "https://kubernetes.io/docs/home/"
       ],
-      "ms": 567,
+      "ms": 561,
       "chars": 572,
       "confidence": {
         "score": 0.6,
@@ -2143,14 +2160,14 @@
         "ratio": 0.6
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 564,
+        "routeMs": 0,
+        "fetchMs": 559,
         "extractMs": 2,
-        "selectMs": 0,
+        "selectMs": 1,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 566
+        "totalMs": 561
       },
       "version": null,
       "cache": "none",
@@ -2188,38 +2205,46 @@
       ],
       "mode": "registry",
       "sources": [
+        "https://learn.microsoft.com/en-us/azure/foundry-classic/agents/how-to/tools-classic/bing-grounding",
+        "https://learn.microsoft.com/en-us/lifecycle/faq/internet-explorer-microsoft-edge",
         "https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement"
       ],
-      "ms": 1357,
-      "chars": 935,
+      "ms": 2116,
+      "chars": 7727,
       "confidence": {
-        "score": 0.57,
+        "score": 0.74,
         "label": "medium"
       },
       "facets": {
         "terms": [
           "retirement",
           "bing",
-          "time"
+          "date",
+          "life",
+          "time",
+          "end"
         ],
         "covered": [
           "bing",
-          "time"
+          "date",
+          "life",
+          "time",
+          "end"
         ],
         "missing": [
           "retirement"
         ],
-        "ratio": 0.667
+        "ratio": 0.833
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1357,
-        "extractMs": 0,
-        "selectMs": 1,
-        "followMs": 0,
+        "fetchMs": 1913,
+        "extractMs": 3,
+        "selectMs": 4,
+        "followMs": 200,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1357
+        "totalMs": 2115
       },
       "version": null,
       "cache": "none",
@@ -2237,7 +2262,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 1"
+          "detail": "got 3"
         },
         {
           "name": "date",
@@ -2260,7 +2285,7 @@
         "https://help.aliyun.com/zh/ecs/user-guide/instance-specification-naming-and-classification",
         "https://help.aliyun.com/zh/ecs/"
       ],
-      "ms": 733,
+      "ms": 760,
       "chars": 3342,
       "confidence": {
         "score": 0.74,
@@ -2285,13 +2310,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 369,
-        "extractMs": 6,
-        "selectMs": 6,
-        "followMs": 358,
+        "fetchMs": 378,
+        "extractMs": 4,
+        "selectMs": 4,
+        "followMs": 377,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 732
+        "totalMs": 759
       },
       "version": null,
       "cache": "none",
@@ -2337,7 +2362,7 @@
         "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/getPhoneNumber.html",
         "https://developers.weixin.qq.com/miniprogram/dev/api/"
       ],
-      "ms": 367,
+      "ms": 291,
       "chars": 3892,
       "confidence": {
         "score": 0.74,
@@ -2360,13 +2385,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 345,
-        "extractMs": 13,
+        "fetchMs": 272,
+        "extractMs": 14,
         "selectMs": 17,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 367
+        "totalMs": 290
       },
       "version": null,
       "cache": "none",
@@ -2413,7 +2438,7 @@
         "https://help.aliyun.com/zh/model-studio/what-is-model-studio",
         "https://help.aliyun.com/zh/model-studio/models"
       ],
-      "ms": 863,
+      "ms": 908,
       "chars": 5919,
       "confidence": {
         "score": 0.98,
@@ -2435,13 +2460,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 862,
-        "extractMs": 23,
-        "selectMs": 21,
+        "fetchMs": 907,
+        "extractMs": 22,
+        "selectMs": 17,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 863
+        "totalMs": 908
       },
       "version": null,
       "cache": "none",
@@ -2488,7 +2513,7 @@
         "https://platform.kimi.com/docs/pricing/chat",
         "https://platform.kimi.com/docs/pricing/batch"
       ],
-      "ms": 1488,
+      "ms": 1366,
       "chars": 4279,
       "confidence": {
         "score": 0.73,
@@ -2513,13 +2538,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1156,
+        "fetchMs": 1098,
         "extractMs": 6,
-        "selectMs": 3,
-        "followMs": 327,
+        "selectMs": 4,
+        "followMs": 265,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1487
+        "totalMs": 1366
       },
       "version": null,
       "cache": "none",
@@ -2565,7 +2590,7 @@
         "https://cloud.tencent.com/document/product/1729",
         "https://cloud.tencent.com/document/product/1729/97731"
       ],
-      "ms": 663,
+      "ms": 696,
       "chars": 2921,
       "confidence": {
         "score": 0.43,
@@ -2587,13 +2612,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 659,
-        "extractMs": 4,
-        "selectMs": 2,
+        "fetchMs": 693,
+        "extractMs": 3,
+        "selectMs": 3,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 662
+        "totalMs": 696
       },
       "version": null,
       "cache": "none",
@@ -2640,7 +2665,7 @@
         "https://ant.design/components/table-cn/",
         "https://ant.design/docs/react/introduce-cn/"
       ],
-      "ms": 1689,
+      "ms": 1218,
       "chars": 5009,
       "confidence": {
         "score": 1,
@@ -2665,14 +2690,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 1688,
-        "extractMs": 23,
-        "selectMs": 9,
+        "routeMs": 0,
+        "fetchMs": 1217,
+        "extractMs": 21,
+        "selectMs": 10,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1689
+        "totalMs": 1218
       },
       "version": null,
       "cache": "none",
@@ -2716,11 +2741,10 @@
       "mode": "registry",
       "sources": [
         "https://docs.spring.io/spring-boot/how-to/data-access.html",
-        "https://docs.spring.io/spring-boot/reference/data/sql.html",
-        "https://docs.spring.io/spring-boot/"
+        "https://docs.spring.io/spring-boot/reference/data/sql.html"
       ],
-      "ms": 1003,
-      "chars": 9129,
+      "ms": 768,
+      "chars": 6829,
       "confidence": {
         "score": 1,
         "label": "high"
@@ -2730,26 +2754,30 @@
           "spring-boot",
           "datasource",
           "spring",
-          "boot"
+          "source",
+          "boot",
+          "data"
         ],
         "covered": [
           "spring-boot",
           "datasource",
           "spring",
-          "boot"
+          "source",
+          "boot",
+          "data"
         ],
         "missing": [],
         "ratio": 1
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 1002,
+        "routeMs": 0,
+        "fetchMs": 767,
         "extractMs": 9,
-        "selectMs": 11,
+        "selectMs": 14,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1003
+        "totalMs": 767
       },
       "version": null,
       "cache": "none",
@@ -2767,7 +2795,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 3"
+          "detail": "got 2"
         },
         {
           "name": "datasource",
@@ -2795,7 +2823,7 @@
         "https://dev.mysql.com/doc/refman/8.4/en/",
         "https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html"
       ],
-      "ms": 1067,
+      "ms": 865,
       "chars": 4622,
       "confidence": {
         "score": 1,
@@ -2821,13 +2849,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1067,
-        "extractMs": 9,
-        "selectMs": 19,
+        "fetchMs": 864,
+        "extractMs": 11,
+        "selectMs": 21,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1067
+        "totalMs": 865
       },
       "version": null,
       "cache": "none",
@@ -2874,7 +2902,7 @@
         "https://www.postgresql.org/docs/current/transaction-iso.html",
         "https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html"
       ],
-      "ms": 1210,
+      "ms": 845,
       "chars": 6652,
       "confidence": {
         "score": 0.9,
@@ -2901,14 +2929,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 1207,
-        "extractMs": 2,
+        "routeMs": 1,
+        "fetchMs": 842,
+        "extractMs": 3,
         "selectMs": 6,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1209
+        "totalMs": 844
       },
       "version": null,
       "cache": "none",
@@ -2970,7 +2998,7 @@
         "https://vuejs.org/guide/essentials/reactivity-fundamentals.html",
         "https://react.dev/reference/react"
       ],
-      "ms": 2122,
+      "ms": 2443,
       "chars": 4716,
       "confidence": {
         "score": 0.37,
@@ -2993,14 +3021,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 788,
+        "routeMs": 1,
+        "fetchMs": 799,
         "extractMs": 4,
-        "selectMs": 6,
+        "selectMs": 3,
         "followMs": 0,
-        "recursiveMs": 1537,
+        "recursiveMs": 1642,
         "indexMs": 0,
-        "totalMs": 2121
+        "totalMs": 2443
       },
       "version": null,
       "cache": "none",
@@ -3057,7 +3085,7 @@
         "https://redis.io/docs/latest/commands/",
         "https://redis.io/docs/latest/"
       ],
-      "ms": 1009,
+      "ms": 1050,
       "chars": 7078,
       "confidence": {
         "score": 1,
@@ -3079,13 +3107,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1009,
+        "fetchMs": 1048,
         "extractMs": 24,
         "selectMs": 15,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1009
+        "totalMs": 1049
       },
       "version": null,
       "cache": "none",
@@ -3136,7 +3164,7 @@
         "https://learn.microsoft.com/en-us/azure/app-service/app-service-web-tutorial-custom-domain",
         "https://learn.microsoft.com/en-us/azure/"
       ],
-      "ms": 2393,
+      "ms": 1860,
       "chars": 4678,
       "confidence": {
         "score": 1,
@@ -3162,13 +3190,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 2392,
-        "extractMs": 19,
+        "fetchMs": 1860,
+        "extractMs": 15,
         "selectMs": 18,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 2393
+        "totalMs": 1860
       },
       "version": null,
       "cache": "none",
@@ -3211,14 +3239,14 @@
       ],
       "mode": "registry",
       "sources": [
-        "https://docs.cloud.google.com/compute/docs/instances?hl=zh-cn",
-        "https://docs.cloud.google.com/docs?hl=zh-cn"
+        "https://docs.cloud.google.com/docs?hl=zh-cn",
+        "https://docs.cloud.google.com/gemini-enterprise-agent-platform/notebooks/workbench/instances?hl=zh-cn"
       ],
-      "ms": 2919,
-      "chars": 3132,
+      "ms": 10733,
+      "chars": 2585,
       "confidence": {
-        "score": 0.92,
-        "label": "high"
+        "score": 0.74,
+        "label": "medium"
       },
       "facets": {
         "terms": [
@@ -3235,23 +3263,23 @@
           "compute",
           "google",
           "engine",
-          "create",
           "cloud"
         ],
         "missing": [
+          "create",
           "gcp"
         ],
-        "ratio": 0.857
+        "ratio": 0.714
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 2919,
-        "extractMs": 5,
+        "fetchMs": 6730,
+        "extractMs": 6,
         "selectMs": 2,
-        "followMs": 0,
+        "followMs": 3997,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 2919
+        "totalMs": 10732
       },
       "version": null,
       "cache": "none",
@@ -3294,13 +3322,14 @@
       ],
       "mode": "registry",
       "sources": [
+        "https://mistral.ai/pricing/",
         "https://docs.mistral.ai/"
       ],
-      "ms": 1257,
-      "chars": 3185,
+      "ms": 2958,
+      "chars": 5105,
       "confidence": {
-        "score": 0.72,
-        "label": "medium"
+        "score": 1,
+        "label": "high"
       },
       "facets": {
         "terms": [
@@ -3310,22 +3339,21 @@
         ],
         "covered": [
           "mistral",
-          "billing"
-        ],
-        "missing": [
+          "billing",
           "pricing"
         ],
-        "ratio": 0.667
+        "missing": [],
+        "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 1255,
-        "extractMs": 4,
-        "selectMs": 1,
+        "routeMs": 1,
+        "fetchMs": 2955,
+        "extractMs": 13,
+        "selectMs": 2,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1257
+        "totalMs": 2957
       },
       "version": null,
       "cache": "none",
@@ -3343,7 +3371,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 1"
+          "detail": "got 2"
         },
         {
           "name": "price",
@@ -3371,7 +3399,7 @@
         "https://huggingface.co/docs/transformers/main/en/installation",
         "https://huggingface.co/docs"
       ],
-      "ms": 1168,
+      "ms": 1242,
       "chars": 4939,
       "confidence": {
         "score": 1,
@@ -3398,14 +3426,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 1167,
-        "extractMs": 4,
+        "routeMs": 1,
+        "fetchMs": 1240,
+        "extractMs": 7,
         "selectMs": 5,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1167
+        "totalMs": 1242
       },
       "version": null,
       "cache": "none",
@@ -3450,7 +3478,7 @@
       "sources": [
         "https://docs.langchain.com/oss/python/langchain/overview"
       ],
-      "ms": 1311,
+      "ms": 969,
       "chars": 2700,
       "confidence": {
         "score": 0.9,
@@ -3471,14 +3499,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 1310,
-        "extractMs": 3,
-        "selectMs": 3,
+        "routeMs": 1,
+        "fetchMs": 968,
+        "extractMs": 5,
+        "selectMs": 5,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1310
+        "totalMs": 969
       },
       "version": null,
       "cache": "none",
@@ -3524,7 +3552,7 @@
         "https://docs.ollama.com/api/pull",
         "https://docs.ollama.com/"
       ],
-      "ms": 967,
+      "ms": 819,
       "chars": 1414,
       "confidence": {
         "score": 0.95,
@@ -3545,14 +3573,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 967,
-        "extractMs": 1,
-        "selectMs": 2,
+        "routeMs": 1,
+        "fetchMs": 818,
+        "extractMs": 2,
+        "selectMs": 1,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 967
+        "totalMs": 819
       },
       "version": null,
       "cache": "none",
@@ -3598,35 +3626,40 @@
         "https://www.mongodb.com/zh-cn/docs/manual/indexes/",
         "https://www.mongodb.com/zh-cn/docs/manual/"
       ],
-      "ms": 2399,
-      "chars": 4993,
+      "ms": 2581,
+      "chars": 5794,
       "confidence": {
-        "score": 1,
-        "label": "high"
+        "score": 0.74,
+        "label": "medium"
       },
       "facets": {
         "terms": [
+          "createindex",
+          "collection",
           "mongodb",
           "create",
           "index"
         ],
         "covered": [
+          "collection",
           "mongodb",
           "create",
           "index"
         ],
-        "missing": [],
-        "ratio": 1
+        "missing": [
+          "createindex"
+        ],
+        "ratio": 0.8
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1818,
-        "extractMs": 5,
-        "selectMs": 3,
-        "followMs": 579,
+        "fetchMs": 1812,
+        "extractMs": 7,
+        "selectMs": 2,
+        "followMs": 765,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 2399
+        "totalMs": 2581
       },
       "version": null,
       "cache": "none",
@@ -3672,21 +3705,25 @@
         "https://www.sqlite.org/wal.html",
         "https://www.sqlite.org/docs.html"
       ],
-      "ms": 1255,
-      "chars": 3435,
+      "ms": 1126,
+      "chars": 2507,
       "confidence": {
         "score": 1,
         "label": "high"
       },
       "facets": {
         "terms": [
+          "journal_mode",
           "sqlite",
+          "pragma",
           "enable",
           "mode",
           "wal"
         ],
         "covered": [
+          "journal_mode",
           "sqlite",
+          "pragma",
           "enable",
           "mode",
           "wal"
@@ -3696,13 +3733,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1253,
+        "fetchMs": 1125,
         "extractMs": 4,
-        "selectMs": 4,
+        "selectMs": 5,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1255
+        "totalMs": 1126
       },
       "version": null,
       "cache": "none",
@@ -3745,38 +3782,44 @@
       ],
       "mode": "registry",
       "sources": [
+        "https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-search-application-put-behavioral-analytics",
         "https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-create",
         "https://www.elastic.co/docs/reference/elasticsearch"
       ],
-      "ms": 1286,
-      "chars": 5697,
+      "ms": 856,
+      "chars": 7700,
       "confidence": {
-        "score": 1,
-        "label": "high"
+        "score": 0.74,
+        "label": "medium"
       },
       "facets": {
         "terms": [
           "elasticsearch",
+          "createindex",
+          "collection",
           "create",
           "index"
         ],
         "covered": [
           "elasticsearch",
+          "collection",
           "create",
           "index"
         ],
-        "missing": [],
-        "ratio": 1
+        "missing": [
+          "createindex"
+        ],
+        "ratio": 0.8
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 1285,
-        "extractMs": 3,
-        "selectMs": 4,
-        "followMs": 0,
+        "routeMs": 0,
+        "fetchMs": 679,
+        "extractMs": 4,
+        "selectMs": 5,
+        "followMs": 171,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1286
+        "totalMs": 856
       },
       "version": null,
       "cache": "none",
@@ -3794,7 +3837,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 2"
+          "detail": "got 3"
         },
         {
           "name": "index",
@@ -3821,7 +3864,7 @@
       "sources": [
         "https://prometheus.io/docs/introduction/overview/"
       ],
-      "ms": 1167,
+      "ms": 842,
       "chars": 3040,
       "confidence": {
         "score": 0.65,
@@ -3843,14 +3886,14 @@
         "ratio": 0.667
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 1164,
+        "routeMs": 0,
+        "fetchMs": 840,
         "extractMs": 1,
-        "selectMs": 0,
+        "selectMs": 1,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1166
+        "totalMs": 842
       },
       "version": null,
       "cache": "none",
@@ -3893,37 +3936,40 @@
       ],
       "mode": "registry",
       "sources": [
-        "https://grafana.com/grafana/dashboards/13786-grafana-usage-insights-datasource-details/",
-        "https://grafana.com/grafana/dashboards/630-sun-and-moon-datasource/",
         "https://grafana.com/docs/grafana/latest/"
       ],
-      "ms": 3005,
-      "chars": 4570,
+      "ms": 998,
+      "chars": 2800,
       "confidence": {
-        "score": 0.91,
-        "label": "high"
+        "score": 0.74,
+        "label": "medium"
       },
       "facets": {
         "terms": [
           "datasource",
-          "grafana"
+          "grafana",
+          "source",
+          "data"
         ],
         "covered": [
-          "datasource",
-          "grafana"
+          "grafana",
+          "source",
+          "data"
         ],
-        "missing": [],
-        "ratio": 1
+        "missing": [
+          "datasource"
+        ],
+        "ratio": 0.75
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 903,
-        "extractMs": 4,
-        "selectMs": 1,
+        "fetchMs": 997,
+        "extractMs": 1,
+        "selectMs": 2,
         "followMs": 0,
-        "recursiveMs": 2100,
+        "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 3003
+        "totalMs": 998
       },
       "version": null,
       "cache": "none",
@@ -3941,7 +3987,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 3"
+          "detail": "got 1"
         },
         {
           "name": "datasource",
@@ -3969,7 +4015,7 @@
         "https://angular.dev/guide/signals",
         "https://angular.dev/overview"
       ],
-      "ms": 954,
+      "ms": 726,
       "chars": 5533,
       "confidence": {
         "score": 1,
@@ -3990,14 +4036,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 952,
-        "extractMs": 5,
-        "selectMs": 5,
+        "routeMs": 0,
+        "fetchMs": 725,
+        "extractMs": 3,
+        "selectMs": 6,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 954
+        "totalMs": 726
       },
       "version": null,
       "cache": "none",
@@ -4043,7 +4089,7 @@
         "https://svelte.dev/docs/svelte/what-are-runes",
         "https://svelte.dev/docs/svelte/overview"
       ],
-      "ms": 1172,
+      "ms": 993,
       "chars": 2071,
       "confidence": {
         "score": 0.91,
@@ -4063,13 +4109,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 966,
-        "extractMs": 0,
-        "selectMs": 2,
-        "followMs": 205,
+        "fetchMs": 787,
+        "extractMs": 1,
+        "selectMs": 1,
+        "followMs": 206,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1172
+        "totalMs": 993
       },
       "version": null,
       "cache": "none",
@@ -4115,7 +4161,7 @@
         "https://packaging.python.org/en/latest/tutorials/packaging-projects/",
         "https://docs.pypi.org/"
       ],
-      "ms": 1521,
+      "ms": 1223,
       "chars": 4047,
       "confidence": {
         "score": 0.98,
@@ -4135,13 +4181,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1521,
+        "fetchMs": 1222,
         "extractMs": 3,
-        "selectMs": 2,
+        "selectMs": 3,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1521
+        "totalMs": 1223
       },
       "version": null,
       "cache": "none",
@@ -4188,7 +4234,7 @@
         "https://docs.github.com/en/code-security/concepts/vulnerability-reporting-and-management/github-advisory-database",
         "https://github.com/advisories"
       ],
-      "ms": 1682,
+      "ms": 1699,
       "chars": 9433,
       "confidence": {
         "score": 0.74,
@@ -4216,14 +4262,14 @@
         "ratio": 0.833
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 1322,
-        "extractMs": 8,
-        "selectMs": 7,
-        "followMs": 354,
+        "routeMs": 1,
+        "fetchMs": 1325,
+        "extractMs": 7,
+        "selectMs": 4,
+        "followMs": 366,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1682
+        "totalMs": 1698
       },
       "version": null,
       "cache": "none",
@@ -4269,8 +4315,8 @@
         "https://docs.flutter.dev/ui",
         "https://docs.flutter.dev/"
       ],
-      "ms": 1034,
-      "chars": 4104,
+      "ms": 758,
+      "chars": 4184,
       "confidence": {
         "score": 1,
         "label": "high"
@@ -4295,13 +4341,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1034,
-        "extractMs": 5,
+        "fetchMs": 757,
+        "extractMs": 4,
         "selectMs": 3,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1034
+        "totalMs": 758
       },
       "version": null,
       "cache": "none",
@@ -4347,7 +4393,7 @@
         "https://nodejs.org/docs/latest-v20.x/api/fs.html",
         "https://nodejs.org/docs/latest-v20.x/api/http.html"
       ],
-      "ms": 949,
+      "ms": 979,
       "chars": 5915,
       "confidence": {
         "score": 1,
@@ -4368,14 +4414,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 949,
-        "extractMs": 36,
+        "routeMs": 1,
+        "fetchMs": 977,
+        "extractMs": 39,
         "selectMs": 35,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 949
+        "totalMs": 978
       },
       "version": "20",
       "cache": "none",
@@ -4421,7 +4467,7 @@
         "https://docs.ruby-lang.org/en/3.3/",
         "https://docs.ruby-lang.org/en/3.3/Fiddle/Closure/BlockCaller.html"
       ],
-      "ms": 1152,
+      "ms": 1249,
       "chars": 3239,
       "confidence": {
         "score": 0.93,
@@ -4442,14 +4488,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 979,
-        "extractMs": 3,
-        "selectMs": 0,
-        "followMs": 166,
+        "routeMs": 1,
+        "fetchMs": 1066,
+        "extractMs": 1,
+        "selectMs": 1,
+        "followMs": 176,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1151
+        "totalMs": 1249
       },
       "version": null,
       "cache": "none",
@@ -4494,7 +4540,7 @@
       "sources": [
         "https://docs.scala-lang.org/tour/case-classes.html"
       ],
-      "ms": 1202,
+      "ms": 1085,
       "chars": 2725,
       "confidence": {
         "score": 0.9,
@@ -4516,13 +4562,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1202,
+        "fetchMs": 1084,
         "extractMs": 1,
         "selectMs": 2,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1202
+        "totalMs": 1084
       },
       "version": null,
       "cache": "none",
@@ -4567,7 +4613,7 @@
       "sources": [
         "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/virtualtables.html"
       ],
-      "ms": 1262,
+      "ms": 803,
       "chars": 3753,
       "confidence": {
         "score": 0.9,
@@ -4589,13 +4635,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 910,
-        "extractMs": 3,
-        "selectMs": 3,
-        "followMs": 351,
+        "fetchMs": 596,
+        "extractMs": 2,
+        "selectMs": 4,
+        "followMs": 206,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1262
+        "totalMs": 803
       },
       "version": null,
       "cache": "none",
@@ -4641,7 +4687,7 @@
         "https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_intro.html",
         "https://docs.ansible.com/projects/ansible/latest/"
       ],
-      "ms": 1089,
+      "ms": 1018,
       "chars": 4839,
       "confidence": {
         "score": 1,
@@ -4661,13 +4707,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1089,
+        "fetchMs": 1017,
         "extractMs": 2,
-        "selectMs": 2,
+        "selectMs": 1,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1089
+        "totalMs": 1018
       },
       "version": null,
       "cache": "none",
@@ -4710,34 +4756,35 @@
       ],
       "mode": "registry",
       "sources": [
-        "https://istio.io/latest/docs/concepts/traffic-management/",
-        "https://istio.io/latest/docs/"
+        "https://istio.io/latest/docs/concepts/traffic-management/"
       ],
-      "ms": 972,
-      "chars": 2532,
+      "ms": 791,
+      "chars": 1760,
       "confidence": {
-        "score": 0.92,
+        "score": 0.9,
         "label": "high"
       },
       "facets": {
         "terms": [
+          "traffic",
           "istio"
         ],
         "covered": [
+          "traffic",
           "istio"
         ],
         "missing": [],
         "ratio": 1
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 971,
-        "extractMs": 3,
+        "routeMs": 0,
+        "fetchMs": 791,
+        "extractMs": 2,
         "selectMs": 5,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 972
+        "totalMs": 791
       },
       "version": null,
       "cache": "none",
@@ -4755,7 +4802,7 @@
         {
           "name": "sources",
           "ok": true,
-          "detail": "got 2"
+          "detail": "got 1"
         },
         {
           "name": "route",
@@ -4782,33 +4829,39 @@
       "sources": [
         "https://argo-cd.readthedocs.io/en/stable/"
       ],
-      "ms": 900,
-      "chars": 2179,
+      "ms": 550,
+      "chars": 1976,
       "confidence": {
         "score": 0.9,
         "label": "high"
       },
       "facets": {
         "terms": [
+          "application",
           "argocd",
-          "argo"
+          "argo",
+          "sync",
+          "app"
         ],
         "covered": [
+          "application",
           "argocd",
-          "argo"
+          "argo",
+          "sync",
+          "app"
         ],
         "missing": [],
         "ratio": 1
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 900,
+        "routeMs": 1,
+        "fetchMs": 549,
         "extractMs": 1,
-        "selectMs": 1,
+        "selectMs": 0,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 900
+        "totalMs": 550
       },
       "version": null,
       "cache": "none",
@@ -4853,7 +4906,7 @@
       "sources": [
         "https://jestjs.io/docs/getting-started"
       ],
-      "ms": 782,
+      "ms": 750,
       "chars": 2661,
       "confidence": {
         "score": 0.81,
@@ -4873,13 +4926,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 781,
-        "extractMs": 2,
+        "fetchMs": 749,
+        "extractMs": 1,
         "selectMs": 1,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 782
+        "totalMs": 749
       },
       "version": null,
       "cache": "none",
@@ -4922,34 +4975,40 @@
       ],
       "mode": "registry",
       "sources": [
-        "https://docs.cypress.io/app/get-started/why-cypress",
-        "https://docs.cypress.io/api/commands/get"
+        "https://docs.cypress.io/api/commands/get",
+        "https://docs.cypress.io/app/get-started/why-cypress"
       ],
-      "ms": 896,
-      "chars": 4922,
+      "ms": 809,
+      "chars": 5066,
       "confidence": {
-        "score": 0.91,
+        "score": 1,
         "label": "high"
       },
       "facets": {
         "terms": [
-          "cypress"
+          "selector",
+          "cypress",
+          "element",
+          "wait"
         ],
         "covered": [
-          "cypress"
+          "selector",
+          "cypress",
+          "element",
+          "wait"
         ],
         "missing": [],
         "ratio": 1
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 895,
-        "extractMs": 5,
+        "fetchMs": 809,
+        "extractMs": 6,
         "selectMs": 4,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 895
+        "totalMs": 809
       },
       "version": null,
       "cache": "none",
@@ -4995,35 +5054,40 @@
         "https://docs.pytest.org/en/stable/",
         "https://docs.pytest.org/en/stable/how-to/parametrize.html"
       ],
-      "ms": 872,
-      "chars": 6041,
+      "ms": 606,
+      "chars": 5375,
       "confidence": {
-        "score": 0.96,
-        "label": "high"
+        "score": 0.74,
+        "label": "medium"
       },
       "facets": {
         "terms": [
+          "parameterized",
+          "parametrize",
           "testing",
           "pytest",
           "test"
         ],
         "covered": [
+          "parametrize",
           "testing",
           "pytest",
           "test"
         ],
-        "missing": [],
-        "ratio": 1
+        "missing": [
+          "parameterized"
+        ],
+        "ratio": 0.8
       },
       "timings": {
-        "routeMs": 0,
-        "fetchMs": 871,
+        "routeMs": 1,
+        "fetchMs": 603,
         "extractMs": 2,
         "selectMs": 2,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 871
+        "totalMs": 605
       },
       "version": null,
       "cache": "none",
@@ -5070,7 +5134,7 @@
         "https://flask.palletsprojects.com/en/stable/quickstart/",
         "https://flask.palletsprojects.com/en/stable/"
       ],
-      "ms": 1278,
+      "ms": 1223,
       "chars": 6057,
       "confidence": {
         "score": 0.94,
@@ -5090,13 +5154,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1278,
-        "extractMs": 32,
-        "selectMs": 29,
+        "fetchMs": 1222,
+        "extractMs": 35,
+        "selectMs": 25,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1278
+        "totalMs": 1222
       },
       "version": null,
       "cache": "none",
@@ -5142,7 +5206,7 @@
         "https://expressjs.com/en/4x/api/",
         "https://expressjs.com/en/guide/using-middleware/"
       ],
-      "ms": 1428,
+      "ms": 1373,
       "chars": 5179,
       "confidence": {
         "score": 0.84,
@@ -5159,14 +5223,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 1427,
-        "extractMs": 4,
+        "routeMs": 0,
+        "fetchMs": 1373,
+        "extractMs": 5,
         "selectMs": 3,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1428
+        "totalMs": 1373
       },
       "version": null,
       "cache": "none",
@@ -5212,7 +5276,7 @@
         "https://helm.sh/docs/chart_template_guide/values_files/",
         "https://helm.sh/docs/"
       ],
-      "ms": 737,
+      "ms": 716,
       "chars": 3970,
       "confidence": {
         "score": 0.96,
@@ -5233,14 +5297,14 @@
         "ratio": 1
       },
       "timings": {
-        "routeMs": 1,
-        "fetchMs": 735,
+        "routeMs": 0,
+        "fetchMs": 715,
         "extractMs": 2,
         "selectMs": 2,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 737
+        "totalMs": 716
       },
       "version": null,
       "cache": "none",
@@ -5286,7 +5350,7 @@
         "https://opentelemetry.io/docs/concepts/signals/traces/",
         "https://opentelemetry.io/docs/"
       ],
-      "ms": 1113,
+      "ms": 902,
       "chars": 3687,
       "confidence": {
         "score": 0.96,
@@ -5310,13 +5374,13 @@
       },
       "timings": {
         "routeMs": 0,
-        "fetchMs": 1111,
-        "extractMs": 5,
+        "fetchMs": 900,
+        "extractMs": 4,
         "selectMs": 2,
         "followMs": 0,
         "recursiveMs": 0,
         "indexMs": 0,
-        "totalMs": 1113
+        "totalMs": 902
       },
       "version": null,
       "cache": "none",
@@ -5357,7 +5421,7 @@
       "entities": [],
       "mode": "none",
       "sources": [],
-      "ms": 0,
+      "ms": 1,
       "chars": 0,
       "confidence": {
         "score": 0,
@@ -5385,7 +5449,7 @@
         "selectMs": 0,
         "followMs": 0,
         "recursiveMs": 0,
-        "totalMs": 0
+        "totalMs": 1
       },
       "version": null,
       "cache": "none",
@@ -5475,7 +5539,7 @@
         "https://www.tianqi.com/xian",
         "https://www.tianqi.com/xian/today/"
       ],
-      "ms": 2408,
+      "ms": 1885,
       "chars": 3575,
       "confidence": {
         "score": 0.4,
@@ -5494,7 +5558,7 @@
         "selectMs": 0,
         "followMs": 0,
         "recursiveMs": 0,
-        "totalMs": 2407
+        "totalMs": 1884
       },
       "version": null,
       "cache": "none",

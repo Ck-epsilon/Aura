@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.6 — 2026-10-24
+
+### Fixed
+
+- 尾延迟收口：单次 registry 抓取上限 2.0 s、discovery 抓取上限 1.8 s；慢官方页不再把整个查询拖过发布门，剩余来源与 fallback 继续作答。
+- 这是 2.4.5 最终校验发现 p95 2642/2689 ms 超门后的性能修复；不改检索语义，不新增功能。
+
+### Gates
+
+- `npm test`: **136/136**
+- `npm run eval` / `answerability`: 74 题 / 361 项、73/73；p95 **2443 ms**，`npm run gate` pass
+- `npm run bench:agent`: 75/77（0.974），gate pass
+- `npm run verify`: 220/220
+
 ## 2.4.5 — 2026-10-24
 
 ### Changed

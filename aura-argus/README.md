@@ -35,8 +35,8 @@ AuraArgus 是一个本地运行的检索工具，给 agent、脚本或你自己�
 ### 从 zip 直接运行（不需要 npm install）
 
 ```bash
-unzip aura-argus-2.4.5.zip
-cd aura-argus-2.4.5
+unzip aura-argus-2.4.6.zip
+cd aura-argus-2.4.6
 
 node src/cli.mjs aura_argus_search "SearXNG 对 429 的冷却时间是多少秒？" --json
 ```
@@ -426,7 +426,7 @@ Node 内置 fetch 默认不读 `HTTP_PROXY` / `HTTPS_PROXY`。需要的话设置
 ## zip 里有什么
 
 ```
-aura-argus-2.4.5/
+aura-argus-2.4.6/
   README.md              ← 你正在看的这份
   LICENSE                MIT
   src/                   运行时代码 + registry.json
@@ -466,6 +466,7 @@ npm run bench:pk215 # 215 题五类覆盖评估（只跑 Aura，不调用 Tavily
 ## License
 
 MIT
+
 
 
 
