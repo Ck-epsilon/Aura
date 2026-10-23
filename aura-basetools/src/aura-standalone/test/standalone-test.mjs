@@ -101,8 +101,8 @@ const layoutRoundTrip = (binPath, label) => {
   fs.writeFileSync(file, 'function alpha() {\n  const a = 1\n  return a\n}\n')
   const env2 = { ...process.env, AURA_CACHE_DIR: path.join(work, 'cache') }
   const spawn = (args) => spawnSync(process.execPath, [binPath, ...args], { cwd: work, encoding: 'utf8', env: env2 })
-  const read = spawn(['read', '--file', file, '--mode', 'map'])
-  const edited = spawn(['edit', '--file', file, '--hunks', JSON.stringify([{ lines: [2, 2], replace: '  const a = 42' }])])
+  const read = spawn(['basetools', 'read', '--file', file, '--mode', 'map'])
+  const edited = spawn(['basetools', 'edit', '--file', file, '--hunks', JSON.stringify([{ lines: [2, 2], replace: '  const a = 42' }])])
   const text = fs.readFileSync(file, 'utf8')
   fs.rmSync(work, { recursive: true, force: true })
   const parse = (res) => {
@@ -140,15 +140,15 @@ const countBom = (b) => {
 say('A 读：取景与令牌')
 {
   const f = write('a.js', utf8('function alpha() {\n  const a = 1\n  return a\n}\n\nfunction beta() {\n  const b = 2\n}\n'))
-  const map = json(run(['read', '--file', f.path, '--mode', 'map']))
+  const map = json(run(['basetools', 'read', '--file', f.path, '--mode', 'map']))
 // 信封里 `symbols` 是**个数**，渲染好的目录在 `text` —— 断言照实际形状写（我第一版写成数组，当场红）
   check(map.ok === true && typeof map.text === 'string' && map.symbols >= 2, 'map 返回符号目录（text + 计数）', JSON.stringify(map).slice(0, 120))
   check(String(map.text).includes('beta'), 'map 里有 beta')
-  const around = json(run(['read', '--file', f.path, '--mode', 'around', '--around', 'beta']))
+  const around = json(run(['basetools', 'read', '--file', f.path, '--mode', 'around', '--around', 'beta']))
   check(around.ok === true && String(around.text ?? '').includes('beta'), 'around 窗口里有 beta')
-  const full = json(run(['read', '--file', f.path, '--mode', 'full']))
+  const full = json(run(['basetools', 'read', '--file', f.path, '--mode', 'full']))
   check(typeof full.version === 'string' && full.version.length > 0, `full 给出令牌 ${full.version}`)
-  const changed = json(run(['read', '--file', f.path, '--mode', 'changed', '--since', String(full.version)]))
+  const changed = json(run(['basetools', 'read', '--file', f.path, '--mode', 'changed', '--since', String(full.version)]))
   check(changed.ok === true && String(changed.note ?? '').includes('no change'), '立即 changed = 无变化', JSON.stringify(changed).slice(0, 120))
 }
 
@@ -156,14 +156,61 @@ say('A 读：取景与令牌')
 say('B 改：按符号 + 回读证据')
 {
   const f = write('b.js', utf8('function alpha() {\n  const a = 1\n  return a\n}\n'))
-  const res = run(['edit', '--file', f.path, '--hunks', JSON.stringify([{ target: 'alpha', replace: 'function alpha() {\n  return 42\n}' }])])
+  const res = run(['basetools', 'edit', '--file', f.path, '--hunks', JSON.stringify([{ target: 'alpha', replace: 'function alpha() {\n  return 42\n}' }])])
   const env2 = json(res)
   check(env2.ok === true, '按符号改成功', JSON.stringify(env2).slice(0, 160))
   check(String(fs.readFileSync(f.path, 'utf8')).includes('return 42'), '磁盘上真的改了')
   check(env2.result?.write_verify?.level === 'bytes', `回读证据 level=${env2.result?.write_verify?.level}`)
-  const dry = json(run(['edit', '--file', f.path, '--hunks', JSON.stringify([{ target: 'alpha', replace: 'x' }]), '--dry-run']))
+  const dry = json(run(['basetools', 'edit', '--file', f.path, '--hunks', JSON.stringify([{ target: 'alpha', replace: 'x' }]), '--dry-run']))
   check(dry.ok === true && dry.result?.dryRun === true, 'dry_run 不落盘')
   check(String(fs.readFileSync(f.path, 'utf8')).includes('return 42'), 'dry_run 之后磁盘没变')
+  const beforePlan = fs.readFileSync(f.path, 'utf8')
+  const plan = json(run(['basetools', 'edit', '--file', f.path, '--hunks', JSON.stringify([{ target: 'alpha', replace: 'x' }]), '--plan']))
+  check(plan.ok === true && plan.result?.dryRun === true, '--plan 是 --dry-run 的同义旗标（回执照常给 applied）', JSON.stringify(plan).slice(0, 120))
+  check(fs.readFileSync(f.path, 'utf8') === beforePlan, '--plan 之后磁盘逐字节没变')
+}
+
+// ── B2 能力清单：运行时可查（0.9.9） ─────────────────────────────────────
+say('B2 能力清单：capabilities 从引擎常量派生')
+{
+  const caps = json(run(['basetools', 'capabilities']))
+  const readTool = caps.tools?.find((tool) => tool.name === 'aura_basetools_read')
+  const editTool = caps.tools?.find((tool) => tool.name === 'aura_basetools_edit')
+  check(caps.ok === true && caps.langsCount === caps.langs?.length, `langsCount=${caps.langsCount}`, JSON.stringify(caps.langs?.length))
+  check(caps.langsCount === 65, '语言表 65 种（与 LANGS 同源）', String(caps.langsCount))
+  check(readTool?.modes?.includes('auto') && readTool.modes.includes('map') && readTool.modes.includes('changed'), '读模式含 auto/map/changed', JSON.stringify(readTool?.modes))
+  check(editTool?.addressKinds?.includes('intent') && editTool.addressKinds.includes('target') && editTool.addressKinds.includes('handle'), '编辑地址档含 intent/target/handle', JSON.stringify(editTool?.addressKinds))
+  check(editTool?.options?.includes('replace_all'), '编辑选项含 replace_all', JSON.stringify(editTool?.options))
+  check(editTool?.options?.includes('require_observation'), '编辑选项含 require_observation', JSON.stringify(editTool?.options))
+  check(caps.limits?.multiTargetsMax === 32 && caps.limits?.defaultPruneBudget === 8192 && caps.limits?.contentBudget === 7492, '限制与常量一致', JSON.stringify(caps.limits))
+  check(caps.commands?.includes('basetools doctor') && caps.commands.includes('basetools capabilities') && caps.commands.includes('basetools write'), '命令表含 doctor/capabilities/write', JSON.stringify(caps.commands))
+  const writeTool = caps.tools?.find((tool) => tool.name === 'aura_basetools_write')
+  check(writeTool?.writeSafety?.dsh?.includes('observation-gate') && !writeTool.writeSafety.dsh.includes('transaction'), 'write 能力按入口分：DSH 有观察闸、无事务', JSON.stringify(writeTool?.writeSafety))
+}
+
+// ── B3 平铺 CLI 的空 replace = 删除（0.9.10 评审发现） ─────────────────────
+say('B3 平铺 CLI：--replace "" 是删除，不是缺参数')
+{
+  const f = write('del.txt', 'a\nb\n')
+  const res = run(['basetools', 'edit', '--file', f.path, '--lines', '1,1', '--replace', ''])
+  const env = json(res)
+  check(res.status === 0 && env.ok === true, '空 replace 被当成删除（exit 0）', JSON.stringify(env).slice(0, 140))
+  check(fs.readFileSync(f.path, 'utf8') === 'b\n', '第一行被删除，剩余字节不动', JSON.stringify(fs.readFileSync(f.path, 'utf8')))
+}
+
+// ── B4 分页读：内置 Read 的 offset/limit 形状（0.10.0） ───────────────────
+say('B4 分页读：offset/limit 与 lines 互斥')
+{
+  const f = write('page.txt', Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n'))
+  const page = json(run(['basetools', 'read', '--file', f.path, '--offset', '2', '--limit', '3']))
+  check(page.ok === true && page.mode === 'lines' && page.totalLines === 10 && page.shown === '3-5', 'offset=2 limit=3 ⇒ 第 3-5 行', JSON.stringify({ mode: page.mode, totalLines: page.totalLines, shown: page.shown }))
+  check(page.text.includes('3: line 3') && page.text.includes('5: line 5') && !page.text.includes('6: line 6'), '正文只含 3-5 行', JSON.stringify(page.text))
+  const conflict = json(run(['basetools', 'read', '--file', f.path, '--lines', '1,2', '--offset', '0', '--limit', '2']))
+  check(conflict.ok === false && conflict.code === 'READ_BAD_ARGS', 'lines 与 offset/limit 同给 ⇒ 拒绝', JSON.stringify(conflict).slice(0, 160))
+  const oob = json(run(['basetools', 'read', '--file', f.path, '--offset', '99', '--limit', '2']))
+  check(oob.ok === false && oob.code === 'READ_BAD_ARGS', 'offset 越界 ⇒ 拒绝', JSON.stringify(oob).slice(0, 160))
+  const modeOffset = json(run(['basetools', 'read', '--file', f.path, '--mode', 'map', '--offset', '0', '--limit', '2']))
+  check(modeOffset.ok === false && modeOffset.code === 'READ_BAD_ARGS', '显式 mode 与 offset/limit 同给 ⇒ 拒绝（不静默换成 lines）', JSON.stringify(modeOffset).slice(0, 160))
 }
 
 // ── C 字节保真 ────────────────────────────────────────────────────────────
@@ -183,7 +230,7 @@ say('C 字节保真：改第 4 行，其余字节不动')
   }
   for (const [name, buf] of Object.entries(shapes)) {
     const f = write(name, buf)
-    const res = run(['edit', '--file', f.path, '--hunks', JSON.stringify([{ lines: [4, 4], replace: 'EDITED' }])])
+    const res = run(['basetools', 'edit', '--file', f.path, '--hunks', JSON.stringify([{ lines: [4, 4], replace: 'EDITED' }])])
     const env2 = json(res)
     if (env2.ok !== true) {
       check(false, `${name} 编辑成功`, JSON.stringify(env2).slice(0, 140))
@@ -208,14 +255,14 @@ say('C 字节保真：改第 4 行，其余字节不动')
 say('D 陈旧闸门：读之后区域被外部改过 ⇒ 拒绝')
 {
   const f = write('d.md', utf8('one\ntwo\nthree\nfour\n'))
-  json(run(['read', '--file', f.path, '--mode', 'full'])) // 建"上次观测"（落盘缓存）
+  json(run(['basetools', 'read', '--file', f.path, '--mode', 'full'])) // 建"上次观测"（落盘缓存）
   fs.writeFileSync(f.path, 'one\nTWO-BY-SOMEONE-ELSE\nthree\nfour\n') // 外部改第 2 行
-  const res = run(['edit', '--file', f.path, '--hunks', JSON.stringify([{ lines: [2, 2], replace: 'mine' }])])
+  const res = run(['basetools', 'edit', '--file', f.path, '--hunks', JSON.stringify([{ lines: [2, 2], replace: 'mine' }])])
   const env2 = json(res)
   check(env2.ok === false && env2.code === 'PATCH_STALE_REGION', `被拒绝（code=${env2.code}）`, JSON.stringify(env2).slice(0, 160))
   check(fs.readFileSync(f.path, 'utf8').includes('TWO-BY-SOMEONE-ELSE'), '磁盘保留外部改动')
   // 带 expect 的老路不受影响：改第 4 行（未被动过）
-  const ok = json(run(['edit', '--file', f.path, '--hunks', JSON.stringify([{ lines: [4, 4], expect: 'four', replace: 'FOUR' }])]))
+  const ok = json(run(['basetools', 'edit', '--file', f.path, '--hunks', JSON.stringify([{ lines: [4, 4], expect: 'four', replace: 'FOUR' }])]))
   check(ok.ok === true, '未被动过的区域照常可编辑', JSON.stringify(ok).slice(0, 140))
 }
 
@@ -225,14 +272,14 @@ say('D 陈旧闸门：读之后区域被外部改过 ⇒ 拒绝')
 say('E 建文件：create 可单独用（与 DSH 壳同一条规则）')
 {
   const p = path.join(tmp, 'made.md')
-  const res = run(['edit', '--file', p, '--create', 'hello\n'])
+  const res = run(['basetools', 'edit', '--file', p, '--create', 'hello\n'])
   const env2 = json(res)
   check(env2.ok === true && env2.result?.operation === 'create', `不给 --hunks 也能建文件 operation=${env2.result?.operation}`, JSON.stringify(env2).slice(0, 140))
   check(fs.readFileSync(p, 'utf8') === 'hello\n', '内容是逐字节写下的')
   // 兼容：显式给 `--hunks '[]'` 仍然可用（旧脚本不该因此变红）
   const p2 = path.join(tmp, 'made2.md')
-  check(json(run(['edit', '--file', p2, '--hunks', '[]', '--create', 'hi\n'])).ok === true, "显式 `--hunks '[]' --create` 仍可用（向后兼容）")
-  const again = json(run(['edit', '--file', p, '--create', 'other\n']))
+  check(json(run(['basetools', 'edit', '--file', p2, '--hunks', '[]', '--create', 'hi\n'])).ok === true, "显式 `--hunks '[]' --create` 仍可用（向后兼容）")
+  const again = json(run(['basetools', 'edit', '--file', p, '--create', 'other\n']))
   check(again.ok === false, '已存在时不覆盖（create 只用于不存在）', JSON.stringify(again).slice(0, 140))
 }
 
@@ -244,21 +291,21 @@ say('E1 --create 的取值：front matter / 含换行 / 后面还跟旗标')
 {
   const fm = '---\ntitle: x\n---\n\nbody\n'
   const p = path.join(tmp, 'frontmatter.md')
-  const res = json(run(['edit', '--file', p, '--create', fm]))
+  const res = json(run(['basetools', 'edit', '--file', p, '--create', fm]))
   check(res.ok === true && res.result?.operation === 'create', '值以 `---` 开头也能建文件', JSON.stringify(res).slice(0, 140))
   check(fs.readFileSync(p, 'utf8') === fm, '完整内容逐字节落下（换行与 `--` 都没丢）', JSON.stringify(fs.readFileSync(p, 'utf8')))
   // 值后面还跟着另一个旗标：最容易被误判成“没带值”的形状。
   // 注意**不能**用 `json()` 断这一条：`json()` 取的是 stdout 最后一行，而 `--pretty` 是多行输出
   // （我第一版就是这么写错的——产品是对的，断言在量错东西）。这里直接看退出码与磁盘。
   const p2 = path.join(tmp, 'frontmatter2.md')
-  const withFlag = run(['edit', '--file', p2, '--create', fm, '--pretty'])
+  const withFlag = run(['basetools', 'edit', '--file', p2, '--create', fm, '--pretty'])
   check(withFlag.status === 0, `值后面再跟一个旗标仍然正确（exit=${withFlag.status}）`, String(withFlag.stderr).slice(0, 90))
   check(fs.readFileSync(p2, 'utf8') === fm, '第二种形状下内容也完整')
   // `@文件` 形式：长内容绕开命令行引号（推荐写法，帮助文本里也写了）
   const bodyFile = path.join(tmp, 'body.txt')
   fs.writeFileSync(bodyFile, fm)
   const p3 = path.join(tmp, 'fromfile.md')
-  check(json(run(['edit', '--file', p3, '--create', `@${bodyFile}`])).ok === true, '`--create @文件` 可用')
+  check(json(run(['basetools', 'edit', '--file', p3, '--create', `@${bodyFile}`])).ok === true, '`--create @文件` 可用')
   check(fs.readFileSync(p3, 'utf8') === fm, '`@文件` 形式下内容也完整')
 }
 
@@ -268,16 +315,16 @@ say('E1 --create 的取值：front matter / 含换行 / 后面还跟旗标')
 say('E3 --hunks-file：前导 BOM 不让它失败')
 {
   const f = write('bomhunks.md', utf8('alpha\nbravo\n'))
-  json(run(['read', '--file', f.path, '--mode', 'full']))
+  json(run(['basetools', 'read', '--file', f.path, '--mode', 'full']))
   const hunksPath = path.join(tmp, 'hunks-bom.json')
   fs.writeFileSync(hunksPath, Buffer.concat([BOM, utf8('[{"lines":[2,2],"replace":"BRAVO"}]')]))
-  const res = json(run(['edit', '--file', f.path, '--hunks-file', hunksPath]))
+  const res = json(run(['basetools', 'edit', '--file', f.path, '--hunks-file', hunksPath]))
   check(res.ok === true, '带 BOM 的 hunks 文件照样能编辑', JSON.stringify(res).slice(0, 140))
   check(fs.readFileSync(f.path, 'utf8') === 'alpha\nBRAVO\n', '落盘正确', JSON.stringify(fs.readFileSync(f.path, 'utf8')))
   // 真坏 JSON 时要报**实际来源**（旧版一律报 `--hunks`，把排查引到错方向）
   const badPath = path.join(tmp, 'hunks-bad.json')
   fs.writeFileSync(badPath, '{ not json')
-  const bad = json(run(['edit', '--file', f.path, '--hunks-file', badPath]))
+  const bad = json(run(['basetools', 'edit', '--file', f.path, '--hunks-file', badPath]))
   check(bad.ok === false && String(bad.error).includes('--hunks-file'), '坏 JSON 报的是实际来源（--hunks-file）', String(bad.error).slice(0, 110))
 }
 
@@ -288,17 +335,17 @@ say('E2 平铺旗标：edit --lines / --replace')
 {
   const f = write('flat.md', utf8('alpha\nbravo\ncharlie\n'))
   // 先 read 建立观测（区域新鲜度闸门依赖它）；本套件没有 readFull 助手，read 也要走 run。
-  const seen = json(run(['read', '--file', f.path, '--mode', 'full']))
+  const seen = json(run(['basetools', 'read', '--file', f.path, '--mode', 'full']))
   check(seen.ok === true, 'E2 先 read 建立观测', JSON.stringify(seen).slice(0, 120))
-  const flat = json(run(['edit', '--file', f.path, '--lines', '3', '--replace', 'CHARLIE', '--expect', 'charlie']))
+  const flat = json(run(['basetools', 'edit', '--file', f.path, '--lines', '3', '--replace', 'CHARLIE', '--expect', 'charlie']))
   check(flat.ok === true, '平铺旗标可以改一行', JSON.stringify(flat).slice(0, 160))
   check(fs.readFileSync(f.path, 'utf8') === 'alpha\nbravo\nCHARLIE\n', '落盘正确', JSON.stringify(fs.readFileSync(f.path, 'utf8')))
   // 半成品（只有 --replace、没有地址）必须继续报“需要 hunks”，不得被当成一个缺地址的 hunk
-  const half = json(run(['edit', '--file', f.path, '--replace', 'X']))
+  const half = json(run(['basetools', 'edit', '--file', f.path, '--replace', 'X']))
   check(half.ok === false && half.code === 'USAGE', '只有 --replace ⇒ USAGE（不给假地址）', `${half.code}: ${String(half.error).slice(0, 70)}`)
   // 两种形状同时给：`--hunks` 优先（显式数组是更强的意图表达）
-  json(run(['read', '--file', f.path, '--mode', 'full']))
-  const both = json(run(['edit', '--file', f.path, '--lines', '1', '--replace', 'ZZ', '--hunks', '[{"lines":[2,2],"replace":"BRAVO"}]']))
+  json(run(['basetools', 'read', '--file', f.path, '--mode', 'full']))
+  const both = json(run(['basetools', 'edit', '--file', f.path, '--lines', '1', '--replace', 'ZZ', '--hunks', '[{"lines":[2,2],"replace":"BRAVO"}]']))
   check(both.ok === true && both.result?.applied?.[0]?.line === 2, '--hunks 与旗标同时给 ⇒ 以 --hunks 为准', JSON.stringify(both).slice(0, 140))
   check(fs.readFileSync(f.path, 'utf8') === 'alpha\nBRAVO\nCHARLIE\n', '两种形状同给时只有 --hunks 那一条生效', JSON.stringify(fs.readFileSync(f.path, 'utf8')))
 }
@@ -311,12 +358,12 @@ say('F MCP：initialize / tools/list / tools/call')
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
     { jsonrpc: '2.0', method: 'notifications/initialized' },
     { jsonrpc: '2.0', id: 2, method: 'tools/list' },
-    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aura_read', arguments: { file_path: f.path, mode: 'map' } } },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file_path: f.path, mode: 'map' } } },
     {
       jsonrpc: '2.0',
       id: 4,
       method: 'tools/call',
-      params: { name: 'aura_edit', arguments: { file_path: f.path, hunks: [{ lines: [4, 4], replace: 'EDITED' }] } },
+      params: { name: 'aura_basetools_edit', arguments: { file_path: f.path, hunks: [{ lines: [4, 4], replace: 'EDITED' }] } },
     },
   ]
   const res = spawnSync(process.execPath, [mcpBin], { input: `${frames.map((x) => JSON.stringify(x)).join('\n')}\n`, encoding: 'utf8', env })
@@ -338,11 +385,11 @@ say('F MCP：initialize / tools/list / tools/call')
   })()
   if (manifest !== null) check(byId.get(1)?.result?.serverInfo?.version === manifest.version, `serverInfo.version 跟包一致（${manifest.version}）`, String(byId.get(1)?.result?.serverInfo?.version))
   const tools = byId.get(2)?.result?.tools ?? []
-  check(tools.length === 4 && tools.some((t) => t.name === 'aura_read') && tools.some((t) => t.name === 'aura_edit') && tools.some((t) => t.name === 'aura_undo') && tools.some((t) => t.name === 'aura_transactions'), `tools/list 四个工具（${tools.map((t) => t.name).join(',')}`)
+  check(tools.length === 5 && tools.some((t) => t.name === 'aura_basetools_read') && tools.some((t) => t.name === 'aura_basetools_edit') && tools.some((t) => t.name === 'aura_basetools_write') && tools.some((t) => t.name === 'aura_basetools_undo') && tools.some((t) => t.name === 'aura_basetools_transactions'), `tools/list 五个工具（${tools.map((t) => t.name).join(',')}`)
   const readEnv = JSON.parse(byId.get(3)?.result?.content?.[0]?.text ?? '{}')
-  check(readEnv.ok === true && Array.isArray(readEnv.symbols ?? []), 'aura_read 经 MCP 可用', JSON.stringify(readEnv).slice(0, 120))
+  check(readEnv.ok === true && Array.isArray(readEnv.symbols ?? []), 'aura_basetools_read 经 MCP 可用', JSON.stringify(readEnv).slice(0, 120))
   const editEnv = JSON.parse(byId.get(4)?.result?.content?.[0]?.text ?? '{}')
-  check(editEnv.ok === true, 'aura_edit 经 MCP 可用', JSON.stringify(editEnv).slice(0, 140))
+  check(editEnv.ok === true, 'aura_basetools_edit 经 MCP 可用', JSON.stringify(editEnv).slice(0, 140))
   check(fs.readFileSync(f.path, 'utf8').includes('EDITED'), 'MCP 路径真的落盘了')
   check(replies.every((r) => r.jsonrpc === '2.0'), '每条回包都是 JSON-RPC 2.0')
 }
@@ -356,19 +403,19 @@ say('G MCP：坏参数 / 未知工具 / 服务存活')
   const frames = [
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {} } },
     { jsonrpc: '2.0', method: 'notifications/initialized' },
-    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'aura_read', arguments: { file: f.path, mode: 'map' } } },
-    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aura_read', arguments: { file_path: f.path, mode: 'outline' } } },
-    { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'aura_read', arguments: { file_path: path.join(tmp, 'nope.md'), mode: 'map' } } },
-    { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'aura_edit', arguments: { file_path: f.path, hunks: 'nope' } } },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file: f.path, mode: 'map' } } },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file_path: f.path, mode: 'outline' } } },
+    { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file_path: path.join(tmp, 'nope.md'), mode: 'map' } } },
+    { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'aura_basetools_edit', arguments: { file_path: f.path, hunks: 'nope' } } },
     { jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'aura_nope', arguments: {} } },
-    { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'aura_read', arguments: { file_path: f.path, mode: 'map' } } },
+    { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file_path: f.path, mode: 'map' } } },
   ]
   const res = spawnSync(process.execPath, [mcpBin], { input: `${frames.map((x) => JSON.stringify(x)).join('\n')}\n`, encoding: 'utf8', env })
   const replies = res.stdout.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
   const byId = new Map(replies.map((r) => [r.id, r]))
   const envOf = (id) => JSON.parse(byId.get(id)?.result?.content?.[0]?.text ?? '{}')
   check(replies.length === 7, `7 条请求全部有回包（收到 ${replies.length}）`)
-  check(envOf(2).code === 'BAD_ARGS', `参数名写错 → BAD_ARGS（${envOf(2).code}）`)
+  check(envOf(2).code === 'ARGS_UNKNOWN_KEY', `参数名写错 → ARGS_UNKNOWN_KEY（${envOf(2).code}）`)
   check(envOf(3).code === 'READ_BAD_MODE', `mode 写错 → READ_BAD_MODE（${envOf(3).code}）`)
   check(envOf(4).code === 'FS_NOT_FOUND', `文件不存在 → FS_NOT_FOUND（${envOf(4).code}）`)
   check(envOf(5).code === 'BAD_ARGS', `hunks 不是数组 → BAD_ARGS（${envOf(5).code}）`)
@@ -383,7 +430,7 @@ say('G MCP：坏参数 / 未知工具 / 服务存活')
 say('H MCP：参数形状宽容度')
 {
   const f = write('mcp-shapes.md', utf8('l1\nl2\nl3\nl4\n'))
-  const call = (id, args) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_read', arguments: args } })
+  const call = (id, args) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: args } })
   const frames = [
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {} } },
     { jsonrpc: '2.0', method: 'notifications/initialized' },
@@ -392,9 +439,9 @@ say('H MCP：参数形状宽容度')
     call(4, { file_path: f.path, lines: 2 }),
     call(5, { file_path: f.path, lines: { start: 1, end: 2 } }),
     // arguments 整体是 JSON 字符串（实测有客户端这么传）
-    { jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'aura_read', arguments: JSON.stringify({ file_path: f.path, start_line: 1 }) } },
+    { jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: JSON.stringify({ file_path: f.path, start_line: 1 }) } },
     // arguments 是解不开的字符串：必须回结构化错误，不能挂死
-    { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'aura_read', arguments: '不是 JSON' } },
+    { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: '不是 JSON' } },
   ]
   const res = spawnSync(process.execPath, [mcpBin], { input: `${frames.map((x) => JSON.stringify(x)).join('\n')}\n`, encoding: 'utf8', env })
   const replies = res.stdout.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
@@ -417,7 +464,7 @@ say('I MCP：hunk 行区间的宽容度')
     jsonrpc: '2.0',
     id,
     method: 'tools/call',
-    params: { name: 'aura_edit', arguments: { file_path: f.path, hunks: [hunk] } },
+    params: { name: 'aura_basetools_edit', arguments: { file_path: f.path, hunks: [hunk] } },
   })
   const frames = [
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {} } },
@@ -552,45 +599,45 @@ const normalizeGolden = (text, dir) => {
  * `changed` 之前要先拿到令牌。**采集与比对共用这一份定义** ⇒ 黄金集不可能与用例漂开。
  */
 const CLI_GOLDEN_CALLS = [
-  { name: 'read-map', file: 'scene.js', args: () => ['read', '--file', 'scene.js', '--mode', 'map'] },
-  { name: 'read-digest', file: 'scene.js', args: () => ['read', '--file', 'scene.js', '--mode', 'digest'] },
-  { name: 'read-full', file: 'scene.js', args: () => ['read', '--file', 'scene.js', '--mode', 'full'] },
-  { name: 'read-around', file: 'scene.js', args: () => ['read', '--file', 'scene.js', '--mode', 'around', '--around', 'beta'] },
-  { name: 'read-lines', file: 'scene.js', args: () => ['read', '--file', 'scene.js', '--mode', 'lines', '--lines', '1,3'] },
-  { name: 'read-search', file: 'scene.js', args: () => ['read', '--file', 'scene.js', '--mode', 'search', '--search', 'return'] },
+  { name: 'read-map', file: 'scene.js', args: () => ['basetools', 'read', '--file', 'scene.js', '--mode', 'map'] },
+  { name: 'read-digest', file: 'scene.js', args: () => ['basetools', 'read', '--file', 'scene.js', '--mode', 'digest'] },
+  { name: 'read-full', file: 'scene.js', args: () => ['basetools', 'read', '--file', 'scene.js', '--mode', 'full'] },
+  { name: 'read-around', file: 'scene.js', args: () => ['basetools', 'read', '--file', 'scene.js', '--mode', 'around', '--around', 'beta'] },
+  { name: 'read-lines', file: 'scene.js', args: () => ['basetools', 'read', '--file', 'scene.js', '--mode', 'lines', '--lines', '1,3'] },
+  { name: 'read-search', file: 'scene.js', args: () => ['basetools', 'read', '--file', 'scene.js', '--mode', 'search', '--search', 'return'] },
   {
     name: 'read-changed',
     file: 'scene.js',
     // 令牌是内容指纹（`<hash>:<字节数>`）：现场读一次取回来，不在黄金集里钉一个手抄的令牌。
-    prepare: (spawn) => JSON.parse(spawn(['read', '--file', 'scene.js', '--mode', 'full']).stdout).version,
-    args: (token) => ['read', '--file', 'scene.js', '--mode', 'changed', '--since', String(token)],
+    prepare: (spawn) => JSON.parse(spawn(['basetools', 'read', '--file', 'scene.js', '--mode', 'full']).stdout).version,
+    args: (token) => ['basetools', 'read', '--file', 'scene.js', '--mode', 'changed', '--since', String(token)],
   },
   {
     name: 'edit-target',
     file: 'w.js',
-    prepare: (spawn) => void spawn(['read', '--file', 'w.js', '--mode', 'full']),
-    args: () => ['edit', '--file', 'w.js', '--hunks', JSON.stringify([{ target: 'alpha', replace: 'function alpha() {\n  return 42\n}' }])],
+    prepare: (spawn) => void spawn(['basetools', 'read', '--file', 'w.js', '--mode', 'full']),
+    args: () => ['basetools', 'edit', '--file', 'w.js', '--hunks', JSON.stringify([{ target: 'alpha', replace: 'function alpha() {\n  return 42\n}' }])],
   },
   {
     name: 'edit-lines',
     file: 'w.js',
-    prepare: (spawn) => void spawn(['read', '--file', 'w.js', '--mode', 'full']),
-    args: () => ['edit', '--file', 'w.js', '--hunks', JSON.stringify([{ lines: [2, 2], replace: '  const a = 42' }])],
+    prepare: (spawn) => void spawn(['basetools', 'read', '--file', 'w.js', '--mode', 'full']),
+    args: () => ['basetools', 'edit', '--file', 'w.js', '--hunks', JSON.stringify([{ lines: [2, 2], replace: '  const a = 42' }])],
   },
   {
     name: 'edit-line-cue',
     file: 'w.js',
-    prepare: (spawn) => void spawn(['read', '--file', 'w.js', '--mode', 'full']),
-    args: () => ['edit', '--file', 'w.js', '--hunks', JSON.stringify([{ line_cue: 'beta', replace: 'function beta() { /* cue */' }])],
+    prepare: (spawn) => void spawn(['basetools', 'read', '--file', 'w.js', '--mode', 'full']),
+    args: () => ['basetools', 'edit', '--file', 'w.js', '--hunks', JSON.stringify([{ line_cue: 'beta', replace: 'function beta() { /* cue */' }])],
   },
   {
     name: 'edit-anchor',
     file: 'w.js',
-    prepare: (spawn) => void spawn(['read', '--file', 'w.js', '--mode', 'full']),
-    args: () => ['edit', '--file', 'w.js', '--hunks', JSON.stringify([{ anchor: '  const b = 2', replace: '  const b = 22' }])],
+    prepare: (spawn) => void spawn(['basetools', 'read', '--file', 'w.js', '--mode', 'full']),
+    args: () => ['basetools', 'edit', '--file', 'w.js', '--hunks', JSON.stringify([{ anchor: '  const b = 2', replace: '  const b = 22' }])],
   },
   // `create` 没有“读一次”这回事：文件本来就还不存在。
-  { name: 'edit-create', file: null, args: () => ['edit', '--file', 'made.md', '--create', 'hello\n'] },
+  { name: 'edit-create', file: null, args: () => ['basetools', 'edit', '--file', 'made.md', '--create', 'hello\n'] },
 ]
 
 /** 跑一次黄金集用例（干净的目录 + 干净的缓存 ⇒ 同一份输入恒定给同一份回执）。 */
@@ -617,53 +664,54 @@ const runGoldenCall = (call) => {
 const CLI_GOLDEN = {
   "read-map": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"mode\":\"map\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"symbols\":4,\"shown\":4,\"byKind\":{\"function\":2,\"variable\":2},\"text\":\"10 lines · 4 symbols (function:2 variable:2)\\nexported (0):\\ninternal:\\n  function  alpha                      1-4\\n  function  beta                       6-9\",\"omitted\":\"2 nested locals omitted (inside a function — reach them with mode=lines, not target=)\",\"next\":\"mode=around around=<name> · mode=lines lines=[a,b] · mode=digest for signatures\"}\n"
+    "stdout": "{\"ok\":true,\"mode\":\"map\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"symbols\":4,\"shown\":4,\"byKind\":{\"function\":2,\"variable\":2},\"text\":\"10 lines · 4 symbols (function:2 variable:2)\\nexported (0):\\ninternal:\\n  function  alpha                      1-4\\n  function  beta                       6-9\",\"omitted\":\"2 nested locals omitted (inside a function — reach them with mode=lines, not target=)\",\"next\":\"mode=around around=<name> · mode=lines lines=[a,b] · mode=digest for signatures\",\"metrics\":{\"mode\":\"map\",\"lines\":10,\"chars\":154,\"symbols\":4,\"truncated\":false}}\n"
   },
   "read-digest": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"mode\":\"digest\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"symbols\":4,\"exported\":[],\"text\":\"10 lines · 4 symbols · 0 control-flow\\nexported: (none)\\nimports: (none)\\nexternal calls: (none)\\n--- signatures ---\\n1-4 (  4 lines) function alpha()\\n6-9 (  4 lines) function beta()\",\"next\":\"mode=around around=<name> to see one function\"}\n"
+    "stdout": "{\"ok\":true,\"mode\":\"digest\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"symbols\":4,\"exported\":[],\"text\":\"10 lines · 4 symbols · 0 control-flow\\nexported: (none)\\nimports: (none)\\nexternal calls: (none)\\n--- signatures ---\\n1-4 (  4 lines) function alpha()\\n6-9 (  4 lines) function beta()\",\"next\":\"mode=around around=<name> to see one function\",\"metrics\":{\"mode\":\"digest\",\"lines\":10,\"chars\":177,\"symbols\":4,\"truncated\":false}}\n"
   },
   "read-full": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"mode\":\"full\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"center\":1,\"label\":\"full file\",\"relocatable\":[{\"line\":1,\"target\":\"alpha\",\"lines\":[1,4]}],\"shown\":\"1-10\",\"text\":\"1: function alpha() {\\n2:   const a = 1\\n3:   return a\\n4: }\\n5: \\n6: function beta() {\\n7:   const b = 2\\n8:   return b\\n9: }\\n10: \"}\n"
+    "stdout": "{\"ok\":true,\"mode\":\"full\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"center\":1,\"label\":\"full file\",\"relocatable\":[{\"line\":1,\"target\":\"alpha\",\"lines\":[1,4]}],\"shown\":\"1-10\",\"text\":\"1: function alpha() {\\n2:   const a = 1\\n3:   return a\\n4: }\\n5: \\n6: function beta() {\\n7:   const b = 2\\n8:   return b\\n9: }\\n10: \",\"metrics\":{\"mode\":\"full\",\"lines\":10,\"chars\":123,\"truncated\":false}}\n"
   },
   "read-around": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"mode\":\"around\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"center\":6,\"label\":\"around symbol function:beta (6-9)\",\"relocatable\":[{\"line\":1,\"target\":\"alpha\",\"lines\":[1,4]}],\"shown\":\"1-10\",\"text\":\"1: function alpha() {\\n2:   const a = 1\\n3:   return a\\n4: }\\n5: \\n6: function beta() {\\n7:   const b = 2\\n8:   return b\\n9: }\\n10: \"}\n"
+    "stdout": "{\"ok\":true,\"mode\":\"around\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"center\":6,\"label\":\"around symbol function:beta (6-9)\",\"relocatable\":[{\"line\":1,\"target\":\"alpha\",\"lines\":[1,4]}],\"shown\":\"1-10\",\"text\":\"1: function alpha() {\\n2:   const a = 1\\n3:   return a\\n4: }\\n5: \\n6: function beta() {\\n7:   const b = 2\\n8:   return b\\n9: }\\n10: \",\"metrics\":{\"mode\":\"around\",\"lines\":10,\"chars\":123,\"truncated\":false}}\n"
   },
   "read-lines": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"mode\":\"lines\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"center\":1,\"label\":\"requested range\",\"relocatable\":[{\"line\":1,\"target\":\"alpha\",\"lines\":[1,4]}],\"shown\":\"1-3\",\"handle\":\"h<ID>a8d61e88:1-3\",\"text\":\"1: function alpha() {  <h<ID>a8d61e88:1-3>\\n2:   const a = 1\\n3:   return a\"}\n"
+    "stdout": "{\"ok\":true,\"mode\":\"lines\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"center\":1,\"label\":\"requested range\",\"relocatable\":[{\"line\":1,\"target\":\"alpha\",\"lines\":[1,4]}],\"shown\":\"1-3\",\"handle\":\"h<ID>a8d61e88:1-3\",\"text\":\"1: function alpha() {  <h<ID>a8d61e88:1-3>\\n2:   const a = 1\\n3:   return a\",\"metrics\":{\"mode\":\"lines\",\"lines\":10,\"chars\":73,\"truncated\":false}}\n"
   },
   "read-search": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"mode\":\"search\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"matches\":2,\"handles\":[{\"line\":3,\"handle\":\"h<ID>82986ddc:3-3\"},{\"line\":8,\"handle\":\"h<ID>85987295:8-8\"}],\"relocatable\":[{\"line\":3,\"target\":\"alpha\",\"lines\":[1,4]},{\"line\":8,\"target\":\"beta\",\"lines\":[6,9]}],\"text\":\"3: return a  <h<ID>82986ddc:3-3>\\n8: return b  <h<ID>85987295:8-8>\"}\n"
+    "stdout": "{\"ok\":true,\"mode\":\"search\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"matches\":2,\"handles\":[{\"line\":3,\"handle\":\"h<ID>82986ddc:3-3\"},{\"line\":8,\"handle\":\"h<ID>85987295:8-8\"}],\"relocatable\":[{\"line\":3,\"target\":\"alpha\",\"lines\":[1,4]},{\"line\":8,\"target\":\"beta\",\"lines\":[6,9]}],\"text\":\"3: return a  <h<ID>82986ddc:3-3>\\n8: return b  <h<ID>85987295:8-8>\",\"metrics\":{\"mode\":\"search\",\"lines\":10,\"chars\":65,\"truncated\":false}}\n"
   },
   "read-changed": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"mode\":\"changed\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"note\":\"no change since that version\",\"text\":\"no change since that version\"}\n"
+    "stdout": "{\"ok\":true,\"mode\":\"changed\",\"totalLines\":10,\"contentBudget\":7492,\"version\":\"531e7692:92\",\"note\":\"no change since that version\",\"text\":\"no change since that version\",\"metrics\":{\"mode\":\"changed\",\"lines\":10,\"chars\":28,\"truncated\":false}}\n"
   },
   "edit-target": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>\\\\w.js\",\"applied\":[{\"line\":1,\"tier\":\"symbol\",\"byNear\":false,\"actual\":\"function alpha() {\\n  const a = 1\\n  return a\\n}\",\"replaced\":\"function alpha() {\\n  return 42\\n}\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":79}}}\n"
+    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>/w.js\",\"applied\":[{\"line\":1,\"tier\":\"symbol\",\"byNear\":false,\"actual\":\"function alpha() {\\n  const a = 1\\n  return a\\n}\",\"replaced\":\"function alpha() {\\n  return 42\\n}\",\"afterLine\":1,\"afterEndLine\":3,\"delta\":-1,\"handle\":\"h<ID>370ea564:1-3\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":79}}}\n"
   },
   "edit-lines": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>\\\\w.js\",\"applied\":[{\"line\":2,\"tier\":\"lines\",\"byNear\":false,\"actual\":\"  const a = 1\",\"replaced\":\"  const a = 42\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":93}}}\n"
+    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>/w.js\",\"applied\":[{\"line\":2,\"tier\":\"lines\",\"byNear\":false,\"actual\":\"  const a = 1\",\"replaced\":\"  const a = 42\",\"afterLine\":2,\"afterEndLine\":2,\"delta\":0,\"handle\":\"h<ID>9edee6fa:2-2\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":93}}}\n"
   },
   "edit-line-cue": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>\\\\w.js\",\"applied\":[{\"line\":6,\"tier\":\"lineCue\",\"byNear\":false,\"actual\":\"function beta() {\",\"replaced\":\"function beta() { /* cue */\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":102}}}\n"
+    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>/w.js\",\"applied\":[{\"line\":6,\"tier\":\"lineCue\",\"byNear\":false,\"actual\":\"function beta() {\",\"replaced\":\"function beta() { /* cue */\",\"afterLine\":6,\"afterEndLine\":6,\"delta\":0,\"handle\":\"h<ID>dfda3c32:6-6\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":102}}}\n"
   },
   "edit-anchor": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>\\\\w.js\",\"applied\":[{\"line\":7,\"tier\":\"exact\",\"byNear\":false,\"actual\":\"  const b = 2\",\"replaced\":\"  const b = 22\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":93}}}\n"
+    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>/w.js\",\"applied\":[{\"line\":7,\"tier\":\"exact\",\"byNear\":false,\"actual\":\"  const b = 2\",\"replaced\":\"  const b = 22\",\"afterLine\":7,\"afterEndLine\":7,\"delta\":0,\"handle\":\"h<ID>6f2dcb63:7-7\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":93}}}\n"
   },
   "edit-create": {
     "exit": 0,
-    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>\\\\made.md\",\"operation\":\"create\",\"applied\":[{\"line\":1,\"tier\":\"create\",\"actual\":\"\",\"replaced\":\"hello\\n\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":6}}}\n"
+    "stdout": "{\"ok\":true,\"result\":{\"path\":\"<DIR>/made.md\",\"operation\":\"create\",\"applied\":[{\"line\":1,\"tier\":\"create\",\"actual\":\"\",\"replaced\":\"hello\\n\"}],\"dryRun\":false,\"write_verify\":{\"level\":\"bytes\",\"bytes\":6}}}\n"
   }
 }
+
 
 if (process.argv.includes('--capture-cli-goldens')) {
   const captured = {}
@@ -705,6 +753,7 @@ say('MT-G 多目标读：CLI --targets（逐项/顺序/不连坐/汇总行/退�
   scene.write('a.js', MT_SOURCE)
   scene.write('b.md', 'one\ntwo\nthree\n')
   const res = scene.run([
+    'basetools',
     'read',
     '--targets',
     JSON.stringify([
@@ -721,8 +770,8 @@ say('MT-G 多目标读：CLI --targets（逐项/顺序/不连坐/汇总行/退�
     JSON.stringify(batch.entries?.map((e) => e.file_path)),
   )
   // ① 每项与“单独一次单目标读”的同一字段值相同：拿整个信封逐字节比
-  const soloA = json(scene.run(['read', '--file', 'a.js', '--mode', 'digest']))
-  const soloB = json(scene.run(['read', '--file', 'b.md', '--mode', 'lines', '--lines', '1,2']))
+  const soloA = json(scene.run(['basetools', 'read', '--file', 'a.js', '--mode', 'digest']))
+  const soloB = json(scene.run(['basetools', 'read', '--file', 'b.md', '--mode', 'lines', '--lines', '1,2']))
   const entryA = JSON.stringify(batch.entries?.[0]?.envelope)
   const entryB = JSON.stringify(batch.entries?.[1]?.envelope)
   check(entryA === JSON.stringify(soloA), '① A 项信封与单独读逐字节相同', byteDiff(entryA, JSON.stringify(soloA)) ?? '')
@@ -730,6 +779,7 @@ say('MT-G 多目标读：CLI --targets（逐项/顺序/不连坐/汇总行/退�
   // ② 一项目标不存在：整批 ok=false，另一项照常可读（不连坐）
   const partial = json(
     scene.run([
+      'basetools',
       'read',
       '--targets',
       JSON.stringify([
@@ -743,7 +793,7 @@ say('MT-G 多目标读：CLI --targets（逐项/顺序/不连坐/汇总行/退�
   check(partial.entries?.[1]?.ok === false && partial.entries?.[1]?.code === 'FS_NOT_FOUND', `② 缺的那项报 FS_NOT_FOUND（${partial.entries?.[1]?.code}）`)
   check(partial.summary === 'targets: 2 ｜ ok 1 ｜ not_found 1', `③ 汇总行 ${JSON.stringify(partial.summary)}`)
   check(partial.counts?.ok === 1 && partial.counts?.failed === 1, `③ counts ok=1 failed=1（${JSON.stringify(partial.counts)}）`)
-  const missingOnly = scene.run(['read', '--targets', JSON.stringify([{ file_path: 'nope.md', mode: 'full' }])])
+  const missingOnly = scene.run(['basetools', 'read', '--targets', JSON.stringify([{ file_path: 'nope.md', mode: 'full' }])])
   check(missingOnly.status === 2 && json(missingOnly).ok === false, `④ 逐项失败 ⇒ 走结果通道、退出码 2（实测 ${missingOnly.status}）`)
 }
 
@@ -754,11 +804,12 @@ say('MT-H 多目标写：CLI --targets（真落盘/零写入/同文件合并/dry
   const scene = mtScene('h')
   scene.write('c.md', 'one\ntwo\n')
   scene.write('d.md', 'alpha\nbravo\n')
-  scene.run(['read', '--file', 'c.md', '--mode', 'full'])
-  scene.run(['read', '--file', 'd.md', '--mode', 'full'])
+  scene.run(['basetools', 'read', '--file', 'c.md', '--mode', 'full'])
+  scene.run(['basetools', 'read', '--file', 'd.md', '--mode', 'full'])
   const beforeC = fs.readFileSync(path.join(scene.dir, 'c.md'))
   const beforeD = fs.readFileSync(path.join(scene.dir, 'd.md'))
   const res = scene.run([
+    'basetools',
     'edit',
     '--targets',
     JSON.stringify([
@@ -775,8 +826,8 @@ say('MT-H 多目标写：CLI --targets（真落盘/零写入/同文件合并/dry
   // ① 逐项回执与单目标同形：字段集合相同（同一个渲染，不是另写一套）
   const soloScene = mtScene('h-solo')
   soloScene.write('solo.md', 'one\ntwo\n')
-  soloScene.run(['read', '--file', 'solo.md', '--mode', 'full'])
-  const solo = json(soloScene.run(['edit', '--file', 'solo.md', '--hunks', JSON.stringify([{ lines: [1, 1], replace: 'ONE' }])]))
+  soloScene.run(['basetools', 'read', '--file', 'solo.md', '--mode', 'full'])
+  const solo = json(soloScene.run(['basetools', 'edit', '--file', 'solo.md', '--hunks', JSON.stringify([{ lines: [1, 1], replace: 'ONE' }])]))
   const keysOf = (o) => Object.keys(o ?? {}).sort().join(',')
   check(keysOf(batch.edits?.[0]?.receipt) === keysOf(solo.result), '① 逐项回执与单目标同形（字段集合相同）', `${keysOf(batch.edits?.[0]?.receipt)} vs ${keysOf(solo.result)}`)
 
@@ -784,11 +835,12 @@ say('MT-H 多目标写：CLI --targets（真落盘/零写入/同文件合并/dry
   const zero = mtScene('h-zero')
   zero.write('c.md', 'one\ntwo\n')
   zero.write('d.md', 'alpha\nbravo\n')
-  zero.run(['read', '--file', 'c.md', '--mode', 'full'])
-  zero.run(['read', '--file', 'd.md', '--mode', 'full'])
+  zero.run(['basetools', 'read', '--file', 'c.md', '--mode', 'full'])
+  zero.run(['basetools', 'read', '--file', 'd.md', '--mode', 'full'])
   const keepC = fs.readFileSync(path.join(zero.dir, 'c.md'))
   const keepD = fs.readFileSync(path.join(zero.dir, 'd.md'))
   const failed = zero.run([
+    'basetools',
     'edit',
     '--targets',
     JSON.stringify([
@@ -812,9 +864,10 @@ say('MT-H 多目标写：CLI --targets（真落盘/零写入/同文件合并/dry
   // ③ 同文件两个目标 ⇒ 合并成一次提交
   const merged = mtScene('h-merge')
   merged.write('m.md', 'one\ntwo\nthree\n')
-  merged.run(['read', '--file', 'm.md', '--mode', 'full'])
+  merged.run(['basetools', 'read', '--file', 'm.md', '--mode', 'full'])
   const mergeEnv = json(
     merged.run([
+      'basetools',
       'edit',
       '--targets',
       JSON.stringify([
@@ -830,10 +883,10 @@ say('MT-H 多目标写：CLI --targets（真落盘/零写入/同文件合并/dry
   // ④ dry-run 不落盘
   const dry = mtScene('h-dry')
   dry.write('c.md', 'one\ntwo\n')
-  dry.run(['read', '--file', 'c.md', '--mode', 'full'])
+  dry.run(['basetools', 'read', '--file', 'c.md', '--mode', 'full'])
   const keep = fs.readFileSync(path.join(dry.dir, 'c.md'))
   const dryEnv = json(
-    dry.run(['edit', '--dry-run', '--targets', JSON.stringify([{ file_path: 'c.md', hunks: [{ lines: [1, 1], replace: 'ONE' }] }])]),
+    dry.run(['basetools', 'edit', '--dry-run', '--targets', JSON.stringify([{ file_path: 'c.md', hunks: [{ lines: [1, 1], replace: 'ONE' }] }])]),
   )
   check(dryEnv.ok === true && dryEnv.edits?.[0]?.outcome === 'dry_run', `④ dryRun 的回执是 dry_run（${dryEnv.edits?.[0]?.outcome}）`, JSON.stringify(dryEnv).slice(0, 160))
   check(fs.readFileSync(path.join(dry.dir, 'c.md')).equals(keep), '④ dryRun 不落盘（逐字节不变）')
@@ -965,42 +1018,42 @@ say('MT-I 形状与边界：参数面拒绝（exit 1），判据只有在引擎�
   scene.write('a.js', MT_SOURCE)
   const one = JSON.stringify([{ file_path: 'a.js', mode: 'digest' }])
   // ① 两种形状同时给 ⇒ 参数面拒绝（读侧与写侧各一次）
-  const readBoth = scene.run(['read', '--file', 'a.js', '--targets', one])
+  const readBoth = scene.run(['basetools', 'read', '--file', 'a.js', '--targets', one])
   const readBothEnv = json(readBoth)
   check(readBoth.status === 1, `① read：--file 与 --targets 同时给 ⇒ exit 1（实测 ${readBoth.status}）`, String(readBothEnv.error).slice(0, 120))
   check(readBothEnv.ok === false && readBothEnv.shape === 'ARGS_SHAPE_EXCLUSIVE', `① 读侧点名互斥判据（shape=${readBothEnv.shape}）`, JSON.stringify(readBothEnv).slice(0, 160))
-  const editBoth = scene.run(['edit', '--file', 'a.js', '--targets', JSON.stringify([{ file_path: 'a.js', hunks: [{ lines: [1, 1], replace: 'X' }] }])])
+  const editBoth = scene.run(['basetools', 'edit', '--file', 'a.js', '--targets', JSON.stringify([{ file_path: 'a.js', hunks: [{ lines: [1, 1], replace: 'X' }] }])])
   const editBothEnv = json(editBoth)
   check(editBoth.status === 1 && editBothEnv.shape === 'ARGS_SHAPE_EXCLUSIVE', `① edit：同样被拒（exit=${editBoth.status}，shape=${editBothEnv.shape}）`, String(editBothEnv.error).slice(0, 120))
   check(fs.readFileSync(path.join(scene.dir, 'a.js'), 'utf8') === MT_SOURCE, '① 被拒的写没有碰磁盘（逐字节不变）')
 
   // ② 超 32 项
   const tooMany = Array.from({ length: 33 }, () => ({ file_path: 'a.js', mode: 'digest' }))
-  const over = scene.run(['read', '--targets', JSON.stringify(tooMany)])
+  const over = scene.run(['basetools', 'read', '--targets', JSON.stringify(tooMany)])
   const overEnv = json(over)
   check(over.status === 1, `② 33 项 ⇒ exit 1（实测 ${over.status}）`)
   check(overEnv.shape === 'ARGS_TARGETS_LIMIT' && overEnv.got === 33, `② 报出实得数（got=${overEnv.got}，shape=${overEnv.shape}）`, String(overEnv.error).slice(0, 120))
 
   // ③ 空数组不是“成功读了 0 个”
-  const empty = scene.run(['read', '--targets', '[]'])
+  const empty = scene.run(['basetools', 'read', '--targets', '[]'])
   const emptyEnv = json(empty)
   check(empty.status === 1 && emptyEnv.shape === 'ARGS_TARGETS_SHAPE', `③ 空数组 ⇒ 拒绝（exit=${empty.status}，shape=${emptyEnv.shape}）`, String(emptyEnv.error).slice(0, 120))
 
   // ④ 不是 JSON：说清来源与接受的形状
-  const notJson = json(scene.run(['read', '--targets', '[{file_path: a.js}]']))
+  const notJson = json(scene.run(['basetools', 'read', '--targets', '[{file_path: a.js}]']))
   check(notJson.code === 'USAGE' && String(notJson.error).includes('--targets') && String(notJson.error).includes('JSON'), '④ 字面 JSON 坏了 ⇒ 说清来源与形状', String(notJson.error).slice(0, 140))
-  const missingSpec = json(scene.run(['read', '--targets', '@nope.json']))
+  const missingSpec = json(scene.run(['basetools', 'read', '--targets', '@nope.json']))
   check(missingSpec.code === 'USAGE' && String(missingSpec.error).includes('@nope.json'), '④ @文件 读不到 ⇒ 报的是实际来源', String(missingSpec.error).slice(0, 140))
-  const bare = json(scene.run(['read', '--targets']))
+  const bare = json(scene.run(['basetools', 'read', '--targets']))
   check(bare.code === 'USAGE', `④ \`--targets\` 没带值 ⇒ USAGE（收到 ${JSON.stringify(String(bare.error).slice(0, 60))}）`)
   // 与 `--hunks-file` 同一条理由：PowerShell 5.1 默认写 BOM，剥掉即可
   fs.writeFileSync(path.join(scene.dir, 'spec.json'), Buffer.concat([BOM, Buffer.from(one, 'utf8')]))
-  const bomSpec = scene.run(['read', '--targets', '@spec.json'])
+  const bomSpec = scene.run(['basetools', 'read', '--targets', '@spec.json'])
   check(bomSpec.status === 0 && json(bomSpec).ok === true, `④ \`@文件\` 带 BOM 照样能用（exit=${bomSpec.status}）`, String(bomSpec.stderr).slice(0, 100))
 
   // ⑤ 顶层不认识的键不许静默忽略（`dryrun` 拼错而照写盘是最坏的一种）
   const unknown = json(
-    scene.run(['edit', '--targets', JSON.stringify({ targets: [{ file_path: 'a.js', hunks: [{ lines: [1, 1], replace: 'X' }] }], dryrun: true })]),
+    scene.run(['basetools', 'edit', '--targets', JSON.stringify({ targets: [{ file_path: 'a.js', hunks: [{ lines: [1, 1], replace: 'X' }] }], dryrun: true })]),
   )
   check(unknown.code === 'USAGE' && unknown.shape === 'ARGS_UNKNOWN_KEY', `⑤ 未知顶层键 ⇒ 拒绝（shape=${unknown.shape}）`, String(unknown.error).slice(0, 140))
   check(fs.readFileSync(path.join(scene.dir, 'a.js'), 'utf8') === MT_SOURCE, '⑤ 被拒的写没有碰磁盘（逐字节不变）')
@@ -1018,11 +1071,11 @@ say('MT-K MCP：targets 的声明、逐项回执、汇总行与既有形状')
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {} } },
     { jsonrpc: '2.0', method: 'notifications/initialized' },
     { jsonrpc: '2.0', id: 2, method: 'tools/list' },
-    call(3, 'aura_read', { targets: [{ file_path: 'a.js', mode: 'digest' }, { file_path: 'b.md', mode: 'lines', lines: [1, 2] }] }),
-    call(4, 'aura_read', { targets: [{ file_path: 'a.js', mode: 'digest' }, { file_path: 'nope.md', mode: 'full' }] }),
-    call(5, 'aura_edit', { targets: [{ file_path: 'c.md', hunks: [{ lines: [1, 1], replace: 'ALPHA' }] }] }),
-    call(6, 'aura_edit', { file_path: 'c.md', targets: [{ file_path: 'c.md', hunks: [{ lines: [2, 2], replace: 'B' }] }] }),
-    call(7, 'aura_read', { file: 'a.js', mode: 'digest' }),
+    call(3, 'aura_basetools_read', { targets: [{ file_path: 'a.js', mode: 'digest' }, { file_path: 'b.md', mode: 'lines', lines: [1, 2] }] }),
+    call(4, 'aura_basetools_read', { targets: [{ file_path: 'a.js', mode: 'digest' }, { file_path: 'nope.md', mode: 'full' }] }),
+    call(5, 'aura_basetools_edit', { targets: [{ file_path: 'c.md', hunks: [{ lines: [1, 1], replace: 'ALPHA' }] }] }),
+    call(6, 'aura_basetools_edit', { file_path: 'c.md', targets: [{ file_path: 'c.md', hunks: [{ lines: [2, 2], replace: 'B' }] }] }),
+    call(7, 'aura_basetools_read', { file: 'a.js', mode: 'digest' }),
   ])
   const replies = res.stdout.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
   const byId = new Map(replies.map((r) => [r.id, r]))
@@ -1030,9 +1083,9 @@ say('MT-K MCP：targets 的声明、逐项回执、汇总行与既有形状')
   const tools = byId.get(2)?.result?.tools ?? []
   const schemaOf = (name) => tools.find((t) => t.name === name)?.inputSchema ?? {}
   check(
-    schemaOf('aura_read').properties?.targets?.type === 'array' && schemaOf('aura_edit').properties?.targets?.type === 'array',
+    schemaOf('aura_basetools_read').properties?.targets?.type === 'array' && schemaOf('aura_basetools_edit').properties?.targets?.type === 'array',
     'K 两个工具的 inputSchema 都声明了 targets 数组',
-    JSON.stringify({ read: schemaOf('aura_read').properties?.targets, edit: schemaOf('aura_edit').properties?.targets }).slice(0, 160),
+    JSON.stringify({ read: schemaOf('aura_basetools_read').properties?.targets, edit: schemaOf('aura_basetools_edit').properties?.targets }).slice(0, 160),
   )
   const batch = envOf(3)
   check(batch.ok === true && batch.entries?.length === 2, 'K file_path 缺席 + targets 在场 ⇒ 不再 BAD_ARGS，逐项照给', JSON.stringify(batch).slice(0, 180))
@@ -1043,10 +1096,10 @@ say('MT-K MCP：targets 的声明、逐项回执、汇总行与既有形状')
   check(partial.summary === 'targets: 2 ｜ ok 1 ｜ not_found 1', `K 缺一项时的汇总行 ${JSON.stringify(partial.summary)}`)
   check(byId.get(4)?.result?.isError === true, `K 有失败 ⇒ isError=true（${byId.get(4)?.result?.isError}）`)
   const editBatch = envOf(5)
-  check(editBatch.ok === true && editBatch.edits?.[0]?.landed === true, 'K aura_edit 带 targets 走引擎批入口', JSON.stringify(editBatch).slice(0, 180))
+  check(editBatch.ok === true && editBatch.edits?.[0]?.landed === true, 'K aura_basetools_edit 带 targets 走引擎批入口', JSON.stringify(editBatch).slice(0, 180))
   check(fs.readFileSync(path.join(scene.dir, 'c.md'), 'utf8') === 'ALPHA\nbravo\n', 'K MCP 批编辑真落盘', JSON.stringify(fs.readFileSync(path.join(scene.dir, 'c.md'), 'utf8')))
   check(envOf(6).code === 'ARGS_SHAPE_EXCLUSIVE', `K file_path 与 targets 同时给 ⇒ 互斥判据（${envOf(6).code}）`, String(envOf(6).error).slice(0, 140))
-  check(envOf(7).code === 'BAD_ARGS', `K 两种形状都没给 ⇒ 仍是 BAD_ARGS（既有行为不变，${envOf(7).code}）`, String(envOf(7).error).slice(0, 140))
+  check(envOf(7).code === 'ARGS_UNKNOWN_KEY', `K 两种形状都没给仍被未知键守卫点名（${envOf(7).code}）`, String(envOf(7).error).slice(0, 140))
   check(res.stderr.trim() === '', 'K 没靠 stderr 兑底（不用抛出当回包）', res.stderr.trim().slice(0, 80))
 }
 
@@ -1088,7 +1141,7 @@ say('MT-L 句柄寻址：同一份柄、同一次改动 —— 三面同 tier �
   }
   const bytesOf = (p) => fs.readFileSync(p)
   const tierOf = (env) => String(env?.result?.applied?.[0]?.tier ?? env?.applied?.[0]?.tier ?? '')
-  const readHandle = (scene) => json(scene.run(['read', '--file', 'a.js', '--mode', 'lines', '--lines', '1,4'])).handle
+  const readHandle = (scene) => json(scene.run(['basetools', 'read', '--file', 'a.js', '--mode', 'lines', '--lines', '1,4'])).handle
   /** 逐字节只有第 n 行变：行数、每行的行尾字节、其余每一行都要一模一样（返回 null = 通过）。 */
   const onlyLineChanged = (before, after, lineNo) => {
     const a = split(String(before))
@@ -1103,20 +1156,20 @@ say('MT-L 句柄寻址：同一份柄、同一次改动 —— 三面同 tier �
   const declScene = mtScene('l-decl')
   declScene.write('a.js', MT_SOURCE)
   const decl = mcpReplies(
-    declScene.mcp([...MCP_HELLO, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, mcpCall(3, 'aura_read', { file_path: 'a.js', mode: 'lines', lines: [1, 4] })]),
+    declScene.mcp([...MCP_HELLO, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, mcpCall(3, 'aura_basetools_read', { file_path: 'a.js', mode: 'lines', lines: [1, 4] })]),
   )
-  const editTool = decl.tools.find((t) => t.name === 'aura_edit')
+  const editTool = decl.tools.find((t) => t.name === 'aura_basetools_edit')
   const hunkProps = Object.keys(editTool?.inputSchema?.properties?.hunks?.items?.properties ?? {})
   const missing = ['handle', 'line', 'position'].filter((key) => !hunkProps.includes(key))
   check(
     missing.length === 0,
-    'L① MCP 声明面：aura_edit 的 hunks.items.properties 收得下 handle / line / position',
+    'L① MCP 声明面：aura_basetools_edit 的 hunks.items.properties 收得下 handle / line / position',
     `缺 ${missing.join(',') || '（无）'}；实得 ${hunkProps.join(',')}`,
   )
   const hunkRequired = editTool?.inputSchema?.properties?.hunks?.items?.required ?? []
   check(JSON.stringify(hunkRequired) === '["replace"]', 'L① required 仍是 ["replace"]（三个从属键一个都不进去）', JSON.stringify(hunkRequired))
 
-  // ② MCP 真改一次：柄从上面那次 `aura_read` 拿；正文行尾的 <h…> 与结构化 handle 必须同值
+  // ② MCP 真改一次：柄从上面那次 `aura_basetools_read` 拿；正文行尾的 <h…> 与结构化 handle 必须同值
   const mcpRead = decl.env(3)
   const mcpHandle = mcpRead.handle
   const marker = (String(mcpRead.text).match(HANDLE_RE) ?? [null])[0]
@@ -1127,7 +1180,7 @@ say('MT-L 句柄寻址：同一份柄、同一次改动 —— 三面同 tier �
   )
   const mcpBefore = bytesOf(path.join(declScene.dir, 'a.js'))
   const mcpEdit = mcpReplies(
-    declScene.mcp([...MCP_HELLO, mcpCall(4, 'aura_edit', { file_path: 'a.js', hunks: [{ handle: mcpHandle, line: 2, replace: LINE2 }] })]),
+    declScene.mcp([...MCP_HELLO, mcpCall(4, 'aura_basetools_edit', { file_path: 'a.js', hunks: [{ handle: mcpHandle, line: 2, replace: LINE2 }] })]),
   ).env(4)
   const mcpAfter = bytesOf(path.join(declScene.dir, 'a.js'))
   check(
@@ -1142,7 +1195,7 @@ say('MT-L 句柄寻址：同一份柄、同一次改动 —— 三面同 tier �
   const cliScene = mtScene('l-cli')
   cliScene.write('a.js', MT_SOURCE)
   const cliHandle = readHandle(cliScene)
-  const cliRun = cliScene.run(['edit', '--file', 'a.js', '--handle', String(cliHandle), '--line', '2', '--replace', LINE2])
+  const cliRun = cliScene.run(['basetools', 'edit', '--file', 'a.js', '--handle', String(cliHandle), '--line', '2', '--replace', LINE2])
   const cliEdit = json(cliRun)
   check(
     cliRun.status === 0 && cliEdit.ok === true,
@@ -1156,7 +1209,7 @@ say('MT-L 句柄寻址：同一份柄、同一次改动 —— 三面同 tier �
   const subScene = mtScene('l-sub')
   subScene.write('a.js', MT_SOURCE)
   const subBefore = bytesOf(path.join(subScene.dir, 'a.js'))
-  const subRun = subScene.run(['edit', '--file', 'a.js', '--line', '2', '--replace', 'X'])
+  const subRun = subScene.run(['basetools', 'edit', '--file', 'a.js', '--line', '2', '--replace', 'X'])
   const subEnv = json(subRun)
   check(
     subRun.status === 1 && subEnv.code === 'USAGE',
@@ -1168,7 +1221,7 @@ say('MT-L 句柄寻址：同一份柄、同一次改动 —— 三面同 tier �
   // `--position after`：在区间**边界**插入，区间本身一个字节不动
   const posScene = mtScene('l-pos')
   posScene.write('a.js', MT_SOURCE)
-  const posRun = posScene.run(['edit', '--file', 'a.js', '--handle', String(readHandle(posScene)), '--position', 'after', '--replace', 'POST'])
+  const posRun = posScene.run(['basetools', 'edit', '--file', 'a.js', '--handle', String(readHandle(posScene)), '--position', 'after', '--replace', 'POST'])
   const posEnv = json(posRun)
   const posLines = split(bytesOf(path.join(posScene.dir, 'a.js')).toString('utf8'))
   const origLines = split(MT_SOURCE)
@@ -1192,16 +1245,16 @@ say('MT-L 句柄寻址：同一份柄、同一次改动 —— 三面同 tier �
   const reset = () => fs.writeFileSync(triFile, Buffer.from(MT_SOURCE, 'utf8'))
   reset()
   const triCliHandle = readHandle(triScene)
-  const triCli = json(triScene.run(['edit', '--file', 'a.js', '--handle', String(triCliHandle), '--line', '2', '--replace', LINE2]))
+  const triCli = json(triScene.run(['basetools', 'edit', '--file', 'a.js', '--handle', String(triCliHandle), '--line', '2', '--replace', LINE2]))
   const triCliDisk = bytesOf(triFile)
 
   // 回到同一份字节：柄是「账本键 + 区间文本 + 行区间」的函数 ⇒ 重读一次的柄必须逐字符相同
   reset()
   const triMcpRead = mcpReplies(
-    triScene.mcp([...MCP_HELLO, mcpCall(3, 'aura_read', { file_path: 'a.js', mode: 'lines', lines: [1, 4] })]),
+    triScene.mcp([...MCP_HELLO, mcpCall(3, 'aura_basetools_read', { file_path: 'a.js', mode: 'lines', lines: [1, 4] })]),
   ).env(3)
   const triMcp = mcpReplies(
-    triScene.mcp([...MCP_HELLO, mcpCall(4, 'aura_edit', { file_path: 'a.js', hunks: [{ handle: triMcpRead.handle, line: 2, replace: LINE2 }] })]),
+    triScene.mcp([...MCP_HELLO, mcpCall(4, 'aura_basetools_edit', { file_path: 'a.js', hunks: [{ handle: triMcpRead.handle, line: 2, replace: LINE2 }] })]),
   ).env(4)
   const triMcpDisk = bytesOf(triFile)
 
@@ -1265,8 +1318,8 @@ say('MT-M 修复地址："改错了能自纠"那一半在独立面上看不看�
     .map((m) => { try { return JSON.parse(m[1]) } catch { return null } })
     .filter((o) => o !== null && typeof o.handle === 'string')
 
-  const notFoundRun = (scene) => scene.run(['edit', '--file', 'a.js', '--hunks', JSON.stringify([{ old: NF_QUOTE, replace: '// nope' }])])
-  const retryRun = (scene, handle) => scene.run(['edit', '--file', 'a.js', '--handle', handle, '--lines', `${NF_REGION.start},${NF_REGION.end}`, '--replace', NF_NEW.join('\n')])
+  const notFoundRun = (scene) => scene.run(['basetools', 'edit', '--file', 'a.js', '--hunks', JSON.stringify([{ old: NF_QUOTE, replace: '// nope' }])])
+  const retryRun = (scene, handle) => scene.run(['basetools', 'edit', '--file', 'a.js', '--handle', handle, '--lines', `${NF_REGION.start},${NF_REGION.end}`, '--replace', NF_NEW.join('\n')])
 
   // ── ① CLI：一次注定找不到的编辑 ──
   const cliScene = mtScene('m-cli')
@@ -1312,7 +1365,7 @@ say('MT-M 修复地址："改错了能自纠"那一半在独立面上看不看�
   }
   const mcpScene = mtScene('m-mcp')
   mcpScene.write('a.js', NF_SRC)
-  const mcpFailRes = mcpScene.mcp([...MCP_HELLO_M, mcpCallM(3, 'aura_edit', { file_path: 'a.js', hunks: [{ old: NF_QUOTE, replace: '// nope' }] })])
+  const mcpFailRes = mcpScene.mcp([...MCP_HELLO_M, mcpCallM(3, 'aura_basetools_edit', { file_path: 'a.js', hunks: [{ old: NF_QUOTE, replace: '// nope' }] })])
   const mcpFail = envOfM(mcpFailRes, 3)
   const mcpRetry = nearHandles(textOf(mcpFail))
   check(
@@ -1322,7 +1375,7 @@ say('MT-M 修复地址："改错了能自纠"那一半在独立面上看不看�
   )
   const mcpRetryRes = mcpScene.mcp([
     ...MCP_HELLO_M,
-    mcpCallM(3, 'aura_edit', { file_path: 'a.js', hunks: [{ handle: mcpRetry[0]?.handle, lines: [NF_REGION.start, NF_REGION.end], replace: NF_NEW.join('\n') }] }),
+    mcpCallM(3, 'aura_basetools_edit', { file_path: 'a.js', hunks: [{ handle: mcpRetry[0]?.handle, lines: [NF_REGION.start, NF_REGION.end], replace: NF_NEW.join('\n') }] }),
   ])
   const mcpRetryEnv = envOfM(mcpRetryRes, 3)
   const mcpDisk = fs.readFileSync(path.join(mcpScene.dir, 'a.js')).toString('utf8')
@@ -1374,7 +1427,7 @@ say('MT-M 修复地址："改错了能自纠"那一半在独立面上看不看�
   const AMB_SRC = ['const head = 0', ...Array.from({ length: 10 }, (_, i) => `const pad${String(i + 1).padStart(2, '0')} = ${i + 1}`), 'const dup = value * 2', ...Array.from({ length: 7 }, (_, i) => `const pad${String(i + 11).padStart(2, '0')} = ${i + 11}`), 'const dup = value * 2', ...Array.from({ length: 2 }, (_, i) => `const pad${String(i + 18).padStart(2, '0')} = ${i + 18}`), 'const dup = value * 2', 'const tail = 0'].join('\n') + '\n'
   const ambScene = mtScene('m-amb')
   ambScene.write('a.js', AMB_SRC)
-  const ambFail = json(ambScene.run(['edit', '--file', 'a.js', '--hunks', JSON.stringify([{ old: 'const dup = value * 2', replace: 'const dup = 0' }])]))
+  const ambFail = json(ambScene.run(['basetools', 'edit', '--file', 'a.js', '--hunks', JSON.stringify([{ old: 'const dup = value * 2', replace: 'const dup = 0' }])]))
   const ambRetry = nearHandles(textOf(ambFail))
   // 候选在哪个键上：引擎的错误对象把细节挂在 `error` 下（DSH 壳再把它抬成外套字段）。
   // CLI 收到的是 `{ok,error,code}`（`error` 是**消息字符串**）⇒ 细节只能从 `result`/外套里找；
@@ -1390,7 +1443,7 @@ say('MT-M 修复地址："改错了能自纠"那一半在独立面上看不看�
   // 逐行都真能用：拿第三个候选的地址改一次（刻意不取第一个 "" 就近挑会蒙对）
   const ambPick = ambRetry[2]
   const ambBeforeDisk = fs.readFileSync(path.join(ambScene.dir, 'a.js')).toString('utf8')
-  const ambUse = json(ambScene.run(['edit', '--file', 'a.js', '--handle', ambPick.handle, '--replace', 'const dup = 99']))
+  const ambUse = json(ambScene.run(['basetools', 'edit', '--file', 'a.js', '--handle', ambPick.handle, '--replace', 'const dup = 99']))
   const ambAfterDisk = fs.readFileSync(path.join(ambScene.dir, 'a.js')).toString('utf8')
   check(
     ambUse.ok === true && ambAfterDisk !== ambBeforeDisk && ambAfterDisk.split('const dup = 99').length === 2,
@@ -1489,11 +1542,11 @@ say('O 写事务：journal / undo / 多目标回滚')
   const txFile = path.join(tmp, 'tx-single.txt')
   const txOriginal = 'one\ntwo\n'
   fs.writeFileSync(txFile, txOriginal)
-  const txEdit = json(run(['edit', '--file', txFile, '--lines', '1', '--replace', 'ONE', '--transaction']))
+  const txEdit = json(run(['basetools', 'edit', '--file', txFile, '--lines', '1', '--replace', 'ONE', '--transaction']))
   check(txEdit.ok === true && typeof txEdit.result?.transaction?.id === 'string', 'O1 单目标编辑返回 transaction id', JSON.stringify(txEdit.result?.transaction ?? txEdit.code))
   check(fs.readFileSync(txFile, 'utf8') === 'ONE\ntwo\n', 'O1 编辑已落盘')
   const txId = txEdit.result?.transaction?.id
-  const txUndo = json(run(['undo', '--id', String(txId)]))
+  const txUndo = json(run(['basetools', 'undo', '--id', String(txId)]))
   check(txUndo.ok === true && txUndo.status === 'undone', 'O2 undo 成功', JSON.stringify(txUndo))
   check(fs.readFileSync(txFile, 'utf8') === txOriginal, 'O2 undo 恢复原始字节')
 
@@ -1505,25 +1558,25 @@ say('O 写事务：journal / undo / 多目标回滚')
     { file_path: a, hunks: [{ lines: [1, 1], replace: 'ALPHA' }] },
     { file_path: b, hunks: [{ lines: [1, 1], replace: 'BETA' }] },
   ]
-  const multi = json(run(['edit', '--targets', JSON.stringify(targets), '--transaction']))
+  const multi = json(run(['basetools', 'edit', '--targets', JSON.stringify(targets), '--transaction']))
   check(multi.ok === true && typeof multi.transaction?.id === 'string', 'O3 多目标编辑返回 transaction id', JSON.stringify(multi.transaction ?? multi.code))
   check(fs.readFileSync(a, 'utf8') === 'ALPHA\n' && fs.readFileSync(b, 'utf8') === 'BETA\n', 'O3 两个文件都已落盘')
-  const multiUndo = json(run(['undo', '--id', String(multi.transaction?.id)]))
+  const multiUndo = json(run(['basetools', 'undo', '--id', String(multi.transaction?.id)]))
   check(multiUndo.ok === true && multiUndo.restored === 2, 'O4 多目标 undo 恢复两个文件', JSON.stringify(multiUndo))
   check(fs.readFileSync(a, 'utf8') === 'alpha\n' && fs.readFileSync(b, 'utf8') === 'beta\n', 'O4 两个文件都回到原始字节')
 
-  const list = json(run(['transactions']))
+  const list = json(run(['basetools', 'transactions']))
   check(list.ok === true && Array.isArray(list.transactions) && list.transactions.length > 0, 'O5 transactions 列出当前工作区事务')
 
   // 事务后又被改过 ⇒ 默认拒绝 undo，force 才覆盖
   const guardFile = path.join(tmp, 'tx-guard.txt')
   fs.writeFileSync(guardFile, 'v0\n')
-  const guardEdit = json(run(['edit', '--file', guardFile, '--lines', '1', '--replace', 'v1', '--transaction']))
+  const guardEdit = json(run(['basetools', 'edit', '--file', guardFile, '--lines', '1', '--replace', 'v1', '--transaction']))
   const guardId = guardEdit.result?.transaction?.id
   fs.writeFileSync(guardFile, 'external\n')
-  const blocked = json(run(['undo', '--id', String(guardId)]))
+  const blocked = json(run(['basetools', 'undo', '--id', String(guardId)]))
   check(blocked.ok === false && blocked.code === 'TRANSACTION_STALE', 'O6 事务后文件被外部改过 ⇒ undo 默认拒绝', JSON.stringify({ code: blocked.code, error: blocked.error }))
-  const forced = json(run(['undo', '--id', String(guardId), '--force']))
+  const forced = json(run(['basetools', 'undo', '--id', String(guardId), '--force']))
   check(forced.ok === true && fs.readFileSync(guardFile, 'utf8') === 'v0\n', 'O6 force 后仍可恢复')
 
   // O7 多目标：一个成功、一个写失败 ⇒ 成功那个也必须回滚
@@ -1541,10 +1594,31 @@ say('O 写事务：journal / undo / 多目标回滚')
       { file_path: okFile, hunks: [{ lines: [1, 1], replace: 'ALPHA' }] },
       { file_path: hardFile, hunks: [{ lines: [1, 1], replace: 'BETA' }] },
     ]
-    const rollback = json(run(['edit', '--targets', JSON.stringify(rollbackTargets), '--transaction']))
+    const rollback = json(run(['basetools', 'edit', '--targets', JSON.stringify(rollbackTargets), '--transaction']))
     check(rollback.ok === false && rollback.transaction?.status === 'rolled_back', 'O7 多目标部分失败 ⇒ transaction rolled_back', JSON.stringify({ ok: rollback.ok, tx: rollback.transaction, rollback: rollback.rollback }))
     check(rollback.rollback?.restored === 1 && fs.readFileSync(okFile, 'utf8') === 'alpha\n', 'O7 已落地的那个文件被恢复')
     check(fs.readFileSync(hardBase, 'utf8') === 'beta\n' && fs.readFileSync(hardFile, 'utf8') === 'beta\n', 'O7 硬链接目标未被改动')
+    // 回执必须等于**回滚后的最终磁盘状态**，不能继续报 landed/applied。
+    check(rollback.applied === 0 && rollback.landed_paths?.length === 0 && rollback.unchanged === true, 'O7 回滚后 applied=0 / landed_paths=[] / unchanged=true', JSON.stringify({ applied: rollback.applied, landed_paths: rollback.landed_paths, unchanged: rollback.unchanged }))
+    check(rollback.rolled_back === true && rollback.edits?.filter((e) => e.outcome === 'rolled_back').every((e) => e.landed === false), 'O7 逐项 outcome=rolled_back 且 landed=false', JSON.stringify(rollback.edits?.map((e) => ({ outcome: e.outcome, landed: e.landed }))))
+    check(!/applied [1-9]|landed [1-9]/.test(rollback.summary ?? ''), 'O7 汇总行不再出现 applied N / landed N', rollback.summary)
+
+    // 不带 --transaction 也必须能看出“已回滚”：回执事实不依赖是否索要事务 id。
+    // 用一组**新文件**：上一轮回滚后观测账本里还留着“写下去的那版”，同一文件立刻重试会先被
+    // 区域闸拦下（那是另一条保护，别把它混进回执断言）。
+    const okFile2 = path.join(tmp, 'tx-rollback-ok2.txt')
+    const hardBase2 = path.join(tmp, 'tx-rollback-hard-base2.txt')
+    const hardFile2 = path.join(tmp, 'tx-rollback-hard2.txt')
+    fs.writeFileSync(okFile2, 'alpha\n')
+    fs.writeFileSync(hardBase2, 'beta\n')
+    fs.linkSync(hardBase2, hardFile2)
+    const rollbackTargets2 = [
+      { file_path: okFile2, hunks: [{ lines: [1, 1], replace: 'ALPHA' }] },
+      { file_path: hardFile2, hunks: [{ lines: [1, 1], replace: 'BETA' }] },
+    ]
+    const rollbackNoTx = json(run(['basetools', 'edit', '--targets', JSON.stringify(rollbackTargets2)]))
+    check(rollbackNoTx.ok === false && rollbackNoTx.rollback?.status === 'rolled_back' && rollbackNoTx.rolled_back === true, 'O7 include_transaction=false 仍返回 rollback/rolled_back', JSON.stringify({ rollback: rollbackNoTx.rollback, rolled_back: rollbackNoTx.rolled_back }))
+    check(rollbackNoTx.applied === 0 && rollbackNoTx.landed_paths?.length === 0 && fs.readFileSync(okFile2, 'utf8') === 'alpha\n', 'O7 不索要事务 id 时回执仍与最终磁盘一致', JSON.stringify({ applied: rollbackNoTx.applied, landed_paths: rollbackNoTx.landed_paths }))
   }
 
   // O8 锁：同一工作区已有写事务时，第二个编辑必须超时拒绝
@@ -1554,7 +1628,7 @@ say('O 写事务：journal / undo / 多目标回滚')
   process.env.AURA_CACHE_DIR = cache
   try {
     await withWorkspaceLock(tmp, async () => {
-      const res = spawnSync(process.execPath, [bin, 'edit', '--file', lockFile, '--lines', '1', '--replace', 'LOCK'], {
+      const res = spawnSync(process.execPath, [bin, 'basetools', 'edit', '--file', lockFile, '--lines', '1', '--replace', 'LOCK'], {
         cwd: tmp,
         encoding: 'utf8',
         env: { ...env, AURA_LOCK_TIMEOUT_MS: '200' },

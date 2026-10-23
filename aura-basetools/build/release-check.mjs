@@ -9,7 +9,7 @@
  * 为什么要有它：发布前"应该跑什么"如果靠人记，漏一项就是一次事故（本轮已经吃过一次：
  * 改了源没重建 dist，于是同一个版本号下有两份不同字节）。这里把清单**固定**下来：
  *   ① 套件（闸内逐件实跑）② 三套靶场 ③ 包内自带验收 ④ 一键安装器 ⑤ 服务化升级（+独立审计探针）
- *   ⑥ src↔dist 一致性 ⑦ 发布清单新鲜度 ⑧ 版本一致性 ⑨ DSH 就绪 ⑩ **普查完整性**（C32）
+ *   ⑥ src↔dist 一致性 ⑥b **拆包**（两个 npm 包装起来真能用）⑦ 发布清单新鲜度 ⑧ 版本一致性 ⑨ DSH 就绪 ⑩ **普查完整性**（C32）
  *
  * 它只汇总与判定，不替任何套件做判断：每个套件自己打印汇总行并以退出码表态。
  * 明确不在检查范围的一件事：**DSH 工具面要重启宿主才生效**（那是人的动作，不是构建产物的问题）。
@@ -28,6 +28,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
+import { runtimePairs } from './bundle-layout.mjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const json = process.argv.includes('--json')
@@ -39,14 +40,25 @@ const rows = []
  *  这件事本身；把 `build/install-test.mjs` 这类单独调用的套件也算进来，才不会有“明明在跑、
  *  普查却说你没登记”的假红。 */
 const ranSuites = []
+/**
+ * 这些套件在闸内**必须真的跑出断言**。它们跳过时按失败计（`⏭` 仍显示，但闸红）；
+ * 环境依赖型（缺 peer / 缺 dist / 平台不支持硬链接）的其他套件跳过只记 `⏭`，不算通过。
+ */
+const CRITICAL_SUITES = new Set([
+  'write-verify', 'stale-gate', 'byte-fidelity', 'encoding-fidelity', 'span-fidelity',
+  'content-address', 'arg-shape', 'read-schema', 'read', 'notfound-receipt', 'range-args',
+  'standalone', 'write', 'replace-all', 'observation-gate', 'multi-read', 'multi-edit',
+  'argument-surface', 'single-line-target', 'observation-concurrency', 'range-bytes',
+  'aura-read/load', 'aura-edit/load', 'capabilities', 'public-surface', 'ci-contract',
+])
 const run = (relative, args = []) =>
   spawnSync(process.execPath, [path.join(root, relative), ...args], { cwd: root, encoding: 'utf8', timeout: 1800000 })
 
 /** 跑一个"自报成绩"的套件：取最后一行含"通过"的文本作为摘要，退出码为准。 */
-function suite(name, relative) {
+function suite(name, relative, group = '套件') {
   ranSuites.push(relative)
   if (!fs.existsSync(path.join(root, relative))) {
-    rows.push({ group: '套件', name, status: 'missing', summary: '(文件不存在)' })
+    rows.push({ group, name, status: 'missing', summary: '(文件不存在)' })
     return
   }
   const res = run(relative)
@@ -55,11 +67,19 @@ function suite(name, relative) {
     .split('\n')
     .filter((line) => line.includes('通过') || line.includes('失败'))
     .pop()
+  /**
+   * 跳过 ≠ 通过。若干套件在缺 DSH peer / 缺 dist / 平台不允许硬链接时自报
+   * `--- 0/0 通过（已跳过）---` 并以 exit 0 结束；旧版把它们记成 ✅。
+   * 现在统一记 `skipped`，可执行的部分由 `CRITICAL_SUITES` 兜底。
+   */
+  const skipped = res.status === 0 && /0\/0|已跳过|skipped/i.test(summary ?? '')
+  const isCritical = CRITICAL_SUITES.has(name)
+  const status = res.status !== 0 ? 'fail' : skipped ? (isCritical ? 'fail' : 'skipped') : 'ok'
   rows.push({
-    group: '套件',
+    group,
     name,
-    status: res.status === 0 ? 'ok' : 'fail',
-    summary: (summary ?? '').trim(),
+    status,
+    summary: skipped && isCritical ? `critical suite skipped: ${(summary ?? '').trim()}` : (summary ?? '').trim(),
     stderr: (res.stderr ?? '').trim().split('\n').slice(0, 2).join(' | '),
   })
 }
@@ -110,7 +130,7 @@ const SUITES = [
   // 属性测试（T18）：不变式而不是行为断言。随机扰动真实语料，断言“扰动前后哪些符号能寻到”
   // 是同一个集合、跨度可信、解析幂等。已验证它在“命中区域平移一行”的注入下会红。
   ['symbol-invariant', 'src/locator-lab/symbol-invariant-test.mjs'],
-  // 仓库级粗粒度地图（T26）：`aura_read <目录>` 的判据——预算、跨语言依赖方向、忽略规则、
+  // 仓库级粗粒度地图（T26）：`aura_basetools_read <目录>` 的判据——预算、跨语言依赖方向、忽略规则、
   // 候选选择（只读被选中的文件）、以及“预算不够时从后往前丢并自报”。
   ['repo-map', 'src/locator-lab/repo-map-test.mjs'],
   // **真框架冒烟**：把两个插件注册进真的 @deepseek-ai/dsh-tools，并用真校验器验 execute 的返回值。
@@ -154,6 +174,14 @@ const SUITES = [
   // 独立面（包内那份 `standalone-test` 在 §③ 以 dist 形态跑；这里跑的是 src 那一份，
   // 两份逐字节相同——§⑥ 保证——所以两边都不能省：一处查"包里那份能用"，一处查"源这侧能过"）：
   ['standalone', 'src/aura-standalone/test/standalone-test.mjs'],
+  // P0.1/P1.6：CLI/MCP 未知参数、targets 元素未知键、initialize 协议版本。17 项。
+  ['argument-surface', 'src/aura-standalone/test/argument-surface-test.mjs'],
+  // P1.5：并发读的观测缓存 read-merge-write（两进程 / 六进程）。9 项。
+  ['observation-concurrency', 'src/aura-standalone/test/observation-concurrency-test.mjs'],
+  // 0.10.1：整文件写（内置 Write 的替代）——新建/覆写走同一事务与回读校验，
+  //   BOM 与文件既有行尾保留、有无尾换行精确、no-overwrite/dry-run/undo、MCP 声明面与调用面。
+  //   0.10.3 加严格新鲜度，0.10.4 加 eol 策略，0.10.5 加评审回归，0.10.6 加复审回归；现读数 66 项。
+  ['write', 'src/aura-standalone/test/write-test.mjs'],
   ['range-bytes', 'src/aura-standalone/test/range-bytes-test.mjs'],
   // 壳侧：
   ['aura-read/outcome', 'src/aura-read/outcome-test.mjs'],
@@ -392,6 +420,56 @@ const SUITES = [
   //   句柄化落地时就是靠这条发现"结构化字段到不了模型"）；② 变异臂 `--mutation=no-address` 在**导入前**
   //   把引擎那条地址行拿掉 ⇒ R1/R3/R4 按名变红，按字节还原 ⇒ 回绿（第一版变异落在 import 之后：
   //   ESM 已缓存 ⇒ 空变异 ⇒ 假绿，已修）；③ 退出码接线齐全，现读数 6/6。
+  // 意图地址（T16 / 0.8.0）：`intent` 是第五种地址 —— 调用方给一段**模糊**的意图串（符号名片段 /
+  //   短语 / 近似原文），引擎按固定次序收敛成一个精确区间，并把实际走的档写进 `tier`
+  //   （`intent~symbol` / `intent~text~<档>`）。收件理由：
+  //   · 判据是**行为**，只走公开 API（`locate` / `planHunks` / `applyEditToProvider`）：
+  //     ① 符号档三形状（精确名 / 唯一子串 / 大小写不敏感）；② 符号歧义 ⇒ 码 + **符号**候选
+  //     （不是文本候选——这条钉住"结构歧义绝不落到文本层"）；③ near 消歧（跨度含 near 记距离 0）与
+  //     并列时仍拒；④ 文本档四形状（唯一短语 / 一个词写错 / 重复短语 / 完全没有）；⑤ `intent` 与其余
+  //     地址字段互斥 ⇒ `PATCH_INTENT_CONFLICT` 且磁盘 sha256 不变；⑥ 写路径逐字节落地 + 回执 tier/line
+  //     + `expect` 闸门（不符 ⇒ `LOCATOR_ASSERT_MISMATCH`）；⑦ 三个入口的接线（`FLAT_ADDRESS_KEYS`
+  //     收下 intent、`flatHunk` 认"只有 intent + replace"、`EDIT_ARG_KEYS` 同源派生）。
+  //   · **离线自足**：夹具就地生成，临时文件落 `os.tmpdir()` 并删除；不起子进程、不碰外网。
+  //   · 自带通过/失败汇总行与退出码接线（`process.exitCode = fail === 0 ? 0 : 1`），现读数 31/31。
+  ['intent-address', 'src/locator-lab/intent-address-test.mjs'],
+  // 0.8.1：编辑回执自带**改后坐标 / 行数变化 / 新句柄**（调用方不必回读即可继续编辑）；
+  //   片段层另回填整行 `after`（`replaced` 只是行内那一段）。判据只走公开 API，27 项。
+  ['receipt-context', 'src/locator-lab/receipt-context-test.mjs'],
+  // 0.8.2：`auto` 选模式用**宿主真实 budget**（不是固定 8192）判“全文装不装得下”，
+  //   并在理由里披露 host budget / envelope allowance；显式 mode 不被改写。16 项。
+  ['auto-budget', 'src/locator-lab/auto-budget-test.mjs'],
+  // 0.10.0：`replace` 换行风格（auto/preserve/lf/crlf）——对齐内置 Edit 的 CRLF 行为，
+  //   同时保留旧的 preserve 口径与 BOM/区外字节不动。15 项。
+  ['eol-adapt', 'src/locator-lab/eol-adapt-test.mjs'],
+  // 0.10.2：`replace_all`——全部非重叠出现、同行多处的列级重叠判定、参数互斥、
+  //   expect 逐处核对、出现次数变化拒绝（was/now）、CLI/MCP 两面。现读数 36 项。
+  ['replace-all', 'src/locator-lab/replace-all-test.mjs'],
+  // P0.2：共享行符号 / lone CR 的 target/lines 拒绝，old 片段仍安全。12 项。
+  ['single-line-target', 'src/locator-lab/single-line-target-test.mjs'],
+  // 0.10.3：严格新鲜度——never-read / changed-since-read、create 豁免、dry-run 同判、
+  //   多目标零写入、写后自带观测、CLI/MCP/引擎 helper。现读数 32 项。
+  ['observation-gate', 'src/locator-lab/observation-gate-test.mjs'],
+  // 0.9.2：并发/崩溃一致性——多进程同工作区不丢更新、pending 事务可回滚、
+  //   空锁宽限（PID 未写入不抢锁）、外部改动后 undo 默认拒绝。15 项。
+  ['concurrency-crash', 'src/locator-lab/concurrency-crash-test.mjs'],
+  // 0.8.3：任务级基准（读一次 + 改一次 + 回读校验）：8 个真实编辑任务，跨 JS/TS/Python/Go/
+  //   Rust/SQL/Erlang/多 hunk；SLO = 全成功、每任务 2 次调用、返工 0、token ≤ 基线 1.2×、
+  //   p95 ≤ max(5s, 基线 p95×3)（墙钟只作 sanity ceiling）。
+  ['task-bench', 'build/task-bench.mjs'],
+  // 0.8.4：发布物验证——本地 tgz 解包核对声明/文件边界、离线真装、CLI/MCP 真跑，
+  //   并做“同版本逐文件哈希一致”；产出 dist/release-scorecard.json。registry 模式需网络，不在此闸。
+  ['post-publish', 'build/post-publish-check.mjs'],
+  // 0.9.3：性能包线——1k/10k/100k map 冷/热读 p50/p95 + 10k 符号编辑；绝对上限 +
+  //   t(100k)/t(10k) 规模比值。基线只用于报告，判据不绑死本机毫秒。
+  ['perf-gate', 'build/perf-gate.mjs'],
+  // 0.9.4：`aura doctor` 自检——Node/版本/MCP 握手/缓存与锁目录可写；正常 exit 0，
+  //   缓存不可用 exit 2 且逐项点名。11 项。
+  ['doctor', 'src/aura-standalone/test/doctor-test.mjs'],
+  // 0.9.5：能力清单与源码同源（语言表/地址档/读模式/限制）；dist/capabilities.json 由构建产出。
+  ['capabilities', 'build/capabilities-test.mjs'],
+  // CI / 发布闸自己的静态契约：Linux full-gate、Node 18/20 smoke、跳过≠通过、新套件登记。
+  ['ci-contract', 'build/ci-contract-test.mjs'],
 ]
 for (const [name, relative] of SUITES) suite(name, relative)
 
@@ -441,33 +519,32 @@ if (skipUpgrade) {
 }
 
 // ⑥ src ↔ dist 一致性：包里的每个运行时文件都必须与 src 逐字节相同（本轮吃过它的亏）
+//
+// 清单从 `bundle-layout.mjs` 的 `runtimePairs()` 派生，**不再手抄**。手抄的那一版漏了 5 个
+// 已经发出去的文件（`handle-core.mjs`、`transaction-store.mjs`、`workspace-lock.mjs`、
+// `dsh/argv-shell.mjs`、`dsh/hook-inproc.mjs`）—— 它们进了包，却一直不在"改了源没重建"的射程内。
+// 现在打包与比对共用同一份清单：往包里加文件只改一处。
 {
-  const pairs = [
-    ['src/aura-read/index.js', 'dist/aura-basetools/aura-read/index.js'],
-    ['src/aura-edit/index.js', 'dist/aura-basetools/aura-edit/index.js'],
-    ['src/aura-standalone/bin/aura.mjs', 'dist/aura-basetools/bin/aura.mjs'],
-    ['src/aura-standalone/bin/aura-mcp.mjs', 'dist/aura-basetools/bin/aura-mcp.mjs'],
-    ['src/aura-standalone/lib/ops.mjs', 'dist/aura-basetools/lib/ops.mjs'],
-    ['src/aura-standalone/lib/fs-provider.mjs', 'dist/aura-basetools/lib/fs-provider.mjs'],
-    ['src/aura-standalone/lib/observation-store.mjs', 'dist/aura-basetools/lib/observation-store.mjs'],
-    ['src/aura-standalone/test/standalone-test.mjs', 'dist/aura-basetools/test/standalone-test.mjs'],
-    ['build/install.mjs', 'dist/aura-basetools/install.mjs'],
-  ]
-  // 这个清单必须与 make-bundle 的 `ENGINE` **同一个集合**——
-  // 漏一个，那个文件就永远不会被比对（`repo-map.mjs` 就是这样漏了一轮：
-  // 它进了包、却在一致性检查之外，即“改了源没重建”对它是瞎的）。
-  for (const file of ['read-core', 'locator-api', 'struct-core', 'anchor-core', 'write-path', 'args', 'repo-map']) {
-    pairs.push([`src/locator-lab/${file}.mjs`, `dist/aura-basetools/locator-lab/${file}.mjs`])
-  }
+  const pairs = runtimePairs()
   const sha = (p) => (fs.existsSync(path.join(root, p)) ? crypto.createHash('sha256').update(fs.readFileSync(path.join(root, p))).digest('hex') : null)
-  const drift = pairs.filter(([a, b]) => sha(a) !== sha(b)).map(([a]) => a)
+  // `runtimePairs()` 的第二格是**包内相对路径**（与 make-bundle 的 out 目录对齐），
+  // 所以这里补上 `dist/aura-basetools/` 前缀——少了它会把每个文件都读成不存在。
+  const drift = pairs.filter(([source, bundled]) => sha(source) !== sha(`dist/aura-basetools/${bundled}`)).map(([source]) => source)
   rows.push({
     group: '一致性',
     name: 'src↔dist',
     status: drift.length === 0 ? 'ok' : 'fail',
-    summary: drift.length === 0 ? `${pairs.length} 个文件逐字节一致` : `不一致：${drift.join(', ')}（改源没重建？）`,
+    summary: drift.length === 0 ? `${pairs.length} 个运行时文件逐字节一致` : `不一致：${drift.join(', ')}（改源没重建？）`,
   })
 }
+
+// ⑥b 拆包（0.7.0）：两个 npm 包从 .tgz **装出来之后**还能不能用。
+//
+// 为什么不是⑥的一部分：⑥ 比的是"源 → 组合产物"的字节；拆包是**另一条分发形态**
+// （核心包没有 DSH 依赖、适配器按包名 import 核心）。CI 原先只断言核心的 package.json
+// 里没有 DSH 字段 —— 那是**声明**，不是"装起来真能用"。本套件离线装两个 tgz，
+// 从装出来的那份跑 CLI / MCP / npx，并核对适配器的 import 全部解析到核心包。
+suite('split-package', 'build/split-package-test.mjs', '拆包')
 
 // ⑦ 发布清单新鲜度：`dist/manifest.json` 里的 sha256 必须等于旁边那份 .tgz 的真实哈希
 //
@@ -740,6 +817,7 @@ const CENSUS_EXEMPT = [
   //    也不能被“CENSUS_EXEMPT 已过期”点名 —— 它已经不在豁免表里了。
   ['probes/activate-and-verify.mjs', '激活验收件：判据问的是**本机当下**的激活状态（宿主进程表 / ~/.aura 安装副本 vs 源树 / 钩子那一行）—— C37 当次跑 --check 就是 exit 1（宿主还没重启）。红不红取决于"重启了没有"，不是回归线'],
   ['probes/adoption-stats.mjs', '采用率读数器：打印覆盖率与模式分布，唯一的退出码是**用法错**（exit 2）。真正会出错的地方（会话筛选口径 / hunk 级寻址 / 失败判定 / 自测会话过滤）由 adoption-stats-test.mjs 判，那一件已由 C37 登记进 SUITES'],
+  ['probes/coordinate-drift-experiment.mjs', 'T15 分辨实验：合成自证 9 条可复现，但默认还会扫 ~/.dsh/sessions（活语料，随日志增长而变）；读数用于判读“漂移补偿要不要立项”，不是引擎回归线。'],
   // C49 改理由：这条原本写「无判据」——而 C47 给它加了 `--split-at` 的**守恒自检**、
   // C48 又把那条自检接到了退出码上，所以「无判据」与「恒 exit 0」两句都已经过期。
   // 它仍然不是**可复现回归线**，理由换成三条与本单无关、不会随波漂的：
@@ -784,7 +862,7 @@ const CENSUS_EXEMPT = [
   //      本量具不同（+400% 量级的差），于是这组对账恒红；而一条永远红的自检等于没有自检。
   //      同一课在 `anchor-cache` 上刚学过：参考值必须由同一把尺子产，且口径要能当场对。
   // 判定力：退出码挂钩全部三类判据（记账自洽 / 人群口径 / 基线对账；0 绿 1 红 2 用法错）。
-  ['probes/multi-target-adoption.mjs', 'M0 **多目标采用量具**（钉住"装上多目标之后 agent 会不会用它"这组读数）：读会话日志量①每回合调用数②跨文件回合占比③每次调用携带目标数 + 调用构成 + aura_edit vs 内置 edit，并自报样本范围。不是回归线：① 读数挂在**活语料**上（现扫 ~/.dsh/sessions，随日志增长而变）；② 判据全是自洽/口径判据（三个数的分子分母自洽、逐工作区汇总 = 全局、人群口径自检两条），一条绝对条数都没写死；③ `--expect-baseline` 的基线由本量具 `--capture-baseline` 自采，口径（root/工作区集/N/since/until/样本指纹 + 逐文件取样清单）钉在基线里，口径不符印 `⊘` 并**不判**（不假红），口径一致才逐格对账（±20% 一字未动；容差未被收窄由变异证明：+19.0% 绿 / +21.0% 红）。另：`--since=<T>` 一条命令自产前后对照（镜像窗 `--until=T`，同一份取样/计数代码）。判定力：退出码挂钩全部判据（0 绿 / 1 红 / 2 用法错）'],
+  ['probes/multi-target-adoption.mjs', 'M0 **多目标采用量具**（钉住"装上多目标之后 agent 会不会用它"这组读数）：读会话日志量①每回合调用数②跨文件回合占比③每次调用携带目标数 + 调用构成 + aura_basetools_edit vs 内置 edit，并自报样本范围。不是回归线：① 读数挂在**活语料**上（现扫 ~/.dsh/sessions，随日志增长而变）；② 判据全是自洽/口径判据（三个数的分子分母自洽、逐工作区汇总 = 全局、人群口径自检两条），一条绝对条数都没写死；③ `--expect-baseline` 的基线由本量具 `--capture-baseline` 自采，口径（root/工作区集/N/since/until/样本指纹 + 逐文件取样清单）钉在基线里，口径不符印 `⊘` 并**不判**（不假红），口径一致才逐格对账（±20% 一字未动；容差未被收窄由变异证明：+19.0% 绿 / +21.0% 红）。另：`--since=<T>` 一条命令自产前后对照（镜像窗 `--until=T`，同一份取样/计数代码）。判定力：退出码挂钩全部判据（0 绿 / 1 红 / 2 用法错）'],
   ['probes/hook-activation-check.mjs', '激活件验收：段B 要求真 profile 里那行 name 恰好出现 1 次（L384 B0-anchor），并在副本上断言"那一行确实变了"（L424 after.sha256 !== before.sha256）。操作者一旦按它的交割单激活那条命令（本项目既定终态），它**按设计**当场变红 ⇒ 红不红取决于"激活了没有"。（C37 当次跑 exit 0、5.3s，段A 落仓件一致性与段B 往返都绿）'],
   ['probes/hook-wiring-plan.mjs', '接线方案 + 非激活实测：C37 当次跑 exit 1（它自己印"退出码 1（全量：看全部硬判据）"）；硬判据同样挂在"宿主还没改那一行"这个状态上，激活后即失效'],
   ['probes/perf-baseline.mjs', '性能基线量具：按 JOB 分派子进程写读数，本体没有退出码（无判据）'],
@@ -821,16 +899,17 @@ const CENSUS_EXEMPT = [
   //      真落盘 ≤ isError=false ≤ 编辑总数 / 三层桶之和 = 编辑总数 / 逐工作区汇总 = 全局 /
   //      人群口径（默认运行时元会话占比 > 50% ⇒ 红）/ 合成回执四类必须分到四个不同的桶），
   //      **一条绝对条数都没写死** ⇒ 它红了说的是“量具坏了或取样取错了”，不是“引擎回归了”；
-  //   ③ 与参考读数（aura_edit 占 20%、平均 1.67 hunk）的对照**只印不判**（语料一变该改的是那份读数）。
+  //   ③ 与参考读数（aura_basetools_edit 占 20%、平均 1.67 hunk）的对照**只印不判**（语料一变该改的是那份读数）。
   // 判定力：退出码挂钩全部判据（0 绿 / 1 红 / 2 用法错；--selftest 整轮可跑且 exit 0）。
   ['probes/retry-discipline.mjs', '重试纪律读数：读会话日志打印重试分布，无退出码'],
-  ['probes/rework-rate.mjs', 'MT4 **编辑返工量具**（钉住“一次就改好”这组读数）：读会话日志量①(会话,回合,文件)三元组的一次成功率②返工次数与有返工的三元组占比③失败后自我修正率④返工是否落到同一文件；两层成功判据（`isError=false` 与“从回执正文分出真落盘”）各占一格，并自报样本范围与时间窗。不是回归线：① 读数挂在**活语料**上（现扫 ~/.dsh/sessions，随日志增长而变）；② 判据全是自洽/口径/分层判据（记账三段闭合、人群口径自检、合成回执四类分四个不同的桶），一条绝对条数都没写死；③ 与参考读数（aura_edit 占 20%、平均 1.67 hunk）的对照只印不判。判定力：退出码挂钩全部判据（0 绿 / 1 红 / 2 用法错）'],
+  ['probes/rework-rate.mjs', 'MT4 **编辑返工量具**（钉住“一次就改好”这组读数）：读会话日志量①(会话,回合,文件)三元组的一次成功率②返工次数与有返工的三元组占比③失败后自我修正率④返工是否落到同一文件；两层成功判据（`isError=false` 与“从回执正文分出真落盘”）各占一格，并自报样本范围与时间窗。不是回归线：① 读数挂在**活语料**上（现扫 ~/.dsh/sessions，随日志增长而变）；② 判据全是自洽/口径/分层判据（记账三段闭合、人群口径自检、合成回执四类分四个不同的桶），一条绝对条数都没写死；③ 与参考读数（aura_basetools_edit 占 20%、平均 1.67 hunk）的对照只印不判。判定力：退出码挂钩全部判据（0 绿 / 1 红 / 2 用法错）'],
   ['probes/shadow-probe2.mjs', '影子调用计数：读会话日志打印调用计数表，无退出码'],
   ['probes/success-regression.mjs', '成功集回归量具：语料要现扫会话日志（~/.dsh/sessions 下的 zstd 流，600MB 级、几分钟）并随日志增长而变 ⇒ 判据挂在活状态上，不是可复现回归线（本波读数 Z = 0）'],
   // ── build/：C37（另外 3 件 install-test / upgrade-test / audit-upgrade-probe 不在 `SUITES` 那
   //    份字面量里，而是 §④/§⑤ 单独调 `suite()`、照样登记进 `ranSuites`；件数以闸输出「闸内实跑
   //    套件 N 件」那一行为准）──
   ['build/install.mjs', '安装器**产物本体**：§④ install-test.mjs 驱动它、§⑥ 拿它与 dist 那一份逐字节比对。它自己的 checkUpdate( / ✗ / 汇总行是"装完自检"的打印（命中 S1 的是函数名 checkUpdate，不是判据调用），不是回归判据'],
+  ['build/capabilities.mjs', '能力清单生成器：从源码导出常量并写 dist/capabilities.json；判据在 capabilities-test.mjs，生成器自身不判定。'],
   ['build/release-check.mjs', '闸本体：§①–§⑩ 就是它在跑。自我登记会递归（它跑自己），所以它只能在这里被点名'],
   ['build/range-all.mjs', '三套靶场的汇总器（有自己的退出码）：§② 已经**直跑**它，它的三行读数就在本闸的「靶场」组里。登记进 SUITES 等于每次让三套靶场多跑一遍', { ranAs: '靶场' }],
   // ── docs/ 与 dsh/：C37 抬根之后新进普查的两件（各命中一个形态）────────────────

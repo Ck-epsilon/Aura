@@ -240,16 +240,29 @@ say('=== A. 三类可判定失败：isError=false，outcome 正确，磁盘不�
       args: (p) => ({ file_path: p, hunks: [{ anchor: '这段内容根本不存在ZZZ\n也不在这里YYY', replace: 'X' }] }),
       outcome: 'not_found',
     },
+    {
+      label: 'A6 符号名不存在（target，STRUCT_NOT_FOUND）',
+      file: 'a6-target.js',
+      args: (p) => ({ file_path: p, hunks: [{ target: 'NO_SUCH_SYMBOL_ZZZ', replace: 'X' }] }),
+      outcome: 'not_found',
+    },
+    {
+      label: 'A7 符号名歧义（target，STRUCT_AMBIGUOUS）',
+      file: 'a7-target.js',
+      source: 'export function dup() {\n  return 1\n}\n\nexport function dup() {\n  return 2\n}\n',
+      args: (p) => ({ file_path: p, hunks: [{ target: 'dup', replace: 'X' }] }),
+      outcome: 'needs_choice',
+    },
   ]
   for (const c of cases) {
-    const file = writeFixture(c.file, SRC)
+    const file = writeFixture(c.file, c.source ?? SRC)
     const r = await run(c.args(file))
     check(!r.isError, `${c.label} ⇒ 不抛错（isError=false）`, r.isError ? `抛了：${r.code} ${r.text.slice(0, 60)}` : '')
     check(r.value?.outcome === c.outcome, `${c.label} ⇒ outcome=${c.outcome}`, `实际 ${JSON.stringify(r.value?.outcome)} code=${r.value?.code}`)
     check(typeof r.value?.code === 'string' && r.value.code.length > 0, `${c.label} ⇒ 带回引擎判决码`, `code=${JSON.stringify(r.value?.code)}`)
     check(Array.isArray(r.value?.applied) && r.value.applied.length === 0, `${c.label} ⇒ applied 为空数组（不必靠文本猜）`, JSON.stringify(r.value?.applied))
     check(typeof r.value?.next === 'string' && r.value.next.length > 0, `${c.label} ⇒ 带下一步（next）`, String(r.value?.next).slice(0, 50))
-    check(readFixture(file) === SRC, `${c.label} ⇒ 磁盘一个字节没动`)
+    check(readFixture(file) === (c.source ?? SRC), `${c.label} ⇒ 磁盘一个字节没动`)
     check(r.violations.length === 0, `${c.label} ⇒ 回执合 output.schema（不许凭空多字段）`, r.violations.slice(0, 2).join('; '))
     check(/nothing was written/.test(r.text), `${c.label} ⇒ 渲染文本明说"没写盘"`, r.text.split('\n')[0].slice(0, 80))
   }
@@ -267,6 +280,24 @@ say('=== A. 三类可判定失败：isError=false，outcome 正确，磁盘不�
     JSON.stringify(amb.value?.candidates),
   )
   check(/Candidates:/.test(amb.text), 'A3 ⇒ 候选也出现在给模型看的文本里', amb.text.split('\n').slice(0, 4).join(' / '))
+
+  /**
+   * 0.9.1：`target` 的两种失败也必须走结果通道。此前 `STRUCT_NOT_FOUND` / `STRUCT_AMBIGUOUS`
+   * 不在壳层判决表里，会被当成工具故障抛出——模型只看到一句 error.message，拿不到 next 与候选。
+   */
+  const dupSource = 'export function dup() {\n  return 1\n}\n\nexport function dup() {\n  return 2\n}\n'
+  const ambTarget = await run({ file_path: writeFixture('a7b-target.js', dupSource), hunks: [{ target: 'dup', replace: 'X' }] })
+  check(
+    ambTarget.value?.outcome === 'needs_choice' && Array.isArray(ambTarget.value?.candidates) && ambTarget.value.candidates.length >= 2,
+    'A7 ⇒ target 歧义附候选（不是工具故障）',
+    JSON.stringify({ outcome: ambTarget.value?.outcome, code: ambTarget.value?.code, candidates: ambTarget.value?.candidates?.length }),
+  )
+  const missingTarget = await run({ file_path: writeFixture('a6b-target.js', SRC), hunks: [{ target: 'NO_SUCH_SYMBOL_ZZZ', replace: 'X' }] })
+  check(
+    missingTarget.value?.outcome === 'not_found' && typeof missingTarget.value?.next === 'string' && missingTarget.value.next.length > 0,
+    'A6 ⇒ target 不存在带回 next（不是工具故障）',
+    JSON.stringify({ outcome: missingTarget.value?.outcome, code: missingTarget.value?.code, next: missingTarget.value?.next }),
+  )
 
   // 恢复路径不能因为"不抛错了"而丢：符号目录仍要出现在回执正文里
   const hint = await run({
@@ -682,7 +713,7 @@ say('=== F. 句柄：四个新码走结果通道；形状不对仍然抛错（�
 // ════════════════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════
 say('')
-say('=== G. 句柄端到端：aura_read（壳）发句柄 ⇒ aura_edit（壳）用它改 ===')
+say('=== G. 句柄端到端：aura_basetools_read（壳）发句柄 ⇒ aura_basetools_edit（壳）用它改 ===')
 {
   /**
    * 这一段的判据是**壳层这条路**上的完整回合，不是引擎单测：
@@ -975,9 +1006,14 @@ say('=== 段I 多目标逐项正文：与自己的 outcome / landed 对得上 ==
   const solo = await run({ file_path: soloFile, hunks: [hunkOf('i1')] })
   const soloText = solo.isError ? `ERROR ${solo.code}: ${solo.text}` : solo.text
   const strip = (t) => String(t).split(soloFile).join('<P>').split(okFiles[0]).join('<P>')
+  /**
+   * 0.8.1：回执开始带新句柄；句柄的 4 位身份标签来自文件账本键（这里两个临时文件路径不同）。
+   * 只归一这 4 位，指纹与行号仍逐字比 —— 它不是渲染分叉，是“不同文件”这一事实。
+   */
+  const stripHandleId = (t) => String(t).replace(/h[0-9a-f]{4}[0-9a-f]{8}:/g, 'h<id>:')
   check(
-    soloText.length > 0 && strip(okEdits[0]?.text ?? '') === strip(soloText),
-    'I1d 逐项正文 == 同一个 hunk 单发一次的单目标正文（逐字节，路径除外）',
+    soloText.length > 0 && strip(stripHandleId(okEdits[0]?.text ?? '')) === strip(stripHandleId(soloText)),
+    'I1d 逐项正文 == 同一个 hunk 单发一次的单目标正文（逐字节，路径与句柄身份标签除外）',
     `multi=${JSON.stringify(strip(okEdits[0]?.text ?? ''))} single=${JSON.stringify(strip(soloText))}`,
   )
 

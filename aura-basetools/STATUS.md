@@ -1,0 +1,239 @@
+# aura-basetools 状态说明与提交注意事项
+
+> 更新时间：2026-10-23
+> 当前版本：**0.13.0**
+> 当前发布提交：`db1b81f`（Release 0.13.0: namespace CLI verbs under aura basetools）
+> 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
+
+---
+
+## 1. 一句话状态
+
+`aura-basetools` 已具备可直接替代内置文本 `Read` / `Edit` / `Write` 的读写能力：三个入口
+（MCP / DSH / CLI）共用同一份字节保真引擎，文本读写、整份写、`replace_all`、严格新鲜度、
+事务/undo、并发观测缓存和回滚回执都已落地并有回归测试。
+
+---
+
+## 2. 当前公开接口
+
+### 2.1 工具标识（MCP / DSH / capabilities）
+
+| 工具标识 | 作用 |
+|---|---|
+| `aura_basetools_read` | 按意图取景：`map` / `digest` / `full` / `around` / `lines` / `search` / `changed` / `auto` |
+| `aura_basetools_edit` | 按意图寻址编辑；`old` + `replace_all`；事务/undo（CLI/MCP） |
+| `aura_basetools_write` | 整文件新建/覆写；BOM/行尾保留；覆写默认要求先读 |
+| `aura_basetools_undo` | 撤销最近一次/指定写事务 |
+| `aura_basetools_transactions` | 列出当前工作区写事务 |
+
+旧工具名 `aura_read` / `aura_edit` / `aura_write` / `aura_undo` / `aura_transactions`
+**不再作为 MCP/DSH API 暴露**。历史会话日志与 `failure-corpus.json` 仍保留旧名；
+`failure-replay` 等分析件同时识别旧名与新名。
+
+### 2.2 CLI
+
+统一使用 **`aura basetools <verb>`**：
+
+```bash
+aura basetools read  --file src/app.ts --mode map
+aura basetools edit  --file src/app.ts --hunks '[...]'
+aura basetools write --file new.ts --content @body.ts
+aura basetools undo
+aura basetools transactions
+aura basetools mcp
+aura basetools doctor
+aura basetools capabilities
+```
+
+- 顶层 `aura read` / `edit` / `write` / `undo` / `transactions` / `mcp` / `doctor` /
+  `capabilities` **不再作为别名执行**：返回 exit 1、`shape:"CLI_NAMESPACE_REQUIRED"`，
+  不会执行写操作。
+- `aura --help` / `aura --version` 仍在顶层。
+- 包名 `aura-basetools`、bin 名 `aura` / `aura-mcp`、源码目录名不变。
+- MCP 客户端配置：`args: ["basetools", "mcp"]`；
+  npx 形式：`npx -y --package aura-basetools aura basetools mcp`。
+
+---
+
+## 3. 最近完成的关键变更
+
+- **0.11.0**：参数面静默语义修复。
+  - CLI/MCP/`targets` 元素未知参数拒绝，不再把 `--dryrun` 当合法调用真写盘。
+  - 压缩 JS 共享行 `target` → `LOCATOR_LINE_SHARED`；lone CR 文件 `target`/`lines` →
+    `LOCATOR_LONE_CR`。
+  - 多目标回滚后回执按最终磁盘重建：`applied:0`、`landed:false`、`landed_paths:[]`、
+    `rolled_back:true`；`rollback` 不依赖 `--transaction`。
+  - 单/多目标读共用 `normalizeReadRequest`；并发观测缓存改锁 + read-merge-write；
+    MCP `initialize` 不再回显不存在的协议版本。
+  - CI 增加 Linux Node 22 全量闸与 Node 18/20 冒烟；跳过套件显示 `⏭`，关键套件跳过即红。
+- **0.12.0**：MCP/DSH 工具标识统一为 `aura_basetools_*`。
+- **0.13.0**：CLI 子命令统一为 `aura basetools <verb>`；顶层旧动词拒绝并给迁移提示。
+
+---
+
+## 4. 验证状态
+
+最近一次全量闸（0.13.0）：
+
+```bash
+node build/make-bundle.mjs --pack
+node build/release-check.mjs    # exit 0
+```
+
+关键读数：
+
+| 套件 | 结果 |
+|---|---|
+| `standalone` | 228 / 0 |
+| `write` | 66 / 66 |
+| `range-bytes` | 218 / 218 |
+| `multi-read` | 64 / 64 |
+| `real-framework` | 29 / 29 |
+| `argument-surface` | 18 / 18 |
+| `public-surface` | 41 / 41 |
+| `single-line-target` | 12 / 12 |
+| `observation-concurrency` | 9 / 9 |
+| `ci-contract` | 17 / 17 |
+| `split-package` | 75 / 75 |
+| `upgrade` | 94 / 94 |
+| `failure-replay` | 15 / 15 |
+
+其他事实：
+
+- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.13.0`。
+- `installed-package` 在没有可安装产物时会显示 `⏭`（跳过），不再记 ✅。
+- CI 工作流已配置 Linux + Node 22 全量闸和 Node 18/20 冒烟；**本机是 Windows，
+  Linux runner 尚未实际执行过**。
+
+---
+
+## 5. 已知边界与未完成
+
+- **图片读取不在范围内**：`read_image` 仍只能用内置工具。
+- **DSH 需要重启宿主**：工具模块在宿主启动时导入，改名后必须重启才会加载新名字。
+- **MCP 客户端需要重新拉取 `tools/list`**：旧工具名不再存在。
+- **未发布**：截至本文件写入时没有 push、没有 npm publish；全局安装可能仍是旧版本。
+- **历史分析件**：`probes/`、`failure-corpus.json`、旧版本 CHANGELOG 与
+  `docs/aura-tools-0.*.md` 中的旧工具名是历史数据，不应批量改写；需要读取历史日志的分析件
+  应同时识别旧名与新名。
+- **平台覆盖**：本机 Windows 全量闸通过；macOS/Linux 仍以 CI 配置为主，尚未留下本机实跑记录。
+
+---
+
+## 6. 提交前检查清单
+
+按顺序执行；每一步都以实际输出为准，不凭记忆。
+
+1. **确认工作树**
+   ```bash
+   git status --short
+   ```
+   只包含本次预期修改；不把 `dist/`、`node_modules/`、临时日志带进提交。
+
+2. **确认版本**
+   - `src/aura-read/package.json` 与 `src/aura-edit/package.json` 版本必须一致。
+   - 版本变更同步写入 `docs/CHANGELOG.md` 顶部条目与 README（若涉及公开接口/行为）。
+   - 破坏性变更（工具名、CLI 命名空间、默认安全语义）升 minor；纯修复升 patch。
+
+3. **新增/修改测试**
+   - 新套件必须登记到 `build/release-check.mjs` 的 `SUITES`。
+   - 安全/契约类套件同时加入 `CRITICAL_SUITES`，跳过时闸必须变红。
+   - 新文件必须被 CENSUS 扫到且归属明确（登记 / 闸内实跑 / 豁免理由）。
+   - 先写能复现 bug 的断言，再改实现；禁止把当前错误输出写成黄金期望。
+
+4. **构建**
+   ```bash
+   node build/make-bundle.mjs --pack
+   ```
+   该命令会重建 `dist/`、拆分 npm 双包、生成 `dist/capabilities.json`。
+   `dist/` 是派生目录（已在 `.gitignore`），不要手改、不要提交。
+
+5. **语法检查**
+   ```bash
+   node --check <改动过的 .mjs/.js>
+   ```
+
+6. **全量闸**
+   ```bash
+   node build/release-check.mjs
+   ```
+   要求：exit 0；关键套件没有 `⏭`；新增套件读数不是 0/0。
+   如果只有环境依赖型套件显示 `⏭`，可以接受；但要在交付说明里点名。
+
+7. **提交**
+   ```bash
+   git add -A
+   git commit -m "Release X.Y.Z: <一句话变更>"
+   ```
+   只做本地提交。除非用户明确授权，不执行 `git push`、`npm publish`、`npm install -g`。
+
+8. **提交后**
+   ```bash
+   git status --short
+   git log --oneline -1
+   ```
+   工作树应为空；记录提交哈希与闸读数。
+
+---
+
+## 7. 提交注意事项（容易踩的坑）
+
+### 7.1 命名与兼容
+
+- 工具标识是 `aura_basetools_*`；CLI 是 `aura basetools <verb>`。
+  **不要**在新增文档、测试、提示词里恢复 `aura_read` / `aura_edit` 或顶层 `aura read`。
+- 历史日志、冻结夹具、旧版本文档保留旧名是**有意**的；只有需要解析历史日志的代码才加别名，
+  不要把历史文件本身改名。
+- DSH 插件模块名 `dsh-tool-aura-edit`、包名 `aura-basetools-dsh` 是内部/包标识，不是工具 API。
+
+### 7.2 版本与产物
+
+- 两个壳的 `package.json` 版本必须一起改；`make-split-packages` 会拒绝不一致。
+- `dist/`、`*.tgz`、`*.zip` 都是派生物；提交源码 + 构建脚本 + 测试，不提交产物。
+- 发布清单、`dist/capabilities.json`、README 的版本由构建生成，不要手抄。
+
+### 7.3 测试与闸门
+
+- 跳过 ≠ 通过：看到 `0/0 通过（已跳过）` 时确认它在 `CRITICAL_SUITES` 之外。
+- 不要为了提高读数删断言、放宽 `stale-gate` / `require-observation` / `write_verify`。
+- 契约确实变化时，更新旧断言并在提交说明里写清“为什么旧期望不再成立”；
+  不要只改期望值让它变绿。
+- 测试里的观测缓存必须指向临时 `AURA_CACHE_DIR`，不要写真实 `~/.aura`。
+- 跨进程测试（并发、锁、观测缓存）至少要覆盖“两个进程”和“外部改动后仍拒绝”两个方向。
+
+### 7.4 行尾与仓库机制
+
+- Git 会提示 `LF will be replaced by CRLF`；这是仓库换行策略，不要为了消警告批量转码。
+- 修改文件后不要顺手格式化整个文件；保持最小 diff，避免把无关行带进提交。
+- 提交前跑 `git diff --check`，避免空白错误。
+
+### 7.5 发布边界
+
+- **默认只做本地提交。** push、npm publish、全局安装、修改用户 `~/.dsh` 配置都必须有明确授权。
+- 改名属于破坏性变更：发布说明要写清旧名不再可用、DSH 需重启、MCP 客户端需重新拉取工具列表。
+- 发布后验证用 `build/post-publish-check.mjs`；本地打包验证不能替代 registry 验证。
+
+---
+
+## 8. 常用命令速查
+
+```bash
+# 构建 + 全量闸
+node build/make-bundle.mjs --pack
+node build/release-check.mjs
+
+# 单套件
+node src/aura-standalone/test/standalone-test.mjs
+node src/aura-standalone/test/argument-surface-test.mjs
+node src/locator-lab/multi-read-test.mjs
+node src/locator-lab/failure-replay.mjs
+
+# CLI 自检
+aura basetools --help
+aura basetools doctor --json
+aura basetools capabilities --pretty
+
+# 本地产物版本
+node -e "console.log(require('./dist/npm/aura-basetools/package.json').version)"
+```

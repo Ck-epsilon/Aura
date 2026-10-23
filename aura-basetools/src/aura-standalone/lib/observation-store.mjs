@@ -147,6 +147,100 @@ export function createDiskStore(file = observationsPath()) {
     for (const [spelling, target] of aliases) if (!alive.has(target)) aliases.delete(spelling)
   }
 
+  /**
+   * 落盘状态的新鲜度标记。多个 CLI/MCP 进程会同时读写同一个 `observations.json`；
+   * 旧实现“启动时读一次、结束时整份写回”会让后写的进程覆盖先写的观测（并发读两个文件，
+   * 最后只剩一条）——严格新鲜度随后对刚读过的文件报 `never-read`。
+   */
+  let lastStamp = null
+  const fileStamp = () => {
+    try {
+      const st = fs.statSync(file)
+      return `${st.mtimeMs}:${st.size}`
+    } catch {
+      return 'missing'
+    }
+  }
+  lastStamp = fileStamp()
+
+  /** 从盘上重新读一份合法缓存；坏文件/不存在都当空（“没观测过”是合法状态）。 */
+  const loadDisk = () => {
+    try {
+      const raw = JSON.parse(fs.readFileSync(file, 'utf8'))
+      if (raw !== null && typeof raw === 'object' && Array.isArray(raw.seen) && typeof raw.latest === 'object') return raw
+    } catch {
+      /* 落到 null */
+    }
+    return null
+  }
+
+  /** 把盘上条目并进内存：seen 按 key 去重（本地优先），latest/aliases 本地优先。 */
+  const mergeDisk = (disk) => {
+    if (disk === null) return
+    const seen = new Map()
+    for (const entry of disk.seen) seen.set(entry.key, entry)
+    for (const entry of data.seen) seen.set(entry.key, entry)
+    data.seen = [...seen.values()]
+    data.latest = { ...disk.latest, ...data.latest }
+    if (typeof disk.aliases === 'object' && disk.aliases !== null) {
+      for (const [spelling, target] of Object.entries(disk.aliases)) {
+        if (!aliases.has(spelling)) aliases.set(spelling, target)
+      }
+    }
+  }
+
+  /** 查询前刷新：长进程（MCP）也能看见别的进程刚写下的观测。 */
+  const refresh = () => {
+    const stamp = fileStamp()
+    if (stamp === lastStamp) return
+    mergeDisk(loadDisk())
+    lastStamp = stamp
+  }
+
+  /**
+   * 写锁：同一个缓存文件同时只允许一个进程做 read-merge-write。
+   *
+   * 锁是**旁路文件**（`observations.json.lock`，`wx` 原子创建），不引入平台分支；
+   * 陈旧锁（进程崩溃留下）超过 `LOCK_STALE_MS` 后清掉。拿不到锁时仍做一次尽力而为的
+   * 合并写入——缓存损坏/丢一条都不该让编辑失败，但正常情况下不会走到这条。
+   */
+  const LOCK_STALE_MS = 5000
+  const LOCK_WAIT_MS = 2000
+  const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+  const acquireLock = () => {
+    const lock = `${file}.lock`
+    const deadline = Date.now() + LOCK_WAIT_MS
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
+    } catch {
+      return null
+    }
+    for (;;) {
+      try {
+        const fd = fs.openSync(lock, 'wx', 0o600)
+        try { fs.writeFileSync(fd, String(process.pid)) } finally { fs.closeSync(fd) }
+        return lock
+      } catch (error) {
+        if (error?.code !== 'EEXIST') return null
+        try {
+          const st = fs.statSync(lock)
+          if (Date.now() - st.mtimeMs > LOCK_STALE_MS) {
+            fs.unlinkSync(lock)
+            continue
+          }
+        } catch {
+          continue
+        }
+        if (Date.now() >= deadline) return null
+        sleep(10)
+      }
+    }
+  }
+  const releaseLock = (lock) => {
+    if (lock === null) return
+    try { fs.unlinkSync(lock) } catch { /* 已被清理：没有需要撤销的状态 */ }
+  }
+
   const save = () => {
     try {
       const dir = path.dirname(file)
@@ -161,6 +255,7 @@ export function createDiskStore(file = observationsPath()) {
         try { fs.chmodSync(tmp, 0o600) } catch { /* 同上 */ }
       }
       fs.renameSync(tmp, file)
+      lastStamp = fileStamp()
       if (path.sep !== '\\') {
         try { fs.chmodSync(file, 0o600) } catch { /* 同上 */ }
       }
@@ -172,21 +267,44 @@ export function createDiskStore(file = observationsPath()) {
 
   return {
     remember(filePath, version, source, byteOrderMark = false) {
-      if (typeof source !== 'string' || source.length > MAX_SOURCE) return
-      const accounted = accountKeys(filePath, aliases)
-      if (accounted.canonical !== null) aliases.set(accounted.canonical, accounted.key)
-      const key = `${accounted.key}@${version}`
-      data.seen = data.seen.filter((e) => e.key !== key)
-      data.seen.push({ key, version, source, byteOrderMark: byteOrderMark === true })
-      while (data.seen.length > LIMIT) data.seen.shift()
-      data.latest[accounted.key] = key
-      // 指针指向已被淘汰的条目时一并清掉：留着它只会让"最近观测"指向不存在的全文
-      const alive = new Set(data.seen.map((e) => e.key))
-      for (const [p, k] of Object.entries(data.latest)) if (!alive.has(k)) delete data.latest[p]
-      dropDanglingAliases()
-      save()
+      if (typeof source !== 'string') return
+      /**
+       * 超过 `MAX_SOURCE` 的文件**仍然记令牌**，只是不存全文。
+       *
+       * 旧行为是整条丢掉，于是严格新鲜度（`requireObservedRevision`）对大文件永远返回
+       * `never-read`——而它要求的恢复动作（先读一次）根本不可能成功。令牌足够回答
+       * “这一版读过没有”；区域级闸门拿不到全文时如实退回 `basis:'none'`（见 `regionGate`）。
+       */
+      const omitted = source.length > MAX_SOURCE
+      const lock = acquireLock()
+      try {
+        // 先合并盘上条目，再算键与写入：否则两个并发进程会各自用旧快照覆盖对方。
+        mergeDisk(loadDisk())
+        const accounted = accountKeys(filePath, aliases)
+        if (accounted.canonical !== null) aliases.set(accounted.canonical, accounted.key)
+        const key = `${accounted.key}@${version}`
+        data.seen = data.seen.filter((e) => e.key !== key)
+        data.seen.push({
+          key,
+          version,
+          source: omitted ? null : source,
+          ...(omitted ? { source_omitted: true } : {}),
+          byteOrderMark: byteOrderMark === true,
+          at: Date.now(),
+        })
+        while (data.seen.length > LIMIT) data.seen.shift()
+        data.latest[accounted.key] = key
+        // 指针指向已被淘汰的条目时一并清掉：留着它只会让"最近观测"指向不存在的全文
+        const alive = new Set(data.seen.map((e) => e.key))
+        for (const [p, k] of Object.entries(data.latest)) if (!alive.has(k)) delete data.latest[p]
+        dropDanglingAliases()
+        save()
+      } finally {
+        releaseLock(lock)
+      }
     },
     latest(filePath) {
+      refresh()
       /**
        * 快路：**精确键**命中就直接返回（引擎传进来的通常是它自己登记过的那个键）。
        * 只有查不到时才用文件系统事实再问一次"这个写法是不是盘上那一份" —— 于是常见形态下
@@ -203,16 +321,27 @@ export function createDiskStore(file = observationsPath()) {
       if (stored === undefined) return null
       const entry = data.seen.find((e) => e.key === stored)
       if (entry === undefined) return null
-      return { version: entry.version, source: entry.source, byteOrderMark: entry.byteOrderMark === true }
+      return {
+        version: entry.version,
+        source: entry.source,
+        byteOrderMark: entry.byteOrderMark === true,
+        source_omitted: entry.source_omitted === true,
+      }
     },
     entry(filePath, version) {
+      refresh()
       const direct = findEntry(filePath, version)
-      if (direct !== null) return { source: direct.source, byteOrderMark: direct.byteOrderMark === true }
+      if (direct !== null) {
+        return { source: direct.source, byteOrderMark: direct.byteOrderMark === true, source_omitted: direct.source_omitted === true }
+      }
       const accounted = accountKeys(filePath, aliases)
       const entry = findEntry(accounted.key, version) ?? (accounted.canonical === null ? null : findEntry(accounted.canonical, version))
-      return entry === null ? null : { source: entry.source, byteOrderMark: entry.byteOrderMark === true }
+      return entry === null
+        ? null
+        : { source: entry.source, byteOrderMark: entry.byteOrderMark === true, source_omitted: entry.source_omitted === true }
     },
     recall(filePath, version) {
+      refresh()
       const direct = findEntry(filePath, version)
       if (direct !== null) return direct.source
       const accounted = accountKeys(filePath, aliases)
@@ -227,10 +356,14 @@ export function createDiskStore(file = observationsPath()) {
      * 模型手上的行号来自更早的一版，且没有任何东西能替它发现这件事。
      */
     has(filePath, version) {
+      refresh()
       if (findEntry(filePath, version) !== null) return true
       const accounted = accountKeys(filePath, aliases)
       return findEntry(accounted.key, version) !== null || (accounted.canonical !== null && findEntry(accounted.canonical, version) !== null)
     },
-    count: () => data.seen.length,
+    count: () => {
+      refresh()
+      return data.seen.length
+    },
   }
 }

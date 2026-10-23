@@ -246,7 +246,12 @@ function tokenize(src, lang) {
     // 数字
     if (/[0-9]/.test(c)) {
       const start = i
-      while (i < n && /[0-9a-fA-FxX._]/.test(src[i])) i += 1
+      while (i < n && /[0-9a-fA-FxX._]/.test(src[i])) {
+        // Erlang 的 `.` 既是语句终结符、又可能是小数点：`1.` 是整数 1 + 终结符，
+        // `1.0` 才是浮点。只在 `.` 后面还有数字时把它算进数字，否则留给标点层。
+        if (lang.dotTerminatesNumber === true && src[i] === '.' && !/[0-9]/.test(src[i + 1] ?? '')) break
+        i += 1
+      }
       push('number', start, i)
       continue
     }
@@ -293,7 +298,7 @@ function tokenize(src, lang) {
  * 它 10 个顶层 `function` 声明里，**索引只认出 2 个**，其余 8 个凭空消失
  * （`renderChanged` `renderFull` `renderMap` `renderAround` `renderLines`
  * `renderSearch` `windowEnvelope` `fitWithin`），而已认出的 `renderDigest`
- * 跨度是 `69-69`（真实 69-164）。于是 `aura_edit target=<这些名字>` 全部
+ * 跨度是 `69-69`（真实 69-164）。于是 `aura_basetools_edit target=<这些名字>` 全部
  * `STRUCT_NOT_FOUND`，而 `map` 把这些函数报成不存在——**本工具连自己的引擎都定位不了。**
  *
  * 机制：`/` 被当成普通标点，于是
@@ -334,7 +339,7 @@ const NO_HEADER_KEYWORDS = new Set([])
  * 块体**终结规则**：`bodyOpen: null` 的语言靠它把跨度补到真实末端。
  *
  * 这是配置表里第三条语言相关的真差异（前两条是注释与字符串语法）。缺了它，跨度就只有签名行，
- * 而后果是**静默**的：`aura_edit target=<函数名>` 只换掉签名、旧函数体原样留下，
+ * 而后果是**静默**的：`aura_basetools_edit target=<函数名>` 只换掉签名、旧函数体原样留下，
  * `python -m py_compile` 仍然返回 0。因此判据在这里，与其它差异并列：
  *
  *   { style: 'indent' }                        缩进决定块体（Python / Cython）
@@ -356,10 +361,16 @@ const INDENT_BLOCK = { style: 'indent', headerEnds: new Set([':']) }
  * 而这里的语言压根没有配对的收尾词——SQL 只有语句终结符，Erlang 的函数子句只有一个 `.`。
  * 硬套 `closer` 要给每条规则编一个假开块词，那是在配置里写谎话。
  *
- * `terminators` 只列**本语言真实**的终结符：漏列只会让跨度偏短（安全方向），
- * 多列则会把 `Erlang 的 x.y` 这种成员访问误当语句尾（跨度偏长，危险方向）。
+ * `newlineStops` 默认 true：没有终结符时，换行是安全方向的兜底（SQL 的多语句、Vim 的无尾声明）。
+ * Erlang 关掉它：函数体的换行是普通空白，唯一合法的收尾是 `.`；开启会把多行函数体截在签名行。
+ * 关掉后必须在文件内找到终结符，否则跨度判为不完整（fail-closed）——见 terminatorBlockEnd。
  */
-const TERMINATOR_BLOCK = (terminators) => ({ style: 'terminator', terminators: new Set(terminators) })
+const TERMINATOR_BLOCK = (terminators, { newlineStops = true } = {}) => ({
+  style: 'terminator',
+  terminators: new Set(terminators),
+  newlineStops,
+})
+
 
 /**
  * 除 `bodyOpen` 之外还算块开符的字符：`[` —— `const X = [ … ]` 这种字面量体。
@@ -508,9 +519,9 @@ const RUST = {
     { kind: 'trait', pattern: ['$mods*', 'trait', '$name', '$param*'] },
     { kind: 'impl', pattern: ['impl', '$param*', '$name'] },
     { kind: 'mod', pattern: ['$mods*', 'mod', '$name'] },
-    // Rust 的常量/静态绑定。`const`/`static` 已在 modifiers 里，但**规则不能带 `$mods*`**：
-    // 那正是 `pub const R: i32 = 1` 之前一个符号都提不出来的原因——
-    // 同 `export const` 那个洞（变量规则缺 `$mods*`）同源。
+    // Rust 的常量/静态绑定：`const`/`static` 本身也在 modifiers 里，规则必须带 `$mods*`，
+    // 否则 `pub const R` 会被“前一 token 是修饰符”的去重闸门判掉。
+    // `$mods*` 的逐长度回溯（matchPattern）让 `pub const` 能停在 `pub` 之后、把 `const` 留给字面量。
     { kind: 'variable', pattern: ['$mods*', 'const', '$name'], guard: 'notKeyword' },
     { kind: 'variable', pattern: ['$mods*', 'static', '$name'], guard: 'notKeyword' },
   ],
@@ -1183,7 +1194,10 @@ const ERLANG = {
   multiPunct: ['->', '<-', '==', '/=', '=<', '>=', '++', '--', '::', '||', '|>', '<<', '>>'],
   brackets: { '(': ')', '[': ']', '{': '}' },
   bodyOpen: null,
-  blockEnd: TERMINATOR_BLOCK(['.']),
+  dotTerminatesNumber: true,
+
+  blockEnd: TERMINATOR_BLOCK(['.'], { newlineStops: false }),
+
   rules: [
     // `$param` 是**跳过**一个括号组、不捕获任何名字，所以属性名必须写 `'(' '$name'`：
     // 用 `$param` 的结果是 `cap.$name` 为空 ⇒ 符号被 `indexStructure` 静默丢弃（实测 0 个符号）。
@@ -1611,7 +1625,7 @@ function matchAngle(tokens, open) {
  *   `$name`     捕获符号名（必须是标识符；决定声明起点）
  *   `$param`    跳过一个配平括号组（必选）
  *   `$param*`   可选：有 `()` 或 `<>` 就跳，没有就跳过这一段
- *   `$mods*`    可选：吃掉任意个 `modifiers` 词表里的修饰符
+ *   `$mods*`    可选：吃掉任意个 `modifiers` 词表里的修饰符；**逐长度回溯**（字面量本身在词表里时能停在中途）
  *   `$ident*`   可选（**非贪婪**）：吃掉任意个非关键字标识符
  *   `$rest`     跳到**当前所在括号组的收尾 token**（见 `skipToGroupClose`）
  *
@@ -1645,7 +1659,27 @@ function matchPattern(tokens, start, pattern, pi, cap, lang, pairs) {
   const part = pattern[pi]
   const t = tokens[start]
 
-  if (part === '$param*' || part === '$mods*' || part === '$ident*') {
+  if (part === '$mods*') {
+    /**
+     * 修饰符段要**逐个长度回溯**，不能只试「全吃」与「不吃」。
+     *
+     * `pub const G: i32 = 1` 里 `const` 同时是 Rust 的 modifier 和规则字面量：
+     * 全吃 ⇒ 后面的字面量 `const` 永远等不到；不吃 ⇒ 字面量对不上 `pub`。
+     * 中间那一步（吃 `pub`、留 `const`）才是解。`pub const fn f` 仍由全吃那一支命中。
+     */
+    const stops = [start]
+    let i = start
+    while (tokens[i] !== undefined && tokens[i].type === 'ident' && lang.modifiers !== undefined && lang.modifiers.has(tokens[i].value)) {
+      i += 1
+      stops.push(i)
+    }
+    for (let s = stops.length - 1; s >= 0; s -= 1) {
+      const hit = matchPattern(tokens, stops[s], pattern, pi + 1, cap, lang, pairs)
+      if (hit !== null) return hit
+    }
+    return null
+  }
+  if (part === '$param*' || part === '$ident*') {
     // 先试"跳"的版本，失败再试"不跳"的版本——这就是回溯
     const advanced = skipOptional(tokens, start, part, lang, pairs)
     if (advanced !== start) {
@@ -1692,13 +1726,8 @@ function matchPattern(tokens, start, pattern, pi, cap, lang, pairs) {
   return matchPattern(tokens, start + 1, pattern, pi + 1, cap, lang, pairs)
 }
 
-/** 可选段的"跳"这一步：跳不动就原地返回，由调用方回溯到"不跳"的分支。 */
+/** 可选段的"跳"这一步（`$param*` / `$ident*`）：跳不动就原地返回，由调用方回溯。 */
 function skipOptional(tokens, k, part, lang, pairs) {
-  if (part === '$mods*') {
-    let i = k
-    while (tokens[i] !== undefined && tokens[i].type === 'ident' && lang.modifiers !== undefined && lang.modifiers.has(tokens[i].value)) i += 1
-    return i
-  }
   if (part === '$ident*') {
     // 只吃**非关键字**标识符：关键字是模式里的字面量，不该被这个段吞掉
     let i = k
@@ -1784,13 +1813,38 @@ function matchRule(tokens, i, rule, lang, pairs, lineAt) {
    */
   if (rule.guard === 'topLevel' && !clauseInitial(tokens, startTok, lineAt)) return null
   if (rule.guard === 'attributeClause') {
-    // 判据要落在**规则起点**的前一个 token（`-`），不是名字的前一个：
-    // `['-', 'define', '(', '$name', …]` 里名字前面是 `(`，拿它去比 `-` 永远不成立，
-    // 于是同一个 `-define(ALPHA, 1)` 会被属性规则又命中一次（实测报出假符号 `define`）。
+    /**
+     * Erlang 函数子句是**语句级**声明：只能出现在文件开头、上一语句的 `.` 之后，
+     * 或同一函数上一子句的 `;` 之后。
+     *
+     * 这条边界同时挡住三类假符号：属性里的名字（`-module(alpha)` / `-define(ALPHA, …)`）、
+     * `-spec f(A) -> …` 里的 `f`（spec 内部也有 `->`，只看箭头会误收）、以及函数体里的
+     * 调用 `foo(X)`（前一 token 是 `(` / `,` / `=` 等）。
+     *
+     * 前一 token 是 `;` 表示同一函数的后续子句：它们共享到最后一个 `.` 的跨度，
+     * 重复登记会让 `target=f` 报 STRUCT_AMBIGUOUS，所以只登记第一个子句。
+     */
     const prev = tokens[i - 1]
-    if (prev !== undefined && prev.type === 'punct' && prev.value === '-') return null
-    const after = tokens[pairs.get(end - 1) + 1]
-    if (after === undefined || after.value !== '->') return null
+    if (prev !== undefined) {
+      if (prev.type !== 'punct' || (prev.value !== '.' && prev.value !== ';')) return null
+      if (prev.value === ';') return null
+    }
+    const open = tokens[startTok + 1]
+    if (open === undefined || open.type !== 'punct' || open.value !== '(' || !pairs.has(startTok + 1)) return null
+    // 参数组之后可以是 `->`，也可以先是 `when` 守卫（`f(X) when X > 0 -> …`）。
+    // 守卫里没有 `->`；遇到 `;` / `.` 仍没有 `->` 说明这不是函数子句。
+    let j = end
+    for (; j < tokens.length; j += 1) {
+      const t = tokens[j]
+      if (t.type !== 'punct') continue
+      if (t.value === ';' || t.value === '.') return null
+      if (pairs.has(j)) {
+        j = pairs.get(j)
+        continue
+      }
+      if (t.value === '->') break
+    }
+    if (j >= tokens.length) return null
   }
   // 放最后，因为它与其它守卫互不依赖。
   if (looksLikeBinding(tokens, startTok, k, lang)) return null
@@ -2107,7 +2161,7 @@ function isTerminatorToken(t, terminators) {
  * {@link terminatorBlockEnd} 用的两张后缀最小值表。判定优先级与逐 token 扫描同一个 k 上的次序相同。
  * 只在该语言真的走终结符风格时才会被调用。
  */
-function terminatorScan(tokens, pairs, lineAt, terminators) {
+function terminatorScan(tokens, pairs, lineAt, terminators, newlineStops) {
   const n = tokens.length
   const nextStop = new Int32Array(n)
   const nextPairOpen = new Int32Array(n)
@@ -2132,7 +2186,8 @@ function terminatorScan(tokens, pairs, lineAt, terminators) {
       chainEnd[i] = after < n && nextPairOpen[after] !== -1 ? chainEnd[nextPairOpen[after]] : i
     }
     // 终结符优先于括号跳层，括号跳层优先于换行 —— 与原循环在同一个 k 上的判定次序一一对应
-    if (isTerminatorToken(t, terminators) || (!isOpen && i >= 1 && lineAt(t.start) > lineAt(tokens[i - 1].end))) {
+    // 终结符优先于括号跳层，括号跳层优先于换行（newlineStops=false 时换行不是停止条件）
+    if (isTerminatorToken(t, terminators) || (newlineStops && !isOpen && i >= 1 && lineAt(t.start) > lineAt(tokens[i - 1].end))) {
       stop = i
     }
     nextStop[i] = stop
@@ -2148,8 +2203,8 @@ function terminatorScan(tokens, pairs, lineAt, terminators) {
  */
 function lazyTerminatorScan(tokens, pairs, lineAt) {
   let table = null
-  return (terminators) => {
-    if (table === null) table = terminatorScan(tokens, pairs, lineAt, terminators)
+  return (spec) => {
+    if (table === null) table = terminatorScan(tokens, pairs, lineAt, spec.terminators, spec.newlineStops !== false)
     return table
   }
 }
@@ -2160,6 +2215,8 @@ function lazyTerminatorScan(tokens, pairs, lineAt) {
  * 判据与跳表分别落在 {@link isTerminatorToken} 与 {@link terminatorScan} 上）。
  */
 function terminatorBlockEnd(tokens, pairs, fromTok, spec, lineAt, scan) {
+  // 只认终结符（Erlang）：找不到就是跨度不完整，不能拿换行/组尾兜底当一个完整跨度。
+  const onlyTerminator = spec.newlineStops === false
   let skippedEnd = -1
   let k = fromTok + 1
   if (k >= tokens.length) return { endTok: -1, note: '' }
@@ -2177,15 +2234,16 @@ function terminatorBlockEnd(tokens, pairs, fromTok, spec, lineAt, scan) {
     if (s !== -1 && (o === -1 || s < o)) {
       // stop 位置一定不是括号开符（建表时就排除了），所以 `s === o` 不可能出现
       if (isTerminatorToken(tokens[s], spec.terminators)) return { endTok: s, note: '' }
+      if (onlyTerminator) return { endTok: -1, note: '' }
       return { endTok: skippedEnd === -1 ? s - 1 : skippedEnd, note: '' }
     }
-    if (o === -1) return { endTok: skippedEnd, note: '' }
+    if (o === -1) return { endTok: onlyTerminator ? -1 : skippedEnd, note: '' }
     // 这一段里一个停止条件都没有：原循环会一路跨到**最后一个**组尾 ⇒ 用链尾表一次到位（O(1)）
-    if (s === -1) return { endTok: pairs.get(chainEndFrom[k]), note: '' }
+    if (s === -1) return { endTok: onlyTerminator ? -1 : pairs.get(chainEndFrom[k]), note: '' }
     skippedEnd = pairs.get(o)
     k = skippedEnd + 1
   }
-  return { endTok: skippedEnd, note: '' }
+  return { endTok: onlyTerminator ? -1 : skippedEnd, note: '' }
 }
 
 /**
@@ -2324,7 +2382,7 @@ function headerContinues(tokens, k, prev, clauses) {
  * （`bodyOpen` 或 `blockEnd`），扫描器里不写语言分支。
  *
  * **跨度必须覆盖符号真实占据的整段**：拿不到完整跨度时不是退化成签名行，而是标记
- * `spanComplete: false` —— 调用方（`locate`，进而 `aura_edit`）据此刻拒绝 `target=` 替换。
+ * `spanComplete: false` —— 调用方（`locate`，进而 `aura_basetools_edit`）据此刻拒绝 `target=` 替换。
  * 理由是实测的：偏短的跨度会让"只换签名行"这件事**静默**发生，落盘之后语法检查毫无反应。
  *
  * 这里还要分辨一件事：`const describe = (x) => { ... }` 是**函数绑定**，不是普通变量。
@@ -2378,7 +2436,7 @@ function declarationSpan(tokens, pairs, startTok, endTok, lang, lineAt, kind, li
         spanNote = hit.note
       } else last = hit.endTok
     } else if (spec.style === 'terminator') {
-      const hit = terminatorBlockEnd(tokens, pairs, endTok, spec, lineAt, termScan(spec.terminators))
+      const hit = terminatorBlockEnd(tokens, pairs, endTok, spec, lineAt, termScan(spec))
       if (hit.endTok === -1) {
         spanComplete = false
         spanNote = `line ${lineAt(tokens[startTok].start)}: no statement terminator closes this declaration, and no later line starts a new one, so the span cannot be delimited`
@@ -2410,7 +2468,7 @@ function declarationSpan(tokens, pairs, startTok, endTok, lang, lineAt, kind, li
 
 // ── 结构索引的记忆化 ───────────────────────────────────────────────────────
 /**
- * `indexStructure` 是热路径：`aura_read` 的每个结构化模式、`aura_edit` 每次结构化编辑都会建一次
+ * `indexStructure` 是热路径：`aura_basetools_read` 的每个结构化模式、`aura_basetools_edit` 每次结构化编辑都会建一次
  * 完整索引（token 流 + 括号配平 + 符号表）。实测本仓最大的引擎文件（本文件，施工前 97 KB /
  * 2573 行）建一次 **15.8 ms**，而同一份内容在一轮里常被连问几次（read 的 map → digest → target
  * 各一次，edit 的 plan 与 verify 各一次）——同一份工作被反复做。这一层把它记住。

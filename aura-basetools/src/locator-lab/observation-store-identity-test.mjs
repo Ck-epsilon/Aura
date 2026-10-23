@@ -89,10 +89,10 @@ const cli = (cacheDir, args) => {
   return { exit: res.status, stdout: (res.stdout ?? '').trim(), stderr: (res.stderr ?? '').trim(), json }
 }
 /** 读一次（真进程）。 */
-const cliRead = (cacheDir, file) => cli(cacheDir, ['read', '--file', file, '--mode', 'full'])
+const cliRead = (cacheDir, file) => cli(cacheDir, ['basetools', 'read', '--file', file, '--mode', 'full'])
 /** 无 `expect` 的按行编辑（真进程）。 */
 const cliEditLines = (cacheDir, file, lines, replace) =>
-  cli(cacheDir, ['edit', '--file', file, '--hunks', JSON.stringify([{ lines, replace }])])
+  cli(cacheDir, ['basetools', 'edit', '--file', file, '--hunks', JSON.stringify([{ lines, replace }])])
 /** 这个写法在本平台能不能解析到同一个文件（不解析就不是"另一种写法"，如实记分支）。 */
 const sameFile = (a, b) => {
   try {
@@ -196,7 +196,7 @@ say('=== A. 跨进程：进程1 读 Beta.js → 第三方改被寻址行 → 进
    */
   const cr = target('a4')
   const createSpelling = fs.existsSync(cr.lower) ? cr.lower : cr.upper
-  const c1 = cli(cr.cache, ['edit', '--file', createSpelling, '--create', F1_BEFORE])
+  const c1 = cli(cr.cache, ['basetools', 'edit', '--file', createSpelling, '--create', F1_BEFORE])
   say(`  [建文件] aura edit --file ${createSpelling} --create <内容>（文件还不存在）`)
   say(`          exit=${c1.exit} out=${c1.stdout}`)
   check(
@@ -341,7 +341,7 @@ say('=== C. DSH 侧（进程内那条路）行为不退化 ===')
   const editPlugin = await import('../aura-edit/index.js')
   let readTool = null
   let editTool = null
-  const tools = { register: (t) => (t.name === 'aura_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
+  const tools = { register: (t) => (t.name === 'aura_basetools_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
   const mkCtx = () => ({
     fs: fsService,
     ...contextServices(),

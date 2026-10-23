@@ -3,7 +3,7 @@
  *
  * 为什么单独一个文件盯这件事：这条性质此前没有任何测试在看。`struct-test` 验"符号被识别"、
  * `corpus-test` 验"不崩 / 不撒野"，两者都不看末端行。而跨度偏短的后果是**静默**的：
- * 缩进型语言的符号跨度只有签名行，于是 `aura_edit target=<函数名>` 只换掉签名、
+ * 缩进型语言的符号跨度只有签名行，于是 `aura_basetools_edit target=<函数名>` 只换掉签名、
  * 旧函数体原样留在文件里，`python -m py_compile` 仍然返回 0——没有任何错误信号。
  *
  * 三段：
@@ -215,9 +215,9 @@ for (const fx of FAIL_CLOSED) {
   check(found.ok === false && found.code === 'LOCATOR_SPAN_INCOMPLETE', `${fx.ext}/${fx.target} target= 被拒（${found.code ?? 'ok'}）`, fx.why)
 }
 
-// ── C 段：经真实 aura_edit 执行，验证拒绝、磁盘不变、以及"整段替换"──────────
+// ── C 段：经真实 aura_basetools_edit 执行，验证拒绝、磁盘不变、以及"整段替换"──────────
 say('')
-say('=== C. aura_edit：整体替换与拒绝（mock ctx 驱动真插件）===')
+say('=== C. aura_basetools_edit：整体替换与拒绝（mock ctx 驱动真插件）===')
 const plugin = await import('../aura-edit/index.js')
 const tmp = path.join(os.tmpdir(), `span-fidelity-${Date.now()}`)
 fs.mkdirSync(tmp, { recursive: true })
@@ -283,12 +283,18 @@ const refuseCases = [
 ]
 for (const c of refuseCases) {
   const r = await runEdit(c.name, c.lines, { target: c.target, replace: '# replaced' })
-  check(r.error !== null && r.error.code === c.code, `${c.name} target=${c.target} 被拒（${r.error?.code ?? 'ok'}）`, c.code)
+  /**
+   * 0.9.1：跨度不完整是可判定、可恢复的地址失败，现在走**结果通道**（outcome=not_found，
+   * 带 next），不再作为工具故障抛出。两种形状都接受，但必须带回同一个 code 且磁盘不动。
+   */
+  const rejectedCode = r.error?.code ?? r.out?.code ?? null
+  check(rejectedCode === c.code, `${c.name} target=${c.target} 被拒（${rejectedCode ?? 'ok'}）`, c.code)
   check(r.after === r.before, `${c.name} 磁盘未变`)
+  const rejectionMessage = r.error?.message ?? r.out?.message ?? ''
   check(
-    typeof r.error?.message === 'string' && r.error.message.includes('lines='),
+    typeof rejectionMessage === 'string' && rejectionMessage.includes('lines='),
     `${c.name} 拒绝信息给出可执行替代（lines=）`,
-    JSON.stringify(r.error?.message ?? ''),
+    JSON.stringify(rejectionMessage),
   )
 }
 

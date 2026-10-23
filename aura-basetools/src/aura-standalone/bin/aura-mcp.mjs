@@ -5,16 +5,21 @@
  * 为什么是它：Codex / Claude Code / Cursor / Zed 这些 agent 都吃 MCP —— 一次写壳，到处能用，
  * 且**不要求对方装 DSH**（本文件只依赖 node:fs 与本包的引擎）。
  *
- * 暴露四个工具：
- *   aura_read          七种取景（map/digest/full/around/lines/search/changed）+ 版本令牌
- *   aura_edit          四层寻址 + expect + dry_run；逐字节写回 + 陈旧区域闸门 + 落盘后回读校验
- *   aura_undo          撤销最近一次/指定写事务（默认拒绝覆盖后续编辑）
- *   aura_transactions  列出当前工作区写事务
+ * 暴露五个工具：
+ *   aura_basetools_read          七种取景（map/digest/full/around/lines/search/changed）+ 版本令牌
+ *   aura_basetools_edit          四层寻址 + expect + dry_run；逐字节写回 + 陈旧区域闸门 + 落盘后回读校验
+ *   aura_basetools_write         整份写入（对应内置 Write）：新建或整文件替换，同走事务与回读校验
+ *   aura_basetools_undo          撤销最近一次/指定写事务（默认拒绝覆盖后续编辑）
+ *   aura_basetools_transactions  列出当前工作区写事务
  *
  * 接法（写进各家的 MCP 配置即可）：
- *   codex:        codex mcp add aura -- npx -y aura-basetools mcp
- *   claude code:  claude mcp add aura -- npx -y aura-basetools mcp
- *   cursor/zed:   command = "npx", args = ["-y", "aura-basetools", "mcp"]
+ *   codex:        codex mcp add aura -- npx -y --package aura-basetools aura mcp
+ *   claude code:  claude mcp add aura -- npx -y --package aura-basetools aura mcp
+ *   cursor/zed:   command = "npx", args = ["-y", "--package", "aura-basetools", "aura", "mcp"]
+ *
+ * 为什么必须带 `--package`：本包有两个 bin（`aura` / `aura-mcp`），**没有**一个叫
+ * `aura-basetools`；npx 在"多个 bin 且没有与包名同名的"时候会拒绝猜，直接报
+ * `could not determine executable to run`（实测）。`--package` 明确指定包，`aura` 才是命令。
  */
 import { readFileSync } from 'node:fs'
 import process from 'node:process'
@@ -23,6 +28,7 @@ import {
   openProvider,
   readEnvelope,
   editEnvelope,
+  writeEnvelope,
   // 多目标（fs-contract-v2）的引擎绑定：与单目标同一处（`lib/ops.mjs`），bin 里不另找引擎。
   readManyWith,
   editManyEnvelope,
@@ -31,6 +37,9 @@ import {
   assertReadTargets,
   assertEditTargets,
   assertTargetShape,
+  assertKnownArgs,
+  MT_READ_ELEMENT_KEYS,
+  MT_EDIT_ELEMENT_KEYS,
 } from '../lib/ops.mjs'
 
 // 版本从包自己的 package.json 读：写死过一次，结果 0.4.0 的服务对外还报 0.2.1。
@@ -42,7 +51,15 @@ const VERSION = (() => {
     return 'dev'
   }
 })()
-const DEFAULT_PROTOCOL = '2024-11-05'
+const DEFAULT_PROTOCOL = '2025-06-18'
+/**
+ * 服务端真正支持的 MCP 协议版本（按新到旧）。
+ *
+ * 旧实现原样回显客户端给的任意字符串：客户端发 `9999-99-99`，服务端就宣称自己支持
+ * 一个不存在的版本。按 MCP 规范：受支持的请求版本原样返回；不受支持的返回服务端最新的
+ * 受支持版本；类型不合法是参数错误（`-32602`），不是“照抄”。
+ */
+const SUPPORTED_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 
 /**
  * 两个工具共用的 `targets` 声明（fs-contract-v2 §2.1/§2.2）。
@@ -64,6 +81,11 @@ const HUNK_SCHEMA = {
   type: 'object',
   properties: {
     target: { type: 'string', description: '符号名，如 `toTodoList` 或 `function:apply`；跳过全部文本匹配' },
+    intent: {
+      type: 'string',
+      description:
+        '模糊意图地址：符号名片段、短语或近似原文（如 `parseConfig`、`config loader`、`// retry the upload`），由引擎确定性地落成一个精确区间；歧义时报候选并拒绝（不猜）。单独使用（不与 target/lines/line_cue/anchor/old/context/handle 同用）；可用 near 与 expect',
+    },
     lines: {
       oneOf: [
         { type: 'array' },
@@ -77,8 +99,14 @@ const HUNK_SCHEMA = {
     end_line: { type: 'integer', description: '推荐：区间结束行（1-based，闭区间）；省略则等于 start_line' },
     line_cue: { type: 'string', description: '该行上唯一的词' },
     anchor: { type: 'string', description: '记得的原文，容忍空白漂移与改写' },
+    old: {
+      type: 'string',
+      description:
+        '内容地址：你正在替换的**逐字原文**（+ 可选 context 消歧）。给了它，坐标/符号名降为提示；引擎按内容定位，不唯一时拒绝并给候选。',
+    },
+    context: { type: 'string', description: '与 old 同用：紧邻被替换区域的原文，只在 old 多处命中时用来消歧。' },
     /**
-     * fs-contract-v2 §5：读侧发的**区间句柄**（`aura_read` 的回执里就有，也在正文首行行尾）。
+     * fs-contract-v2 §5：读侧发的**区间句柄**（`aura_basetools_read` 的回执里就有，也在正文首行行尾）。
      *
      * 为什么要声明：句柄把「被编辑的那段字节」从模型手里拿走，换成工具自己账本里那份逐字节副本的
      * 凭据；而**参数表里没有的键在这一面就等于不存在** —— CLI 读出来的回执带着柄，模型却看不见
@@ -88,7 +116,7 @@ const HUNK_SCHEMA = {
     handle: {
       type: 'string',
       description:
-        '`aura_read` 发的区间句柄（不透明，如 `h9f3ac1b2e4d5:120-160`）：工具读过的**逐字节区间**，于是那段文字不必由你转述。配合 `line` 或 `position` 在区间内／边界定位。句柄优先于 `old`／坐标——被让开的一方会在回执里点名。',
+        '`aura_basetools_read` 发的区间句柄（不透明，如 `h9f3ac1b2e4d5:120-160`）：工具读过的**逐字节区间**，于是那段文字不必由你转述。配合 `line` 或 `position` 在区间内／边界定位。句柄优先于 `old`／坐标——被让开的一方会在回执里点名。',
     },
     /** 段内**相对**行：整段替换与“只换其中一行”由此分开；越界是**结果**（正常 not_found 回执），不是抛错。 */
     line: {
@@ -106,6 +134,16 @@ const HUNK_SCHEMA = {
     near: { type: 'integer', description: '歧义时的行号提示' },
     expect: { type: 'string', description: '断言该处应是什么；对不上则整个补丁失败' },
     replace: { type: 'string', description: '替换文本；空串 = 删除该区域' },
+    replace_all: {
+      type: 'boolean',
+      description:
+        '与 old 同用：替换全部非重叠出现（从左到右），不再要求唯一。不能与 target/intent/lines/line_cue/anchor/context/handle/near 同用；读取后出现次数变了会整体拒绝。',
+    },
+    eol: {
+      type: 'string',
+      enum: ['auto', 'preserve', 'lf', 'crlf'],
+      description: '替换文本的换行风格。auto（默认）= 适配被替换区域的行尾（CRLF 文件写 CRLF，避免混合行尾）；preserve = 按 replace 原样；lf/crlf = 强制。',
+    },
   },
   // `required` 只写 `replace`：`handle`／`line`／`position` 是**地址的可选形态**，写进必填会让
   // 「按符号改一行」这类调用在参数层就被拒（与 DSH 壳那三处同一条：它们不是必填）。
@@ -114,7 +152,7 @@ const HUNK_SCHEMA = {
 
 const TOOLS = [
   {
-    name: 'aura_read',
+    name: 'aura_basetools_read',
     description:
       'Read a file the way you actually need it. Modes: map (symbol directory), digest (interface only), full, around, lines, search, changed. `auto` picks one for you. Prefer this over reading the whole file.',
     inputSchema: {
@@ -139,8 +177,13 @@ const TOOLS = [
         start_line: { type: 'integer', description: 'mode=lines（推荐）：起始行，1-based，闭区间' },
         end_line: { type: 'integer', description: 'mode=lines（推荐）：结束行，1-based，闭区间；省略则等于 start_line' },
         search: { type: 'string', description: 'mode=search：子串' },
+        context: { type: 'integer', description: 'mode=around：上下各留几行（默认 8）' },
+        kind: { type: 'string', description: 'mode=map：只保留某一类符号（function / class / …）' },
+        budget: { type: 'integer', description: '宿主剪枝阈值（字符）；省略用默认 8192' },
         since: { type: 'string', description: 'mode=changed：上次回执里的 version 令牌' },
         max_chars: { type: 'integer' },
+        offset: { type: 'integer', description: '与 limit 同用：0-based 行偏移（内置 Read 的分页形状）；与 lines 互斥' },
+        limit: { type: 'integer', description: '与 offset 同用：返回行数（默认 2000）；与 lines 互斥' },
         targets: TARGETS_SCHEMA,
       },
       /**
@@ -148,14 +191,14 @@ const TOOLS = [
        * 而“二选一”在 schema 层表达不了（本框架方言不支持 `anyOf`）—— 硬写必填会让多目标形状
        * 在**到达服务之前**就被客户端拒掉。判据只有一处：运行期 `assertTargetShape`（两者都没给）
        * 与 `assertReadTargets`（形状与互斥），与两个 DSH 壳、CLI 共用同一份。
-       * 与下面 `aura_edit` 里 `hunks` 不在 required 是同一条理由。
+       * 与下面 `aura_basetools_edit` 里 `hunks` 不在 required 是同一条理由。
        */
     },
   },
   {
-    name: 'aura_edit',
+    name: 'aura_basetools_edit',
     description:
-      'Edit or create a UTF-8 text file with hunks in one call. Address each hunk by target (symbol), lines, line_cue, or anchor. Writes back byte-for-byte (BOM and per-line endings preserved), refuses a hunk whose addressed region changed since your last read, and reads the file back to verify. All hunks must locate or nothing is written.',
+      'Edit or create a UTF-8 text file with hunks in one call. Address each hunk by intent (fuzzy name/phrase), target (symbol), lines, line_cue, anchor, or old (verbatim content + optional context). With `old`, set `replace_all: true` to replace every non-overlapping occurrence. Writes back byte-for-byte (BOM and per-line endings preserved), refuses a hunk whose addressed region changed since your last read, and reads the file back to verify. All hunks must locate or nothing is written.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -163,6 +206,10 @@ const TOOLS = [
         hunks: { type: 'array', items: HUNK_SCHEMA },
         dry_run: { type: 'boolean', description: '只定位不落盘' },
         include_transaction: { type: 'boolean', description: '在回执里返回 transaction id（默认不返回，保持输出稳定）' },
+        require_observation: {
+          type: 'boolean',
+          description: '严格新鲜度：要求这一版文件在本会话里被读过（或由本工具写过）；否则 PATCH_UNOBSERVED。create 不受影响；dry_run 同样执行这条判决。',
+        },
         create: { type: 'string', description: '文件不存在时用它创建（整份内容）' },
         targets: TARGETS_SCHEMA,
       },
@@ -181,7 +228,32 @@ const TOOLS = [
     },
   },
   {
-    name: 'aura_undo',
+    name: 'aura_basetools_write',
+    description:
+      'Write a whole UTF-8 text file at once (create or overwrite), matching a plain Write tool. Preserves an existing file\'s BOM and line endings, goes through the same transaction/undo path as aura_basetools_edit, and reads the file back to verify bytes. Prefer aura_basetools_edit for partial changes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: '要写的文件路径（绝对或相对 cwd）；不存在则创建' },
+        content: { type: 'string', description: '整份内容；覆盖已有文件时替换全部行' },
+        dry_run: { type: 'boolean', description: '只规划不落盘：新建报 create，覆盖校验换行与字节数' },
+        no_overwrite: { type: 'boolean', description: '文件已存在时拒绝（WRITE_EXISTS）' },
+        allow_unobserved: {
+          type: 'boolean',
+          description: '覆写默认要求先读过这一版（PATCH_UNOBSERVED）；设为 true 才允许盲写，回执照实标 unverified_region。',
+        },
+        eol: {
+          type: 'string',
+          enum: ['auto', 'preserve', 'lf', 'crlf'],
+          description: '覆写时的换行风格：auto（默认）适配文件已有风格；preserve 按 content 原样写；lf/crlf 强制。新建文件始终按 content 原样写（非 auto 会被拒绝）。',
+        },
+        include_transaction: { type: 'boolean', description: '在回执里返回 transaction id（默认不返回）' },
+      },
+      required: ['file_path', 'content'],
+    },
+  },
+  {
+    name: 'aura_basetools_undo',
     description:
       'Undo the latest committed write transaction, or the transaction with the given id. Refuses if a file changed after the transaction; pass force=true to override. Restores the exact bytes captured before the write.',
     inputSchema: {
@@ -193,11 +265,35 @@ const TOOLS = [
     },
   },
   {
-    name: 'aura_transactions',
+    name: 'aura_basetools_transactions',
     description: 'List write transactions for the current workspace (id, status, file count, time).',
     inputSchema: { type: 'object', properties: {} },
   },
 ]
+
+/**
+ * 每个工具接受的顶层键，**直接从注册面同一份 `inputSchema` 派生**。
+ *
+ * 不再手抄第二份名单：schema 加了字段而这里漏改，就会把合法调用拒掉；反过来则把拼错的键
+ * 静默忽略（`dryrun: true` 会变成一次真写盘）。两种漂移都在这一行上消失。
+ */
+const ALLOWED_BY_TOOL = new Map(
+  TOOLS.map((tool) => [tool.name, Object.keys(tool.inputSchema?.properties ?? {})]),
+)
+
+/** 未知键拒绝：走 normal envelope（`isError:true`），不让它变成写盘或挂死。 */
+function unknownArgsRefusal(source, allowed, where) {
+  try {
+    assertKnownArgs(source, allowed, where)
+    return undefined
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message ?? error),
+      code: typeof error?.code === 'string' ? error.code : 'BAD_ARGS',
+    }
+  }
+}
 
 /**
  * MCP 客户端的 `arguments` 按规范是对象；实测有的客户端会把 JSON 当**字符串**传过来（模型
@@ -232,7 +328,7 @@ function toolArguments(raw) {
 async function readTargetsCall(provider, args) {
   let targets
   try {
-    targets = assertReadTargets(args, { toolName: 'aura_read' })
+    targets = assertReadTargets(args, { toolName: 'aura_basetools_read', elementKeys: MT_READ_ELEMENT_KEYS })
   } catch (error) {
     return { ok: false, error: String(error?.message ?? error), code: typeof error?.code === 'string' ? error.code : 'BAD_ARGS' }
   }
@@ -248,7 +344,7 @@ async function readTargetsCall(provider, args) {
 async function editTargetsCall(provider, args) {
   let targets
   try {
-    targets = assertEditTargets(args, { toolName: 'aura_edit' })
+    targets = assertEditTargets(args, { toolName: 'aura_basetools_edit', elementKeys: MT_EDIT_ELEMENT_KEYS })
   } catch (error) {
     return { ok: false, error: String(error?.message ?? error), code: typeof error?.code === 'string' ? error.code : 'BAD_ARGS' }
   }
@@ -256,6 +352,7 @@ async function editTargetsCall(provider, args) {
     targets,
     dryRun: args.dry_run === true,
     includeTransaction: args.include_transaction === true,
+    ...(args.require_observation === true ? { requireObservation: true } : {}),
   })
 }
 
@@ -285,17 +382,38 @@ async function callTool(provider, name, args = {}) {
   // 多目标形状（fs-contract-v2 §2.1/§2.2）：`targets` 在场 ⇒ 走引擎的批入口；
   // 此时 `file_path` **可以缺席**（“file_path 与 targets 二者至少一个，都缺才拒”）。
   const multi = args.targets !== undefined && args.targets !== null
-  if (name === 'aura_read') {
+  /**
+   * 未知参数在**任何工具分支之前**拒：旧版 `dryrun:true` 会一路走到写盘，因为这里只读
+   * `args.dry_run`、对多出来的键零反馈。schema 与这份名单同源（见 `ALLOWED_BY_TOOL`）。
+   * `targets` 元素也逐个校验：它们被声明成 `additionalProperties:true`（形状由运行期判），
+   * 但“运行期判形状”不等于“任意拼错的键都可以被静默丢掉”。
+   */
+  {
+    const allowed = ALLOWED_BY_TOOL.get(name)
+    if (allowed !== undefined) {
+      const refusal = unknownArgsRefusal(args, allowed, name)
+      if (refusal !== undefined) return refusal
+      if (multi && Array.isArray(args.targets)) {
+        const elementAllowed = allowed.filter((key) => key !== 'targets')
+        for (const [index, element] of args.targets.entries()) {
+          if (element === null || typeof element !== 'object' || Array.isArray(element)) continue
+          const elementRefusal = unknownArgsRefusal(element, elementAllowed, `${name} targets[${index}]`)
+          if (elementRefusal !== undefined) return elementRefusal
+        }
+      }
+    }
+  }
+  if (name === 'aura_basetools_read') {
     if (multi) return await readTargetsCall(provider, args)
-    const noShape = noShapeRefusal(args, 'aura_read')
+    const noShape = noShapeRefusal(args, 'aura_basetools_read')
     if (noShape !== undefined) return noShape
     // 原样透传（不再自己挑字段）：行区间的宽容解析在 lib/ops.mjs → locator-lab/args.mjs 一处做，
     // 三个调用面共用同一套判据。之前这里只挑了几个字段，start_line/end_line 会被默默丢掉。
     return readEnvelope(provider, { ...args, file: args.file_path, maxChars: args.max_chars })
   }
-  if (name === 'aura_edit') {
+  if (name === 'aura_basetools_edit') {
     if (multi) return await editTargetsCall(provider, args)
-    const noShape = noShapeRefusal(args, 'aura_edit')
+    const noShape = noShapeRefusal(args, 'aura_basetools_edit')
     if (noShape !== undefined) return noShape
     /**
      * 真正的约束是“**hunks 或 create 至少一个**”（与 schema 的 `required` 一致）。
@@ -309,7 +427,7 @@ async function callTool(provider, name, args = {}) {
     if (!Array.isArray(args.hunks) && !creating) {
       return {
         ok: false,
-        error: 'aura_edit 需要 hunks 数组，或 create（整份内容建文件）二选一；只建文件时直接给 create 即可',
+        error: 'aura_basetools_edit 需要 hunks 数组，或 create（整份内容建文件）二选一；只建文件时直接给 create 即可',
         code: 'BAD_ARGS',
       }
     }
@@ -319,10 +437,22 @@ async function callTool(provider, name, args = {}) {
       dryRun: args.dry_run === true,
       create: creating ? args.create : undefined,
       includeTransaction: args.include_transaction === true,
+      ...(args.require_observation === true ? { requireObservation: true } : {}),
     })
   }
-  if (name === 'aura_undo') return await undoEnvelope(provider, { id: args.id, force: args.force === true })
-  if (name === 'aura_transactions') return transactionsEnvelope(provider)
+  if (name === 'aura_basetools_write') {
+    return await writeEnvelope(provider, {
+      file: args.file_path,
+      content: args.content,
+      dryRun: args.dry_run === true,
+      noOverwrite: args.no_overwrite === true,
+      includeTransaction: args.include_transaction === true,
+      allowUnobserved: args.allow_unobserved === true,
+      ...(typeof args.eol === 'string' ? { eol: args.eol } : {}),
+    })
+  }
+  if (name === 'aura_basetools_undo') return await undoEnvelope(provider, { id: args.id, force: args.force === true })
+  if (name === 'aura_basetools_transactions') return transactionsEnvelope(provider)
   return { ok: false, error: `unknown tool ${JSON.stringify(name)}`, code: 'UNKNOWN_TOOL' }
 }
 
@@ -349,8 +479,20 @@ export async function serve() {
     try {
       if (method === 'initialize') {
         const asked = params?.protocolVersion
+        if (asked !== undefined && asked !== null && (typeof asked !== 'string' || asked.length === 0)) {
+          return replyError(
+            id,
+            -32602,
+            `protocolVersion must be a non-empty string; supported: ${SUPPORTED_PROTOCOLS.join(', ')}`,
+          )
+        }
+        const version =
+          typeof asked === 'string' && SUPPORTED_PROTOCOLS.includes(asked)
+            ? asked
+            : DEFAULT_PROTOCOL
         return reply(id, {
-          protocolVersion: typeof asked === 'string' && asked.length > 0 ? asked : DEFAULT_PROTOCOL,
+          protocolVersion: version,
+          supportedProtocolVersions: SUPPORTED_PROTOCOLS,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: 'aura-basetools', version: VERSION },
         })

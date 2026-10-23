@@ -105,7 +105,7 @@ const FIXTURES = [
     span: [3, 5],
     absent: ['name'],
   },
-  // ── 批 2：已做好的 8 个扩展名（erl/hrl/hs/ml/nim/zig 未做对，故不写进这里）───────────
+  // ── 批 2：已做好的扩展名（erl 的 T2 已补；hrl/hs/ml/nim/zig 仍未做对，故不写进这里）───
   {
     ext: 'r',
     lines: ["alpha <- function(a) {", '  a + 1', '}', 'print(alpha(1))'],
@@ -169,6 +169,31 @@ const FIXTURES = [
     target: 'beta',
     span: [4, 5],
     absent: ['b'],
+  },
+  // ── T2：Erlang 函数子句（提取 + 多行跨度 + when 守卫 + 多子句合并 + spec 不误收）──
+  {
+    ext: 'erl',
+    lines: ['-module(alpha).', '-export([beta/1]).', '', 'beta(A) ->', '    A + 1.'],
+    want: 'module:alpha[1-1] function:beta[4-5]',
+    target: 'beta',
+    span: [4, 5],
+    absent: ['A'],
+  },
+  {
+    ext: 'erl',
+    lines: ['-module(alpha).', 'f(0) -> zero;', 'f(N) when N > 0 ->', '    N;', 'f(N) ->', '    -N.'],
+    want: 'module:alpha[1-1] function:f[2-6]',
+    target: 'f',
+    span: [2, 6],
+    absent: ['N', 'zero'],
+  },
+  {
+    ext: 'erl',
+    lines: ['-module(alpha).', '-spec beta(integer()) -> integer().', 'beta(A) ->', '    A + 1.'],
+    want: 'module:alpha[1-1] function:beta[3-4]',
+    target: 'beta',
+    span: [3, 4],
+    absent: ['integer'],
   },
 ]
 

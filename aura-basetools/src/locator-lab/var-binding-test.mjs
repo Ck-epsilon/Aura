@@ -63,10 +63,14 @@ const POSITIVE = [
   ['let S2 = 1', 'x.swift', 'S2'],
   ['const val KT = 1', 'x.kt', 'KT'],
   ['public const val KT2 = 1', 'x.kt', 'KT2'],
-  // Rust：`const` / `static` 声明（modifiers 里有这两个词，但原来没有对应规则）
+  // Rust：`const` / `static` 声明（含 T28 修好的 `pub const` / `pub unsafe const`）
   ['const R1: i32 = 1', 'x.rs', 'R1'],
   ['static R2: i32 = 1', 'x.rs', 'R2'],
   ['pub static R3: i32 = 1', 'x.rs', 'R3'],
+  ['pub const R5: i32 = 1', 'x.rs', 'R5'],
+  ['pub const R6: u8 = 2;', 'x.rs', 'R6'],
+  ['pub unsafe const R7: i32 = 1', 'x.rs', 'R7'],
+  ['pub(crate) const R8: u8 = 2', 'x.rs', 'R8'],
 ]
 for (const [src, file, want] of POSITIVE) {
   const got = names(src, file)
@@ -83,6 +87,7 @@ const NO_DUP = [
   ['export class C {}', 'x.mjs', 'C'],
   ['export const D = 1', 'x.mjs', 'D'],
   ['pub static R4: i32 = 1', 'x.rs', 'R4'],
+  ['pub const R9: i32 = 1', 'x.rs', 'R9'],
   ['public const val KT3 = 1', 'x.kt', 'KT3'],
   ['public static let S3 = 1', 'x.swift', 'S3'],
 ]

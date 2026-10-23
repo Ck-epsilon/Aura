@@ -14,7 +14,7 @@
  *   planHunks {"lines":"1,7"}               => PATCH_EXPECT_MISMATCH | （同上）
  *   planHunks {"start_line":1,"end_line":7} => PATCH_EXPECT_MISMATCH | （同上）
  *
- * 施工中还撞到同一件事的现场证据：用 `aura_edit` 改一个 11 行的区间、`expect` 只引其中一行时，
+ * 施工中还撞到同一件事的现场证据：用 `aura_basetools_edit` 改一个 11 行的区间、`expect` 只引其中一行时，
  * 编辑被**同一道闸门**拒了（回执 `lines 217-227 via lines do not match assert — the content there is: …`）——
  * 这道不一致连引擎自己的编辑路径都挡。
  *

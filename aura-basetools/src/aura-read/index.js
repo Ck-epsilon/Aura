@@ -29,7 +29,7 @@ import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 // 读取逻辑本身框架无关，住在 locator-lab；本文件是它的 DSH 适配器。
 import { readWith, readManyWith, MODES, BYTE_ORDER_MARK_BYTES, startsWithByteOrderMark } from '../locator-lab/read-core.mjs'
-import { LINE_ADDRESS_HINT, asLinePair, assertKnownArgs, assertReadTargets, assertTargetShape, gaveLineAddress, inferReadMode, lineRangeOf } from '../locator-lab/args.mjs'
+import { MT_READ_ELEMENT_KEYS, asLinePair, assertKnownArgs, assertReadTargets, assertTargetShape, inferReadMode, lineRangeOf, normalizeReadRequest } from '../locator-lab/args.mjs'
 // 仓库级地图（T26）：引擎驱动遍历，本文件只把 ctx.fs 的两个原始能力接上去。
 import { collectRepoMap } from '../locator-lab/repo-map.mjs'
 
@@ -80,6 +80,7 @@ export const Config = z.object({})
  */
 export const PASSTHROUGH_FIELDS = [
   'symbols',
+  'metrics',
   'version',
   'omitted',
   'next',
@@ -152,6 +153,10 @@ export const READ_ARG_KEYS = [
   'context',
   'since',
   'kind',
+  'max_chars',
+  'budget',
+  'offset',
+  'limit',
   // fs-contract-v2 §2.1：多目标形状。它与 `file_path` **互斥**（判据只有一份：`assertReadTargets`）。
   'targets',
 ]
@@ -407,7 +412,7 @@ function batchEntryOf(entry) {
  *     返回对象是**必须**的，不再是“可选美化”：句柄的身份标签按 `ledgerIdentityKey(filePath, identityKey)`
  *     算，而单目标那条路递的是 `ctx.fs.resolve()` 的 `targetKey`（C61）。多目标若只把路径串当身份，
  *     同一文件同一区间在两条路上会得到**两个不同的句柄**（实测 `h4745015d4840:…` vs `he6dd015d4840:…`），
- *     于是“一次读一批、再一次改一批”这条正路会在 `aura_edit` 上以 `PATCH_HANDLE_IDENTITY_MISMATCH` 断掉。
+ *     于是“一次读一批、再一次改一批”这条正路会在 `aura_basetools_edit` 上以 `PATCH_HANDLE_IDENTITY_MISMATCH` 断掉。
  *     `readManyTarget` 现在把 `displayPath` 当显示路径、`targetKey` 当身份键（**不新造第三份口径**：
  *     `ledgerIdentityKey` / `IDENTITY_KEYS` 就是既有那一份）。
  *   · 同一路径不得解析三次（resolve 在真实后端上是 realpath）⇒ 按路径**记忆化一个 Promise**，
@@ -476,7 +481,7 @@ async function readTargetsBatch(ctx, exec, targets) {
 }
 
 /**
- * 注册 `aura_read` 工具，以及配套的提示段。
+ * 注册 `aura_basetools_read` 工具，以及配套的提示段。
  *
  * ## 为什么必须同时注册提示段
  *
@@ -504,14 +509,14 @@ export function apply(ctx) {
     name: 'tool:aura-read',
     order: 1310,
     text: ({ scope }) =>
-      ctx.tools.get('aura_read', scope) === undefined
+      ctx.tools.get('aura_basetools_read', scope) === undefined
         ? ''
         : [
             // 措辞与内置指导**同形**（命令式）。理由见 aura-edit 里同一处的注释：
             // 建议式的措辞在实测中只在部分会话里生效——它是在跟先验拔河。
             // 兜底措辞分两处写：开头**不**给平级选项（给了就等于发许可证——实测中性任务下模型会顺着它选内置），
-            // 只在末尾给"aura_read 真做不到"的那两种情况。
-            'Use the aura_read tool — not read — for every text-file read: it is the default, and it shows structure instead of raw bytes.',
+            // 只在末尾给"aura_basetools_read 真做不到"的那两种情况。
+            'Use the aura_basetools_read tool — not read — for every text-file read: it is the default, and it shows structure instead of raw bytes.',
             'Start with `map` when you do not yet know the file (an importance-ranked symbol directory); use `around` or a line range (`start_line` + `end_line`) for the part you will edit; `digest` for a file\'s interface and dependencies; `changed` to see what moved since a previous read.',
             // 刻意**不再**写"未知扩展名请用内置 read"。实测这句话是错的：未知扩展名上
             // `auto` 会降级到 `full`，内容照给（见 locator-lab/disable-check.mjs）。
@@ -522,13 +527,13 @@ export function apply(ctx) {
             // 措辞仍是命令式，与上下文同形；放在兜底条件**之前**，让“何时该用内置 read”仍是最后一句。
             'When several files are needed — or several places in files you are about to change — pass `targets` instead of calling once per file: one call, one receipt per target, output in input order, and a missing file does not fail the rest.',
             // 兜底条件写明白：不写会让模型在确实需要内置工具时犹豫（超大窗口 / aura 直接拒读）。
-            'The built-in `read` remains only for what aura_read cannot do: a raw window larger than one reply, or a file aura_read refuses.',
+            'The built-in `read` remains only for what aura_basetools_read cannot do: a raw window larger than one reply, or a file aura_basetools_read refuses.',
           ].join(' '),
   })
 
   ctx.tools.register(
     defineTool({
-      name: 'aura_read',
+      name: 'aura_basetools_read',
       description:
         'Read a file the way you actually need it. Seven modes, and `auto` picks the smallest one for you: ' +
         '`map` (what is in this file — an importance-ranked symbol directory), ' +
@@ -628,13 +633,29 @@ export function apply(ctx) {
           type: 'string',
           description: 'mode=search: a substring to find across the file.',
         },
+        max_chars: {
+          type: 'integer',
+          description: 'Ask for a smaller content budget than the host ceiling (chars).',
+        },
+        budget: {
+          type: 'integer',
+          description: 'Pipeline ceiling in chars; overrides the host pruner threshold for this call.',
+        },
+        offset: {
+          type: 'integer',
+          description: 'Pagination: 0-based line offset; use with `limit` (mutually exclusive with lines/start_line+end_line).',
+        },
+        limit: {
+          type: 'integer',
+          description: 'Pagination: number of lines (default 2000); use with `offset`.',
+        },
         context: {
           type: 'integer',
           description: 'mode=around: how many lines of context on each side. Default 8.',
         },
         since: {
           type: 'string',
-          description: 'mode=changed: the `version` value from a previous aura_read of this file.',
+          description: 'mode=changed: the `version` value from a previous aura_basetools_read of this file.',
         },
         kind: {
           type: 'string',
@@ -667,7 +688,7 @@ export function apply(ctx) {
             totalLines: { type: 'integer' },
             // `text` 必须声明。第一版漏了它——而渲染器返回的正是 `text`，
             // 于是**每一条成功路径**都被框架以 `additionalProperties: false` 拒绝：
-            //   tool "aura_read" returned invalid output: "value.text" is not a declared property
+            //   tool "aura_basetools_read" returned invalid output: "value.text" is not a declared property
             // 我的 load-test 当时 29/29 全绿，因为它从不校验输出是否合自己声明的 schema。
             // 现在那道校验补上了，这类错误不会再穿过测试。
             text: { type: 'string', required: true },
@@ -702,6 +723,21 @@ export function apply(ctx) {
               },
             },
             symbols: { type: 'integer' },
+            /**
+             * 0.9.8：确定性的回执 metrics（引擎统一附加）。只放可由内容复算的事实，
+             * 不放墙钟；`truncated` 表示 `omitted` 是否存在（有没有被预算裁过）。
+             */
+            metrics: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                mode: { type: 'string', required: true },
+                lines: { type: 'integer', required: true },
+                chars: { type: 'integer', required: true },
+                symbols: { type: 'integer' },
+                truncated: { type: 'boolean', required: true },
+              },
+            },
             // `version` 可选，而不是必填。历史：它曾是必填，而当时 `changed` 在 `since` 缺省下不给令牌，
             // 于是 around／lines／search 与所有未索引扩展名上它是 undefined，真实会话里 .json／.yml／.md
             // 的读取被框架整条拒掉，才改成可选。
@@ -873,31 +909,29 @@ export function apply(ctx) {
          * 它抛的是**参数面**错（`ARGS_TARGETS_SHAPE` / `ARGS_TARGETS_LIMIT` / `ARGS_SHAPE_EXCLUSIVE`），
          * 逐项失败则是结果通道（引擎已把每项封成结果，不抛）。
          */
-        const batch = assertReadTargets(args, { toolName: 'aura_read' })
+        const batch = assertReadTargets(args, { toolName: 'aura_basetools_read', elementKeys: MT_READ_ELEMENT_KEYS })
         if (batch !== undefined) {
           // 多目标形状同样要过未知参数守卫：拼错的键不因为换了形状就被放行。
-          assertKnownArgs(args, READ_ARG_KEYS, 'aura_read')
+          assertKnownArgs(args, READ_ARG_KEYS, 'aura_basetools_read')
           return await readTargetsBatch(ctx, exec, batch)
         }
         /**
          * “二选一”的**另一半**（两个都没给 ⇒ 也拒）只有一份判据，住在 `args.mjs` 的
          * `assertTargetShape`（`src/locator-lab/args.mjs:455`）——壳里原来那句
          * `file_path must be a non-empty string` 是特例写法，已删（它把“没有形状可用”
-         * 说成了“file_path 写错了”，而 aura_edit 壳里还长着同一句：两处必然会漂）。
+         * 说成了“file_path 写错了”，而 aura_basetools_edit 壳里还长着同一句：两处必然会漂）。
          * 抛的仍是参数面同族码 `ARGS_SHAPE_EXCLUSIVE`；单目标调用照旧带 `file_path`，故这条路一字未变。
          */
-        assertTargetShape(args, { toolName: 'aura_read' })
-        // 参数形状在这里收敛一次：后面只认 {start, end}，三个调用面（工具壳/CLI/MCP）判据一致。
-        const lineRange = lineRangeOf(args)
-        if (lineRange === undefined && gaveLineAddress(args)) {
-          throw new Error(LINE_ADDRESS_HINT)
+        assertTargetShape(args, { toolName: 'aura_basetools_read' })
+        // 参数形状在这里收敛一次：行区间 / 分页 / 模式推断与 CLI/MCP、targets 元素共用
+        // 同一个 `normalizeReadRequest`。旧版这里只看 `lines`，`offset/limit` 在本面被静默忽略。
+        assertKnownArgs(args, READ_ARG_KEYS, 'aura_basetools_read')
+        const shape = normalizeReadRequest(args)
+        if (shape.ok !== true) {
+          throw Object.assign(new Error(shape.error), { code: shape.code })
         }
-        // 给了行区间就用 lines 模式，省掉"顺手再写一个 mode"的机会（写了也尊重）。
-        // 未知参数不回默认行为：拼错的字段被静默忽略时，模型看到的是**成功**。
-        assertKnownArgs(args, READ_ARG_KEYS, 'aura_read')
-        // 未知参数不回默认行为：拼错的字段被静默忽略时，模型看到的是**成功**。
-        assertKnownArgs(args, READ_ARG_KEYS, 'aura_read')
-        const mode = inferReadMode(args, lineRange)
+        let mode = shape.mode
+        let lineRange = shape.lines
         const cwd = exec.agent?.session?.header?.cwd
         const target = await ctx.fs.resolve(args.file_path, {
           ...(cwd !== undefined ? { cwd } : {}),
@@ -907,11 +941,14 @@ export function apply(ctx) {
         const info = await ctx.fs.stat(target, exec.signal)
         if (info === undefined) {
           // **缺失也要记录成一次观测。** 这是 dsh-tool-fs 的契约：`fs/observed` 的
-          // `{kind:'absent'}` 让后续 `write` 能走"带防护的创建"而不是被策略拒绝。
-          // 我第一版直接抛错、不记录，于是"读一个还不存在的文件，然后创建它"这条
+          // `{kind:'absent'}` 让后续 `create` 能走"带防护的创建"而不是被策略拒绝。
+          // 我第一版直接抛错、不记录，于是"读一个还不存在的文件、然后创建它"这条
           // 完全正常的流程会在写入侧失败——而且失败原因看起来与读取毫无关系。
           ctx.emit('fs/observed', target, { kind: 'absent' }, exec)
           throw new Error(`cannot read "${target.displayPath}": not found`)
+        }
+        if (info.type === 'directory' && shape.paginate) {
+          throw Object.assign(new Error('offset/limit applies to files; a directory is returned as a repo map — drop pagination'), { code: 'READ_BAD_ARGS' })
         }
         /**
          * 目录：**不读文件，直接给一张仓库地图**（T26）。
@@ -971,7 +1008,7 @@ export function apply(ctx) {
           source = await ctx.fs.readText(target, exec.signal)
         } catch (error) {
           if (!isNonUtf8TextFailure(error)) throw error
-          throw Object.assign(new Error(nonUtf8RefusalMessage('read', target.displayPath, 'aura_read')), {
+          throw Object.assign(new Error(nonUtf8RefusalMessage('read', target.displayPath, 'aura_basetools_read')), {
             code: typeof error.code === 'string' && error.code.length > 0 ? error.code : 'ERR_ENCODING_INVALID_ENCODED_DATA',
             cause: error,
           })
@@ -979,6 +1016,16 @@ export function apply(ctx) {
         // BOM 只存在于字节里（readText 会在解码时丢掉它）——版本令牌要能区分只差 BOM 的两个文件，
         // 就必须把这个事实从字节里取出来交给引擎。
         const byteOrderMark = await fileStartsWithByteOrderMark(ctx.fs, target, exec.signal)
+        /**
+         * 第二遍收敛：拿到总行数后才能做 offset 越界与尾行截断。
+         * 与单目标 `readEnvelope`、targets 元素**同一个**判定器。
+         */
+        const finalShape = normalizeReadRequest(args, source.split(/\r?\n/).length)
+        if (finalShape.ok !== true) {
+          throw Object.assign(new Error(finalShape.error), { code: finalShape.code })
+        }
+        mode = finalShape.mode
+        lineRange = finalShape.lines
         /**
          * 宿主给"单条工具结果"定的字符上限，**当场读**（不在引擎里抄）。
          *
@@ -992,6 +1039,8 @@ export function apply(ctx) {
          * 且因为披露机制在，偏保守不会丢信息。
          */
         const hostCeiling = (() => {
+          const explicit = Number.isInteger(args.budget) && args.budget > 0 ? args.budget : undefined
+          if (explicit !== undefined) return explicit
           const pruner = ctx.get('toolResultPruner')
           const threshold = pruner?.config?.thresholdChars
           return Number.isInteger(threshold) && threshold > 0 ? threshold : undefined
@@ -1065,6 +1114,8 @@ export function apply(ctx) {
           // changed 的 `since` 用文件版本而非内容指纹：调用方从 read 结果里拿到的是版本，
           // 而版本来自 fs 后端，因此跨进程、跨工具都一致。
           ...(args.since === undefined ? {} : { since: args.since }),
+          // `max_chars` 是调用方要求**更小**的预算；与 CLI/MCP/多目标同一字段。
+          ...(args.max_chars === undefined ? {} : { maxChars: args.max_chars }),
           // 流水线硬上限**现读现传**，不在引擎里抄一个常量。
           // `toolResultPruner.config.thresholdChars` 是可配置的（dsh-base 与三个 preset 都显式写着），
           // 所以"抄进引擎"会在宿主改配置时静默失准（调大→白白少给，调小→中段被剪）。

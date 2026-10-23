@@ -1,29 +1,110 @@
 # aura-basetools —— 项目总览
 
-给 AI coding agent 用的文件读写工具：`aura_read`（按意图取景：符号目录 / 接口 / 窗口 / 搜索 / 差异）与
-`aura_edit`（按意图寻址：符号名 / 行号 / 唯一词 / 记忆原文；逐字节保真、陈旧区域闸门、落盘后回读校验）。
+给 AI coding agent 用的文件读写工具：`aura_basetools_read`（按意图取景：符号目录 / 接口 / 窗口 / 搜索 / 差异）、
+`aura_basetools_edit`（按意图寻址：模糊意图 / 符号名 / 行号 / 唯一词 / 记忆原文；逐字节保真、陈旧区域闸门、落盘后回读校验）
+与 `aura_basetools_write`（整文件新建/覆写；同一事务与回读校验，保留 BOM 与文件既有行尾）。
 **0.7.0 起拆成两个 npm 包**：
 
 - `aura-basetools`：引擎 + CLI + MCP，**不依赖 DSH**；
-- `aura-basetools-dsh`：DSH 的 `aura_read` / `aura_edit` 适配器，依赖 core。
+- `aura-basetools-dsh`：DSH 的 `aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write` 适配器，依赖 core。
 
 DSH 插件 · MCP 服务（Codex / Claude Code / Cursor）· CLI 三条入口共用同一份引擎。
 
+**0.8.0 起 `aura_basetools_edit` 多一层 `intent`**：给一段模糊意图（符号名片段 / 短语 / 近似原文），
+引擎按固定次序（精确符号 → 符号子串 → 文本锚点）收敛成精确区间；歧义时拒绝并给候选，
+回执的 `tier` 写明实际走的是哪一档（`intent~symbol` / `intent~text~<档>`）。
+它与 `target` / `lines` / `line_cue` / `anchor` / `old` / `handle` 互斥（同时给会被拒），
+`near` / `expect` / `replace` 可以同用。例：
+
+```bash
+aura basetools edit --file src/locator-lab/struct-core.mjs --intent 'matchPattern' --replace '...'
+```
+
+**0.8.1 起**，成功编辑的 `applied[]` 还带 `afterLine` / `afterEndLine` / `delta` / `handle`：
+下一次编辑直接拿 `handle` 寻址即可，不必先回读；片段层（`old` 命中行内一段）另回填整行 `after`。
+`--plan` / `dry_run` 不铸可复用句柄（盘上没写，句柄必过期）。
+
+**0.8.2 起** `auto` 用调用方传入的 `budget`（宿主剪枝阈值）判断全文是否装得下，并在 `auto`
+理由里披露预算来源；不传则回落到 8192。显式 `mode=` 不受这个选择影响。
+
+**0.10.0 起** `replace` 的换行默认跟**被替换区域**（CRLF 文件写 CRLF，避免混合行尾）；
+要保留输入原样用 `eol: "preserve"`，强制统一用 `"lf"` / `"crlf"`。读取支持内置 `Read` 的
+`offset`（0-based）+ `limit`（行数）分页形状，与 `lines` 互斥。
+
+**0.10.1 起新增整文件写**：CLI `aura basetools write --file <路径> --content <文本|@文件>`、
+MCP `aura_basetools_write`。新建与覆写都走 `edit` 同一条工作区锁、事务日志与落盘回读校验；覆写保留
+已有 BOM，并把 content 的换行适配成文件已有风格，**有无尾换行也精确保留**。
+`--no-overwrite` 拒绝覆盖，`--dry-run` / `--plan` 只规划，`--transaction` 可 `undo`。
+整份写仍比 `edit` 粗：能改局部就不要整份写。
+
+**0.10.2 起 `old` 可配 `replace_all`**（CLI `--replace-all`、MCP/DSH `replace_all: true`）：
+一次替换全部**非重叠**出现（从左到右；`aa` 在 `aaaa` 上得到两处）。不能与
+`target` / `intent` / `lines` / `line_cue` / `anchor` / `context` / `handle` / `near` 同用
+（它们都是“收敛到一处”的地址）；读取后出现次数变了 ⇒ `PATCH_STALE_REGION`，
+回执的 `occurrence_count` 给出 `{was, now}`。`old` 仍走两档匹配：有逐字命中时只改逐字那些，
+没有时才回退空白折叠。
+
+**0.10.3 起有严格新鲜度（read-before-write）**：`aura_basetools_write` 的覆写默认要求**当前这版文件**
+在本会话里被读过（或由本工具写过），否则 `PATCH_UNOBSERVED`（`reason: never-read` /
+`changed-since-read`）；`--allow-unobserved` 才允许盲写，回执标 `unverified_region`；新建豁免。
+`aura_basetools_edit` 用 `--require-observation`（MCP/DSH `require_observation: true`）显式开启，
+`dry_run` 也执行同一条判决（预演不撒谎）。普通编辑的默认行为不变：有观测就查区域，
+没有观测则放行并如实标 `unverified_region`。
+
+**0.10.4 起整份写的换行可控**：`--eol auto`（默认，套用文件已有风格）/
+`preserve`（按 content 原样写，与内置 `Write` 的“给什么写什么”对齐）/ `lf` / `crlf`；
+新建文件始终按 content 原样写，显式传非 `auto` 会拒绝（不静默忽略）。
+
+**0.10.5 是独立评审后的缺陷修复版**：>256 KiB 的文件仍记观测令牌（严格闸不再永远
+`never-read`）；整份覆写的行区间与规划同源（不再有“先读一次算行数”的 TOCTOU 尾巴），
+`--allow-unobserved` 同时越过区域闸；`replace_all` 保留多行 `old` 中间的空行、只替换
+exact 命中的那一段、拒绝带首/尾换行的 `old`；`targets` 元素上的 `require_observation`
+真正生效；`--content @不存在` 回 JSON 回执；非 UTF-8 覆写点名 `aura_basetools_write`；
+`mode` 与 `offset/limit` 同给被拒；`edit --create --dry-run` 不再真的建文件。
+
+**0.10.6 是同一评审的复审后续**：DSH 壳的 `create` 预演、>256 KiB token-only 观测上的
+陈旧句柄/基准/降级措辞、多目标 `dry_run` 信封（不再谎报 `created`/`landed`）与同文件合并的
+`require_observation`，以及非法元素值的参数面拒绝（不再吐 Node 栈或先建事务）。
+
+**0.12.0 起对外工具标识统一为 `aura_basetools_*`**：MCP / DSH 工具名为
+`aura_basetools_read`、`aura_basetools_edit`、`aura_basetools_write`、
+`aura_basetools_undo`、`aura_basetools_transactions`。包名与 bin 名不变。
+历史会话日志仍含旧名；分析件同时认旧名与新名。
+
+**0.13.0 起 CLI 也进入 `basetools` 命名空间**：统一写成 `aura basetools <verb>`
+（`read` / `edit` / `write` / `undo` / `transactions` / `mcp` / `doctor` / `capabilities`）。
+顶层旧动词不再作为别名执行，会返回 `CLI_NAMESPACE_REQUIRED` 并提示新写法；
+`aura --help` / `aura --version` 仍在顶层。MCP 配置的 args 改为 `["basetools", "mcp"]`。
+
+**0.11.0 起参数面、寻址与回执不再静默**：未知旗标/参数（含 `--dryrun`、`targets` 元素）
+一律拒绝且不写盘；压缩代码里共享行的 `target` 与 lone CR 文件上的 `target`/`lines`
+分别以 `LOCATOR_LINE_SHARED` / `LOCATOR_LONE_CR` 拒绝；多目标回滚后回执按最终磁盘重建
+（`applied:0` / `landed_paths:[]` / `rolled_back:true`）；多目标读与单目标共用
+`offset/limit/context/kind/budget/max_chars` 映射；并发读不再覆盖观测缓存；
+MCP `initialize` 不再回显不存在的协议版本。CI 增加 Linux Node 22 全量闸与 Node 18/20 冒烟。
+
 ## 目录
 
+> 当前版本、公开接口、已知边界与**提交前检查清单**见 `STATUS.md`。
+
 ```
-src/aura-read/         DSH 工具壳（aura_read）
-src/aura-edit/         DSH 工具壳（aura_edit）
+src/aura-read/         DSH 工具壳（aura_basetools_read）
+src/aura-edit/         DSH 工具壳（aura_basetools_edit）
 src/locator-lab/       引擎：框架无关、不许用 node:fs（结构 / 读 / 锚点 / 写路径）
 src/aura-standalone/   独立面：CLI + MCP + node:fs 提供方 + 落盘观测缓存 + 自带验收
-build/make-bundle.mjs  打包：dist/aura-basetools/ + .tgz + 交付包 zip + 一页说明
+build/make-bundle.mjs  打包：dist/aura-basetools/ + .tgz + 交付包 zip + 一页说明；
+                       --pack 时还会顺手派生 dist/npm/ 的两个 npm 包（一条命令 = 完整产物）
+build/bundle-layout.mjs 包内运行时文件的**唯一清单**：打包按它复制，发布闸按它比对 src↔dist
+build/make-split-packages.mjs 从组合产物派生 aura-basetools（核心）/ aura-basetools-dsh（DSH 适配器）
+build/split-package-test.mjs  拆包的**安装级**验收：离线装两个 tgz，从装出来的那份跑 CLI/MCP/npx，
+                              并核对适配器按包名解析核心（入 release-check + CI）
 build/install.mjs      一键安装器（双击 / agent 一条命令；幂等、可卸载、装完真自检）
 build/install-test.mjs 安装器的机械验收（假 HOME 里真装真卸真卸载，52 项）
 build/zip.mjs          自带模式位的 ZIP 写入器（macOS 双击 .command 要 0755，系统压缩工具不写）
 build/range-all.mjs    一条命令跑完三套靶场（格式矩阵 / 字节形态 / 参数形态）并汇总
-build/release-check.mjs 发布前的**全量测试闸**：34 套（单元/集成/验收/冒烟/端到端）+ 三套靶场
-                       + 包内验收 + 安装器 + 服务化升级 + src↔dist 一致性 + 发布清单 + 版本一致性
-                       + DSH 就绪（不启动宿主也能查的部分）
+build/release-check.mjs 发布前的**全量测试闸**：全量套件（单元/集成/验收/冒烟/端到端；件数以闸输出为准）
+                       + 三套靶场 + 包内验收 + 安装器 + 服务化升级 + 拆包安装级验收 + src↔dist 一致性
+                       + 发布清单 + 版本一致性 + DSH 就绪（不启动宿主也能查的部分）
 dsh/*.yml              DSH 补丁夹具（验证用，非 live）
 probes/adoption-stats.mjs  采用率统计（按会话算覆盖率；读 ~/.dsh/sessions，只读）
 probes/which-tools.mjs     会话日志里实际用过哪些工具（最近 25 个 + 全量合计）
@@ -32,12 +113,14 @@ probes/edit-failure-census.mjs  写失败的**构成**：把 16–18% 拆到分�
 probes/weight-profile.mjs  重尾分布与载荷上限（结论带被测文件哈希，只在哈希下有效）
 probes/retry-discipline.mjs   同一文件反复修补的检测（真信号：失败后不读又改）
 probes/name-addressing.mjs    按名寻址的可达面（重名 25%；失败回执里必须带可用地址）
+probes/coordinate-drift-experiment.mjs  T15 分辨实验：失败率 × 此前成功编辑次数 × 地址类型（流式读日志）
 
-src/locator-lab/repo-map.mjs  仓库级粗粒度地图（T26）：`aura_read <目录>` 的输出形式与判据
+src/locator-lab/repo-map.mjs  仓库级粗粒度地图（T26）：`aura_basetools_read <目录>` 的输出形式与判据
 probes/probe-*.mjs         模式选择 / 采用率专题分析
 probes/shadow-probe*.mjs   shadow 实验数据
 
 docs/测试分层.md         六类测试各问什么、本仓由谁回答、每类的**已知缺口**、以及跑法
+docs/agent-guide.md      给调用方的决策表：读模式/地址选择/回执/失败恢复/事务
                         （“哪几类没有”就是“哪几种 bug 看不见”）
 docs/aura-客户版-优势说明.md 对外（客户/评估者）版优势说明：收益优先、含交付/回滚/合规/验收清单
                             构建时会以 aura-basetools-<版本>-优势说明.md 的名义放进交付包
@@ -51,16 +134,21 @@ docs/aura-tools-0.*.md     逐版本版本说明（0.2.0 → 0.6.1；0.5.0 = 服
                            未知参数不再被静默吞掉 + 六类测试分层；0.6.1 = 体检能看见 profile 那一侧的第二份安装；
                            0.6.16 = 独立面（CLI + MCP）也接上 `targets`：一次调用多目标，三个面同一份判据；
                            0.6.17 = 句柄寻址也补到 CLI 与 MCP 的声明面（能力面按可能性给全，不按采样率）)
-dist/                  产出（派生物，随时可重建）
+dist/                  产出（派生物，随时可重建；npm 双包在 dist/npm/）
 ```
 
 ## 构建与验收
 
 ```bash
-node build/make-bundle.mjs --pack                  # 重建 dist/（含交付包 zip）
+node build/make-bundle.mjs --pack                  # 重建 dist/（含交付包 zip 与 dist/npm 双包）
+node build/split-package-test.mjs                  # 拆包安装级验收：两个 tgz 装起来真能用
 node build/install-test.mjs                        # 安装器验收（含 --version / --doctor）：52/52 才算过
 node build/range-all.mjs                           # 三套靶场全跑（持续打用）
 node build/release-check.mjs                       # 发布前必跑：全量测试闸（一项不过就不算通过）
+node build/task-bench.mjs                          # 任务级基准：8 个读+改任务对照基线（SLO 闸）
+node build/post-publish-check.mjs                  # 发布物验证 + dist/release-scorecard.json（--registry 用于发布后）
+node build/perf-gate.mjs                           # 性能包线：1k/10k/100k 行冷/热读 + 10k 编辑（绝对上限 + 规模比值）
+node build/capabilities.mjs --write                # 能力清单 dist/capabilities.json（make-bundle --pack 会自动跑）
 node build/upgrade-test.mjs                        # 服务化升级验收（升级/回滚/断电安全）
 node dist/aura-basetools/test/standalone-test.mjs  # 包内自带验收：测"要发出去的那一份"
 ```
@@ -79,16 +167,19 @@ layers 29 · regex-lex 51）与 `src/aura-{read,edit}/`（load 50/41 · align 12
 每次 `edit` 在第一次写之前把原始字节记到 `~/.aura/transactions/<workspace>/<id>/`；写成功后标记 committed，写失败则按 `afterVersion` 校验后回滚已落地的文件。
 
 ```bash
-aura edit --file a.js --lines 10 --replace 'const x = 1' --transaction
-aura edit --targets '[{"file_path":"a.js","hunks":[...]},{"file_path":"b.js","hunks":[...]}]' --transaction
-aura transactions
-aura undo                      # 最近一次 committed
-aura undo --id <id>            # 指定事务
-aura undo --id <id> --force    # 文件在事务后又被改过也强制恢复
+aura basetools edit --file a.js --lines 10 --replace 'const x = 1' --transaction
+aura basetools edit --targets '[{"file_path":"a.js","hunks":[...]},{"file_path":"b.js","hunks":[...]}]' --transaction
+aura basetools write --file new.js --content @template.js --transaction   # 整份新建/覆写也进事务
+aura basetools transactions
+aura basetools undo                      # 最近一次 committed
+aura basetools undo --id <id>            # 指定事务
+aura basetools undo --id <id> --force    # 文件在事务后又被改过也强制恢复
 ```
 
 - 默认 `edit` **不把 transaction id 放进回执**（保持 CLI/MCP 输出稳定）；需要 id 时加 `--transaction`（MCP 用 `include_transaction: true`）。
-- 多目标写：一个目标写失败，已落地的目标会被回滚；回执里带 `transaction` 与 `rollback`。
+- 多目标写：一个目标写失败，已落地的目标会被事务回滚；回执按**最终磁盘**重建
+  （`applied:0` / `landed:false` / `landed_paths:[]` / `rolled_back:true`），
+  `rollback` 字段不依赖 `--transaction`。回滚有冲突时标 `recovery_required`。
 - undo 默认拒绝覆盖“事务后又被外部改过”的文件（`TRANSACTION_STALE`）；`--force` 才强制。
 - 同一工作区的并发编辑由 `~/.aura/locks/<workspace>.lock` 串行化；`AURA_NO_LOCK=1` 可关闭，`AURA_LOCK_TIMEOUT_MS` / `AURA_LOCK_STALE_MS` 可调。
 - `AURA_CACHE_DIR` 同时覆盖观测缓存、事务日志和锁目录。
@@ -137,10 +228,23 @@ node probes/which-tools.mjs                        # 逐会话列出用过哪些
 
 - **人**：双击 `一键安装.cmd`（Windows）/ `一键安装.command`（macOS）
 - **agent**：`node aura-basetools/install.mjs --yes --json`
-- **手工**：`npm i -g ./aura-basetools-<版本>.tgz && codex mcp add aura -- aura mcp`
+- **手工**：`npm i -g ./aura-basetools-<版本>.tgz && codex mcp add aura -- aura basetools mcp`
 - **DSH**：`dsh plugin --profile <名字> add ./aura-basetools-<版本>.tgz`
 
 撤销：`node aura-basetools/install.mjs --uninstall`。
+
+装完先跑 `aura basetools doctor`（机器读 `--json`）：Node/版本/MCP 握手/缓存与锁目录，任一失败 exit 2。
+查本机能力用 `aura basetools capabilities --pretty`（读模式/地址档/语言/限制，全部来自引擎常量）。
+
+npm 官方源发**两个包**（构建在 `dist/npm/`，由 `make-bundle.mjs --pack` 一并产出）：
+
+| 包 | 内容 | 入口 |
+|---|---|---|
+| `aura-basetools` | 核心：引擎 + CLI + MCP，**无 DSH 依赖** | `aura` / `aura-mcp`；`npx -y --package aura-basetools aura basetools mcp` |
+| `aura-basetools-dsh` | DSH 适配器：三个工具壳（`aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write`）+ patch，依赖同版本核心 | `dsh plugin add aura-basetools-dsh` |
+
+发布顺序：先核心、后适配器。两包都能装上且适配器按包名解析核心，由
+`build/split-package-test.mjs` 守着（已入 `release-check` 与 CI）。
 
 ## 目录之外的两件事（重要）
 

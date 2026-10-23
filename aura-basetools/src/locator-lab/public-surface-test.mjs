@@ -80,12 +80,12 @@ check(
  * `locator-lab/` 里还住着测试与靶场，而它们**本来就该** import 壳（那些套件测的就是壳）。
  * 第一版把整个目录扫了一遍，于是 5 个测试文件被当成“引擎依赖了壳”——
  * 那是**我的判据边界画错了**，不是代码错。边界要与“哪些文件进包”同一份：
- * `build/make-bundle.mjs` 的 `ENGINE`。
+ * `build/bundle-layout.mjs` 的 `ENGINE`（打包与 `src↔dist` 比对也读它）。
+ * 这里直接 import 那份清单，不再正则解析源码——清单搬家时正则只会读出 0 个文件，
+ * 而那看起来像“判据通过了一个空集合”。
  */
-const bundle = read('build/make-bundle.mjs')
-const engineList = /const ENGINE = \[([\s\S]*?)\]/.exec(bundle)?.[1] ?? ''
-const engineFiles = [...engineList.matchAll(/'([^']+\.mjs)'/g)].map((m) => m[1])
-check(engineFiles.length >= 7, `从打包清单读出 ${engineFiles.length} 个引擎文件（判据取自 make-bundle，不是手写）`, engineFiles.join(','))
+const { ENGINE: engineFiles } = await import(asUrl(path.join(pkgRoot, 'build', 'bundle-layout.mjs')))
+check(engineFiles.length >= 7, `从打包清单读出 ${engineFiles.length} 个引擎文件（判据取自 bundle-layout，不是手写）`, engineFiles.join(','))
 const impure = engineFiles.filter((f) => /from '\.\.\/aura-(read|edit)/.test(read(`src/locator-lab/${f}`)))
 check(impure.length === 0, '引擎文件都不依赖工具壳（依赖方向单向：壳 → 引擎）', impure.join(','))
 // 顺带钉住“引擎不许碰 node:fs / process.platform”——打包时也有守卫，但那条只在 `--pack` 时才跑
@@ -105,14 +105,17 @@ const mkCtx = (registered, hidden) => ({
   systemPrompt: { section: (s) => registered.push({ __section: s }) },
 })
 const names = []
+const EXPECTED_TOOLS = { 'aura-read': ['aura_basetools_read'], 'aura-edit': ['aura_basetools_edit', 'aura_basetools_write'] }
 for (const dir of ['aura-read', 'aura-edit']) {
   const registered = []
   shells[dir].apply(mkCtx(registered, false))
   const tools = registered.filter((r) => r.name !== undefined && r.__section === undefined)
-  check(tools.length === 1, `${dir}: apply 恰好注册一个工具`, `实际 ${tools.length}`)
-  names.push(tools[0]?.name)
+  const got = tools.map((t) => t.name).sort()
+  const want = EXPECTED_TOOLS[dir].slice().sort()
+  check(JSON.stringify(got) === JSON.stringify(want), `${dir}: 注册的工具恰好是 ${want.join(' / ')}`, `实际 ${got.join(' / ')}`)
+  names.push(...tools.map((t) => t.name))
 }
-check(names.join(',') === 'aura_read,aura_edit', '两个工具名恰好是 aura_read / aura_edit（模型与文档都按这两个名字调）', names.join(','))
+check(names.sort().join(',') === 'aura_basetools_edit,aura_basetools_read,aura_basetools_write', '三个工具名恰好是 aura_basetools_read / aura_basetools_edit / aura_basetools_write（模型与文档都按这三个名字调）', names.join(','))
 
 say('')
 say('=== C. 参数键的唯一来源：守卫名单 == schema 声明 == 兼容层实装 ===')
@@ -124,17 +127,19 @@ say('=== C. 参数键的唯一来源：守卫名单 == schema 声明 == 兼容�
   // 三处若不同源，症状是“schema 里有、守卫却拒”或反过来的静默丢参数。
   const readKeys = [...shells['aura-read'].READ_ARG_KEYS].sort()
   const editKeys = [...shells['aura-edit'].EDIT_ARG_KEYS].sort()
-  check(readKeys.includes('file_path') && readKeys.includes('mode'), 'aura_read 的名单含 file_path 与 mode', readKeys.join(','))
-  check(editKeys.includes('file_path') && editKeys.includes('hunks'), 'aura_edit 的名单含 file_path 与 hunks', editKeys.join(','))
+  check(readKeys.includes('file_path') && readKeys.includes('mode'), 'aura_basetools_read 的名单含 file_path 与 mode', readKeys.join(','))
+  check(editKeys.includes('file_path') && editKeys.includes('hunks'), 'aura_basetools_edit 的名单含 file_path 与 hunks', editKeys.join(','))
   // 平铺形状的地址键必须**在名单里**，否则守卫会拒掉模型真在用的形状
   //
   // 这份字面量是**手抄的第三方期望**（不从这里 import `FLAT_ADDRESS_KEYS` 派生）：派生就等于
   // 拿被测物当量具，下面那条"两份名单一致"的判据会永远自洽。`handle` 是 fs-contract-v2 的
-  // 第四种地址键（它单独在场就足以定下区间）；`line` / `position` **不是**地址键
-  // —— 它们只在 `handle` 同时在场时才成立（拒绝那一半在 `write-path.mjs` 的 `planHunks` 里）。
-  const flat = ['target', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle']
+  // 第四种地址键（它单独在场就足以定下区间）；`intent`（T16）是第五种，同样单独在场即构成地址；
+  // `old`（0.10.2）是内容地址，平铺形状从此可直接 `--old <原文>`（`replace_all` 依赖它）。
+  // `line` / `position` **不是**地址键——它们只在 `handle` 同时在场时才成立（拒绝那一半在
+  // `write-path.mjs` 的 `planHunks` 里）。
+  const flat = ['target', 'intent', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle', 'old']
   const missing = flat.filter((k) => !editKeys.includes(k))
-  check(missing.length === 0, 'aura_edit 的名单覆盖全部平铺地址键（否则守卫拒自家实装的形状）', missing.join(','))
+  check(missing.length === 0, 'aura_basetools_edit 的名单覆盖全部平铺地址键（否则守卫拒自家实装的形状）', missing.join(','))
   const { FLAT_ADDRESS_KEYS } = await import(asUrl(path.join(pkgRoot, 'src', 'locator-lab', 'args.mjs')))
   check(
     JSON.stringify([...FLAT_ADDRESS_KEYS].sort()) === JSON.stringify(flat.slice().sort()),
@@ -199,7 +204,7 @@ say('')
 say('=== F. 独立面提供的命令与文档一致 ===')
 {
   const usage = read('src/aura-standalone/bin/aura.mjs')
-  for (const cmd of ['aura read', 'aura edit', 'aura mcp']) {
+  for (const cmd of ['aura basetools read', 'aura basetools edit', 'aura basetools mcp']) {
     check(usage.includes(cmd), `CLI 帮助里有 \`${cmd}\``)
   }
   /**
@@ -218,11 +223,27 @@ say('=== F. 独立面提供的命令与文档一致 ===')
     const res = spawnSync(process.execPath, [cli], { encoding: 'utf8' })
     check(res.status === 0, `不带参数调用 ⇒ 打印用法并成功退出（实测 ${res.status}）`)
     check(
-      /aura read|USAGE|用法/.test(`${res.stdout}${res.stderr}`),
+      /aura basetools read|USAGE|用法/.test(`${res.stdout}${res.stderr}`),
       '不带参数调用会打印用法',
       JSON.stringify(String(res.stdout).slice(0, 80)),
     )
   }
+}
+
+say('')
+say('=== G. MCP 接线指引里的 npx 必须能解析到 bin ===')
+{
+  /**
+   * 本包有 `aura` / `aura-mcp` 两个 bin，**没有**一个叫 `aura-basetools`。npx 在"多个 bin
+   * 且没有与包名同名的"时候会直接拒绝猜（实测 `could not determine executable to run`），
+   * 所以指引必须写成 `npx -y --package aura-basetools aura mcp`。
+   *
+   * 这条不是文字洁癖：旧指引写的是 `npx -y aura-basetools mcp`，照着做的人会在启动
+   * MCP 之前就失败，而 CLI 本身完全正常——是最容易归错因的一类。
+   */
+  const mcpDoc = read('src/aura-standalone/bin/aura-mcp.mjs')
+  check(!/npx\s+-y\s+aura-basetools/.test(mcpDoc), '指引不再给出 npx 猜不到 bin 的形式')
+  check(mcpDoc.includes('npx -y --package aura-basetools aura mcp'), '指引给出的 npx 形式带 --package + 命令')
 }
 
 say('')

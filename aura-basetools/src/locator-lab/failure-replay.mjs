@@ -20,7 +20,7 @@
  * 从原始事件里能拿到 CSV 里没有的三样东西，而它们是重放的前提：
  *   1. **原始 hunk 参数**（CSV 只有定位器种类与个数）；
  *   2. **回执首行**（CSV 只有归类名）；
- *   3. **可用的原文片段** —— 失败之前同会话里对同一文件的那几次成功 `aura_read`，
+ *   3. **可用的原文片段** —— 失败之前同会话里对同一文件的那几次成功 `aura_basetools_read`，
  *      回执里带 `行号: 正文`，按行号拼回去就是**当时那份文件的局部快照**。
  *
  * ## 重放怎么算"可重放"
@@ -134,6 +134,16 @@ import { readWith } from './read-core.mjs'
 import { flatHunk, lineRangeOf, asLinePair } from './args.mjs'
 import { normSpace } from './anchor-core.mjs'
 import { contextServices } from './mock-ctx.mjs'
+
+/**
+ * 语料是**历史日志**：0.12.0 之前写的是 `aura_read` / `aura_edit`，之后写的是
+ * `aura_basetools_read` / `aura_basetools_edit`。分析件必须两种都认，否则重命名会把
+ * 历史 353 条全部当成“读路径”，基准列与现树列就会假装逐条相同（判据⑬实测过）。
+ */
+const READ_TOOL_NAMES = new Set(['aura_read', 'aura_basetools_read'])
+const EDIT_TOOL_NAMES = new Set(['aura_edit', 'aura_basetools_edit'])
+const isReadToolName = (name) => READ_TOOL_NAMES.has(name)
+const isEditToolName = (name) => EDIT_TOOL_NAMES.has(name)
 
 /**
  * 「现树」这份引擎的入口：新契约列、以及「现树·旧入参」列用它。
@@ -356,7 +366,7 @@ function bucketOf(errorClass) {
 // ── 2. 从日志里挖"当时的原文片段" ──
 
 /**
- * 成功 `aura_read` 的回执里，正文是 `行号: 文本`；把这一份按行号收起来，
+ * 成功 `aura_basetools_read` 的回执里，正文是 `行号: 文本`；把这一份按行号收起来，
  * 就是**当时那份文件的局部快照**。非正文行（信封、符号目录、省略说明）不匹配这个形状，
  * 自然被跳过——这正是选择"行号: "而不是"尽量解析"的理由：**宁可少收，不可收错行**。
  */
@@ -493,7 +503,7 @@ function buildCorpus(log = console.error) {
       continue
     }
     const order = records.filter(
-      (r) => r.type === 'tool/call' && (r.data?.name === 'aura_read' || r.data?.name === 'aura_edit'),
+      (r) => r.type === 'tool/call' && (isReadToolName(r.data?.name) || isEditToolName(r.data?.name)),
     )
     if (!order.length) continue
     sessionsWithCalls += 1
@@ -521,7 +531,7 @@ function buildCorpus(log = console.error) {
         args = null
       }
       const fp = typeof args?.file_path === 'string' ? args.file_path : ''
-      if (!isError && call.data.name === 'aura_read' && fp) {
+      if (!isError && isReadToolName(call.data.name) && fp) {
         const { map, version } = lineMapFromReceipt(txt)
         if (map.size > 0) {
           const cur = snaps.get(fp) ?? { map: new Map(), version: null }
@@ -588,7 +598,7 @@ function buildCorpus(log = console.error) {
  * 把一条失败调用变成语料条目。
  *
  * 重放原文的 ladder（要的是「当时那几行的逐字原文」，不是「随便一份能跑的文件」）：
- *   1. `log`     —— 失败前同会话对同一文件的成功 `aura_read` 回执，按行号拼回快照；
+ *   1. `log`     —— 失败前同会话对同一文件的成功 `aura_basetools_read` 回执，按行号拼回快照；
  *   2. `receipt` —— 回执自己引出的实证原文（`the content there is: “…”`），
  *                   铺在回执报出的行号上。它是断言不符那条路径**逐字吐出来的区域原文**，
  *                   因此受寻址区间与历史逐字相同，失败能原样复现；
@@ -1018,7 +1028,7 @@ export function probeEngineOldContract(engine = LOCAL_ENGINE) {
   }
 }
 
-/** 壳层侧探针：`aura_edit` 的 hunk schema 里有没有 `old` / `context`。 */
+/** 壳层侧探针：`aura_basetools_edit` 的 hunk schema 里有没有 `old` / `context`。 */
 async function probeShellOldContract() {
   try {
     const plugin = await import('../aura-edit/index.js')
@@ -1039,7 +1049,7 @@ async function probeShellOldContract() {
       ready: keys.includes('old'),
       keys,
       flatKeys,
-      how: `aura_edit hunk 键 = [${keys.join(', ')}]`,
+      how: `aura_basetools_edit hunk 键 = [${keys.join(', ')}]`,
     }
   } catch (error) {
     return { ready: false, keys: [], how: `壳层 schema 读不到：${String(error?.message ?? error).slice(0, 140)}` }
@@ -1085,7 +1095,7 @@ function stageToolCopy(entry, tmpDir, label) {
  */
 function replayOldWith(engine, entry, content, copyPath) {
   try {
-    if (entry.tool === 'aura_edit') {
+    if (isEditToolName(entry.tool)) {
       const hunks = (entry.hunks ?? []).filter((h) => h && typeof h === 'object')
       if (hunks.length === 0) return { outcome: OUTCOME.unrepresentable, detail: '没有可搬运的 hunk 参数' }
       engine.planHunks(content, hunks, copyPath)
@@ -1743,7 +1753,7 @@ async function replayCorpus(corpus, options) {
       const idle = { attempts: [], writes: 0, diskChanged: false }
       let neuRes
       if (!engine.ready) neuRes = { outcome: OUTCOME.notReady, detail: engine.how, code: 'NOT_READY', ...idle }
-      else if (entry.tool === 'aura_read') {
+      else if (isReadToolName(entry.tool)) {
         neuRes = { outcome: OUTCOME.na, detail: '读路径没有 old/context 入口', code: 'READ_PATH', ...idle }
       } else {
         // 新契约列只踩这一份**可写**副本（编排层会真落盘）；旧入参列与冻结基准列踩上面那份只读的。
@@ -1758,7 +1768,7 @@ async function replayCorpus(corpus, options) {
 
       let evRes = { outcome: OUTCOME.na, detail: '', code: 'NA', ...idle }
       if (!engine.ready) evRes = { outcome: OUTCOME.notReady, detail: engine.how, code: 'NOT_READY', ...idle }
-      else if (entry.tool === 'aura_edit') {
+      else if (isEditToolName(entry.tool)) {
         // 附表这一列也是**真入口**，所以它也占一个自己的可写副本：挤在主列那份上，
         // 第二次尝试就会打在第一次写过的内容上（主列成功时那份已经变了）。
         evRes = evidenceText
@@ -1770,7 +1780,7 @@ async function replayCorpus(corpus, options) {
       pairs.push({
         id: entry.id,
         klass: entry.klass,
-        scope: !engine.ready ? 'not_ready' : entry.tool === 'aura_read' ? 'read' : 'edit',
+        scope: !engine.ready ? 'not_ready' : isReadToolName(entry.tool) ? 'read' : 'edit',
         old: oldRes.outcome,
         neu: neuRes.outcome,
         // 新列这一条 ok 是哪条地址挣来的：`old+context` / `old` / null（不是 ok）。
@@ -1976,7 +1986,7 @@ function printTable(corpus, result) {
   console.log('')
   console.log('=== 接口就绪探针 ===')
   console.log(`  引擎  planHunks 认 {old}?  ${result.engine.ready ? '就绪' : '未就绪'} —— ${result.engine.how}`)
-  console.log(`  壳层  aura_edit schema 认 old/context?  ${result.shell.ready ? '就绪' : '未就绪'} —— ${result.shell.how}`)
+  console.log(`  壳层  aura_basetools_edit schema 认 old/context?  ${result.shell.ready ? '就绪' : '未就绪'} —— ${result.shell.how}`)
   // 同一个探针再问一遍**冻结夹具**：两边答案不同，就是「基准列确实用的是另一份代码」的行为凭据。
   console.log(
     `  基准  冻结夹具认 {old}?  ${result.frozen?.status === 'ok' ? (result.frozen.oldProbe?.ready ? '就绪' : '未就绪') : '（基准列没跑成）'}` +
@@ -2129,7 +2139,7 @@ guardUnknown(process.argv.slice(2))
     diffPairs.length > 0 && okFlip.length > 0,
     '新列 ok 与旧列 ok 不同源（编辑路径逐条结果不同，不是同一份结果的两次打印）',
     editPairs.length === 0
-      ? '编辑路径一条都没跑（引擎未就绪或语料里没有 aura_edit 条目）—— 无从判断两列是否同源'
+      ? '编辑路径一条都没跑（引擎未就绪或语料里没有 aura_basetools_edit 条目）—— 无从判断两列是否同源'
       : diffPairs.length === 0
         ? `编辑路径 ${editPairs.length} 条逐条结果与旧列完全一致（旧列 ${JSON.stringify(totals.old)}）—— 新列疑似旧列副本`
         : `编辑路径 ${editPairs.length} 条里 ${diffPairs.length} 条结果不同，其中 ok 归属翻转 ${okFlip.length} 条，点名：${nameIds(okFlip.map((p) => `${p.id}:旧=${p.old}→新=${p.neu}`))}`,

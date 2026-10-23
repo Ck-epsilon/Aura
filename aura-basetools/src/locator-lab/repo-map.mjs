@@ -1,5 +1,5 @@
 /**
- * repo-map.mjs —— **仓库级粗粒度地图**（T26）：`aura_read <目录>` 该回什么。
+ * repo-map.mjs —— **仓库级粗粒度地图**（T26）：`aura_basetools_read <目录>` 该回什么。
  *
  * ## 为什么不是“文件的 map 的 map”
  *

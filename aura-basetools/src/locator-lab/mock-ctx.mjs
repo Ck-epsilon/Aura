@@ -6,7 +6,7 @@
  * 原来的测试 mock 只有 `tools` / `systemPrompt` / `emit` / `waterfall`，而真实的
  * Cordis 上下文**还有 `inject` 与 `get`**。mock 比框架宽松，就等于没测那一部分：
  *
- *   `aura_edit` 曾用 `ctx.get('sandboxPolicy')` 取沙箱策略，而全部测试 mock 都没有
+ *   `aura_basetools_edit` 曾用 `ctx.get('sandboxPolicy')` 取沙箱策略，而全部测试 mock 都没有
  *   `get`，于是"取不到就降级"这条路径在测试里永远走通，生产里却抛
  *   `TypeError: ctx.get is not a function`。更早一次同性质的漏测更贵：mock 的
  *   `editText` 只声明两个参数，而真实签名是五个（`target, edit, expected, signal,

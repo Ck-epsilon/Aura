@@ -63,23 +63,86 @@ export function flatHunk(source) {
   const ADDRESS_KEYS = FLAT_ADDRESS_KEYS
   if (!ADDRESS_KEYS.some((k) => source[k] !== undefined)) return null
   const hunk = {}
-  for (const key of [...ADDRESS_KEYS, ...HANDLE_SHAPE_KEYS, 'replace', 'expect', 'near']) {
+  for (const key of [...ADDRESS_KEYS, ...HANDLE_SHAPE_KEYS, 'context', 'replace', 'expect', 'near', 'eol', 'replace_all']) {
 
     const value = source[key]
     if (value === undefined || value === null) continue
-    if (typeof value === 'string' && value.length === 0) continue
+    // `replace: ''` 是**删除**，是合法动作；其余空串仍然不是地址/断言。
+    if (typeof value === 'string' && value.length === 0 && key !== 'replace') continue
     hunk[key] = value
   }
   return typeof hunk.replace === 'string' ? hunk : null
 }
 
 /**
+ * 单次读请求的**统一收敛**（单目标与 `targets` 元素共用）。
+ *
+ * 旧版 `readManyTarget` 手写字段转发，`offset` / `limit` / `context` / `kind` / `budget`
+ * 在多目标里被静默丢掉——同一个元素单独读与放进 `targets` 读会得到两种结果。
+ * 这里把“行区间 / 分页 / 模式推断 / 非法组合”收成一份，两个入口都调它。
+ *
+ * `totalLines` 只有在内容已读到时才给得出；第一遍（读文件前）传 undefined，用来尽早拒绝
+ * 形状错误；第二遍传真实行数，用来做 offset 越界与尾行截断。
+ *
+ * @returns `{ok:true, mode, lines, paginate, offset, limit}` 或
+ *   `{ok:false, code:'READ_BAD_ARGS', error}`。
+ */
+export function normalizeReadRequest(args, totalLines = undefined) {
+  const lines = lineRangeOf(args)
+  if (lines === undefined && gaveLineAddress(args)) {
+    return { ok: false, code: 'READ_BAD_ARGS', error: LINE_ADDRESS_HINT }
+  }
+  const paginate = args.offset !== undefined || args.limit !== undefined
+  if (paginate && lines !== undefined) {
+    return { ok: false, code: 'READ_BAD_ARGS', error: 'use either lines/start_line+end_line or offset/limit, not both' }
+  }
+  if (paginate && args.mode !== undefined && args.mode !== null && args.mode !== 'auto') {
+    return { ok: false, code: 'READ_BAD_ARGS', error: `mode=${JSON.stringify(args.mode)} cannot be combined with offset/limit; drop the mode or use lines/start_line+end_line` }
+  }
+  const offset = paginate ? Number(args.offset ?? 0) : null
+  const limit = paginate ? Number(args.limit ?? 2000) : null
+  if (paginate && (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit <= 0)) {
+    return { ok: false, code: 'READ_BAD_ARGS', error: 'offset must be an integer >= 0 and limit an integer > 0' }
+  }
+  let resolvedLines = lines
+  if (paginate && totalLines !== undefined) {
+    if (!Number.isInteger(totalLines) || totalLines < 1 || offset >= totalLines) {
+      return { ok: false, code: 'READ_BAD_ARGS', error: `offset ${offset} is outside 0..${Math.max(0, totalLines - 1)}` }
+    }
+    resolvedLines = { start: offset + 1, end: Math.min(offset + limit, totalLines) }
+  }
+  return {
+    ok: true,
+    mode: paginate ? 'lines' : inferReadMode(args, lines),
+    lines: resolvedLines,
+    paginate,
+    offset,
+    limit,
+  }
+}
+/**
  * 平铺形状的**地址键**（{@link flatHunk} 与未知参数守卫共用同一份名单）。
  *
  * 导出它是为了不再出现第二份：守卫要拿它算“合法键集合”，而如果有两份名单，
  * 新增一种地址写法时必有一处漏改——那正是本项目反复出现的形状。
  */
-export const FLAT_ADDRESS_KEYS = ['target', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle']
+export const FLAT_ADDRESS_KEYS = ['target', 'intent', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle', 'old']
+
+/**
+ * `targets` 元素（单目标参数）的合法键。
+ *
+ * 与顶层工具键**分开**：`targets` 本身、批量级的 `include_transaction` 都不是元素参数；
+ * 放进元素里只会被静默丢掉。三面（CLI / MCP / DSH）共用这一份，未知键一律
+ * `ARGS_UNKNOWN_KEY`，不再只校验顶层。
+ */
+export const MT_READ_ELEMENT_KEYS = [
+  'file_path', 'mode', 'around', 'lines', 'start_line', 'end_line', 'search', 'context', 'since', 'kind', 'budget', 'max_chars', 'offset', 'limit',
+]
+export const MT_EDIT_ELEMENT_KEYS = [
+  'file_path', 'hunks', 'create', 'dry_run', 'require_observation',
+  'target', 'intent', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'old', 'context',
+  'replace', 'replace_all', 'eol', 'expect', 'near', 'handle', 'line', 'position',
+]
 
 /**
  * 句柄形状的**从属键**（fs-contract-v2 / HD2）：它们只在 `handle` 在场时有意义，
@@ -121,7 +184,7 @@ export function handleShapeVerdict(value) {
  *
  * ## 为什么必须有这道守卫（实测出来的）
  *
- * 真框架**不会**剥掉未声明的参数：实测 `aura_read` 收到 `{file_path, mod: 'map'}` 时
+ * 真框架**不会**剥掉未声明的参数：实测 `aura_basetools_read` 收到 `{file_path, mod: 'map'}` 时
  * `args.mod` 原样到达 `execute`，而工具只读 `args.mode` ⇒ 回一个**默认模式的成功回执**，零反馈。
  * 模型把 `mode` 写成 `mod`、`lines` 写成 `line`、`maxChars` 写成 `max_chars` 时，
  * 它看到的是成功——比报错坏得多（本项目原则：宁可大声失败，不可静默换语义）。
@@ -134,7 +197,7 @@ export function handleShapeVerdict(value) {
  * ## 实测代价（16757 次真实调用）
  *
  * 会被这道守卫拒的：`limit×13`、`offset×10`、`line_cue×2`、`start_mode×1`、`sandbox_permissions×1`
- * （全在 `aura_read` 侧；`aura_edit` 侧**一条都没有**）。
+ * （全在 `aura_basetools_read` 侧；`aura_basetools_edit` 侧**一条都没有**）。
  * 其中 `limit`与`offset` 本意是分页——而本工具的分页参数叫 `start_line`/`end_line`，
  * 静默忽略的结果是“模型以为自己翻页了、实际拿到的是同一段”。报错是**修好**，不是收紧。
  *
@@ -394,6 +457,23 @@ export function assertEditTargets(source, options = {}) {
         { code: 'ARGS_TARGETS_SHAPE', index, got: 'an object without a path' },
       )
     }
+    /**
+     * 元素级布尔参数在**参数面**就判类型：否则 `require_observation:"yes"` 会在
+     * `editTargetRequests` 里抛到编排层之外（dry-run 分支没有 try/catch，CLI 直接吐 Node 栈；
+     * 非 dry-run 还会先建一个事务再回滚）。参数没成形属于 `ARGS_*` 面，与 `USAGE/1` 同档。
+     */
+    for (const key of ['require_observation', 'requireObservation']) {
+      if (element[key] !== undefined && typeof element[key] !== 'boolean') {
+        throw Object.assign(
+          new Error(`${toolName}: \`${targetKey}[${index}].${key}\` must be a boolean — got ${typeWordOf(element[key])}`),
+          { code: 'ARGS_BAD_REQUIRE_OBSERVATION', index, key, got: typeWordOf(element[key]) },
+        )
+      }
+    }
+    // 元素级的未知键：与顶层同一个守卫、同一套报错（合法键由调用方按读/写给）。
+    if (Array.isArray(options.elementKeys)) {
+      assertKnownArgs(element, options.elementKeys, `${toolName} ${targetKey}[${index}]`)
+    }
   })
   return raw
 }
@@ -413,7 +493,7 @@ export function assertEditTargets(source, options = {}) {
  *
  * 为什么不是另一份实现：`assertEditTargets` 里那条互斥判据（`targets` 与单目标形状同时给 ⇒
  * 参数面拒绝）是本仓的**唯一一份**。读侧再写一遍就会漂开 —— 而漂开之后，同一个载荷
- * 在 `aura_read` 被放行、在 `aura_edit` 被拒（或反过来），且两边都不会报错。
+ * 在 `aura_basetools_read` 被放行、在 `aura_basetools_edit` 被拒（或反过来），且两边都不会报错。
  *
  * 读侧元素内部（mode / lines / search / since / kind）本函数**一个字都不解读**：
  * 它们由引擎 `readManyWith` 逐项走今天那套单目标判定器（契约 §2.1「同一个校验器」）。
@@ -485,6 +565,23 @@ export function editTargetRequests(targets) {
     const request = { index, displayPath: targetPathOf(element), hunks: element.hunks }
     for (const key of ['create', 'identityKey', 'dryRun']) {
       if (element[key] !== undefined) request[key] = element[key]
+    }
+    /**
+     * 单目标参数里的 `require_observation` 在这里翻成引擎的驼峰键。
+     *
+     * 旧版只转发 `create/identityKey/dryRun`，于是元素上写 `require_observation: true`
+     * 在参数面被收下、到引擎前被静默丢掉——与“顶层默认值”相反的行为，而且回执照样成功。
+     * 元素显式给了就压过顶层默认（与 `dryRun` 同一口径）。
+     */
+    const requireObservation =
+      element.require_observation !== undefined ? element.require_observation : element.requireObservation
+    if (requireObservation !== undefined) {
+      if (typeof requireObservation !== 'boolean') {
+        throw Object.assign(new Error(`targets[${index}].require_observation must be a boolean`), {
+          code: 'ARGS_BAD_REQUIRE_OBSERVATION',
+        })
+      }
+      request.requireObservation = requireObservation
     }
     return request
   })

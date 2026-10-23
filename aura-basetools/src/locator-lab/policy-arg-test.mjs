@@ -1,5 +1,5 @@
 /**
- * policy-arg-test.mjs —— 验证 aura_edit 确实把**会话的沙箱策略**传给了 mutation。
+ * policy-arg-test.mjs —— 验证 aura_basetools_edit 确实把**会话的沙箱策略**传给了 mutation。
  *
  * 为什么必须专门测这个：原来的 41/41 全绿，但 mock 里的 editText 是
  * `async (t, req) => …`（两个参数），而真实后端是

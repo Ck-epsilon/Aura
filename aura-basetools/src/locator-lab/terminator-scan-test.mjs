@@ -249,8 +249,8 @@ for (const [ext, src] of CORPUS) {
 }
 const digest = crypto.createHash('sha256').update(canonical.join('\n'), 'utf8').digest('hex')
 /** 黄金摘要（`sha256(canonical.join('\n'))`）与同批三个计数。改口径就要连它们一起改，这是有意的。 */
-const GOLDEN_DIGEST = 'd671ee6ce362ad7e364b13daaa0418ccf6b220fb1d6b15365599795afc75ca6d'
-const GOLDEN_SYMBOLS = 1378
+const GOLDEN_DIGEST = '2529b62ebf122702f7b920864224a51424607165c09082d0a474f6bb0ee58d27'
+const GOLDEN_SYMBOLS = 1410
 const GOLDEN_CASES = 443
 
 say('')
@@ -258,11 +258,8 @@ say('[段② 黄金摘要] 终结符型夹具 × 7 种变异 + 退化形状 + �
 for (const [ext, n] of [...perExt.entries()].sort()) say(`  ${ext.padEnd(6)} ${String(n).padStart(5)} 个符号`)
 say(`  用例 ${CORPUS.length} 件 / 符号 ${symbolTotal} 个 / 索引抛错 ${errorTotal} 件`)
 say(`  sha256 ${digest}`)
-say(
-  `  ⚠ 已知缺口（**既有**，与 w28 的线性化无关）：Erlang 的**函数子句**一个都提不出来（本批 ${erlFunctions} 个 function 符号）。` +
-    '成因在 `matchRule` 的 `attributeClause` 闸门：它用 `pairs.get(end - 1)` 找参数表之后的 `->`，而 `$param` 跳过整组后 `end - 1` 落在 `)` 上 ⇒ `pairs.get` 为 undefined。' +
-    '本套件只把它印出来、不判红（红线不挂在别人身上）；谁把它修好，下面的黄金摘要会变红并指向这一行。',
-)
+say(`  Erlang function 符号：${erlFunctions} 个（T2：函数子句提取已修复，黄金摘要钉住）`)
+check(erlFunctions >= 1, '② Erlang 函数子句真的被提取（T2 回归钉）', `function 符号 ${erlFunctions} 个`)
 check(
   GOLDEN_DIGEST !== 'UNPINNED' && digest === GOLDEN_DIGEST && symbolTotal === GOLDEN_SYMBOLS && CORPUS.length === GOLDEN_CASES,
   '② 整表摘要 + 符号数 + 用例数与黄金值逐位相同（漂移报警器）',

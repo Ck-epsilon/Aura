@@ -6,7 +6,7 @@
  *     而 `ignoreBOM` 默认 false ⇒ **BOM 不进解码后的字符串**；
  *   · 写回用 `TextEncoder`，它**从不**产出 BOM。
  * 于是任何一次编辑都会永久丢掉 BOM，而没有任何信号。第二个后果更隐蔽：
- * `aura_read` 的版本令牌算在解码后的字符串上，只差 BOM 的两个文件因此拿到**同一个令牌**——
+ * `aura_basetools_read` 的版本令牌算在解码后的字符串上，只差 BOM 的两个文件因此拿到**同一个令牌**——
  * `changed` 会说"没变"。
  *
  * 判据只能来自**字节**：提供方的 `readByteRange`（接口声明见
@@ -78,7 +78,7 @@ const readPlugin = await import('../aura-read/index.js')
 const editPlugin = await import('../aura-edit/index.js')
 let readTool = null
 let editTool = null
-const sharedTools = { register: (t) => (t.name === 'aura_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
+const sharedTools = { register: (t) => (t.name === 'aura_basetools_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
 const mkCtx = () => ({
   fs: fsService,
   ...contextServices(),
@@ -92,7 +92,7 @@ const mkCtx = () => ({
 readPlugin.apply(mkCtx())
 editPlugin.apply(mkCtx())
 const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
-check(readTool !== null && editTool !== null, 'aura_read 与 aura_edit 都注册成功', `${readTool?.name} / ${editTool?.name}`)
+check(readTool !== null && editTool !== null, 'aura_basetools_read 与 aura_basetools_edit 都注册成功', `${readTool?.name} / ${editTool?.name}`)
 
 const read = (file, args = {}) => readTool.execute({ file_path: file, ...args }, exec)
 const edit = (file, hunks, extra = {}) => editTool.execute({ file_path: file, hunks, ...extra }, exec)
@@ -118,7 +118,7 @@ say('=== 0. mock 与真提供方同形（mock 自检）===')
 
 // ── A 段：BOM 经编辑仍在 ────────────────────────────────────────────────────
 say('')
-say('=== A. BOM 文件经 aura_edit 编辑后首三字节仍是 EF BB BF ===')
+say('=== A. BOM 文件经 aura_basetools_edit 编辑后首三字节仍是 EF BB BF ===')
 const BOM_SRC = 'export function alpha(a) {\n  return a;\n}\n'
 const bomFile = path.join(tmp, 'bom.js')
 writeBytes(bomFile, withBom(BOM_SRC))

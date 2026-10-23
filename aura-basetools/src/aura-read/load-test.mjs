@@ -1,9 +1,9 @@
 /**
- * load-test —— 用最小 mock 上下文把 aura_read 当作加载器会做的那样跑一遍。
+ * load-test —— 用最小 mock 上下文把 aura_basetools_read 当作加载器会做的那样跑一遍。
  *
- * 验三件事（与 aura_edit 的加载测试同一套口径）：
+ * 验三件事（与 aura_basetools_edit 的加载测试同一套口径）：
  *   1. 模块形状：name / inject / apply 齐全，依赖能解析
- *   2. 注册：apply 真的注册了 aura_read，schema 正确
+ *   2. 注册：apply 真的注册了 aura_basetools_read，schema 正确
  *   3. 行为：七个模式都能通过工具层跑通，且输出信封里的字段真的到得了模型
  */
 import fs from 'node:fs'
@@ -52,11 +52,11 @@ const mockCtx = {
 }
 plugin.apply(mockCtx)
 check(registered !== null, 'apply 调用了 ctx.tools.register')
-check(registered?.name === 'aura_read', `注册的工具名 = ${JSON.stringify(registered?.name)}`)
+check(registered?.name === 'aura_basetools_read', `注册的工具名 = ${JSON.stringify(registered?.name)}`)
 const params = Object.keys(registered?.parameters?.properties ?? {})
 check(
   // start_line/end_line 是后加的：行区间不用写数组语法，模型少一类写错的机会（2026-09-22）。
-  params.join(',') === 'file_path,targets,mode,around,lines,start_line,end_line,search,context,since,kind',
+  params.join(',') === 'file_path,targets,mode,around,lines,start_line,end_line,search,max_chars,budget,offset,limit,context,since,kind',
   `参数 = ${params.join(',')}`,
 )
 check(registered?.description?.includes('map'), '描述里点明了 map 模式')
@@ -75,7 +75,7 @@ const guideText = typeof sec?.text === 'function' ? sec.text({ scope: undefined 
 // 措辞必须是**命令式**，与内置的 "Use the read tool — not shell commands like cat — …" 同形。
 // 这已不是风格偏好：实测建议式措辞（"prefer X over Y"）在部分会话里压不过先验，
 // 同一份指导会出现"有时选 Aura、有时选内置"的分裂结果。
-check(typeof guideText === 'string' && guideText.includes('Use the aura_read tool'), '指导用与内置同形的命令式措辞')
+check(typeof guideText === 'string' && guideText.includes('Use the aura_basetools_read tool'), '指导用与内置同形的命令式措辞')
 // 这里原本断言指导里含 "Keep the built-in read"，即"未知扩展名请用内置 read"。
 // 那句话是**错的**，已删：实测未知扩展名上 `auto` 会降级到 `full` 并给出完整内容
 // （见 locator-lab/unknown-ext-output.mjs）。错的指导比没有指导更坏——它恰好在
@@ -146,7 +146,7 @@ const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
 /**
  * 校验一个返回值是否**合工具自己声明的 output.schema**。
  *
- * 这道校验是本文件最重要的一课。第一版 load-test 29/29 全绿，而 aura_read 在真机上
+ * 这道校验是本文件最重要的一课。第一版 load-test 29/29 全绿，而 aura_basetools_read 在真机上
  * **每一条成功路径都失败**——因为渲染器返回 `text`，而 output.schema 里没声明它，
  * 框架按 `additionalProperties: false` 直接拒绝。mock 从不校验输出形状，于是那个 bug
  * 一路穿过所有测试，直到真实模型调用才暴露。

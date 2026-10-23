@@ -462,14 +462,14 @@ try {
   }
   applyRead(ctx)
   editPlugin.apply(ctx)
-  const read = byName.get('aura_read')
-  const edit = byName.get('aura_edit')
+  const read = byName.get('aura_basetools_read')
+  const edit = byName.get('aura_basetools_edit')
   const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
   // 宿主要校验的参数里一定带 file_path（它是必填），所以校验形状时要把它补上——
   // 少了它就是"必填缺失"，13 种形状会一起红，而那不是形状的问题。
   const asHostArgs = (extra) => ({ file_path: mdPath, ...extra })
 
-  check('apply 注册出 aura_read 与 aura_edit', read !== undefined && edit !== undefined, [...byName.keys()].join(','))
+  check('apply 注册出 aura_basetools_read 与 aura_basetools_edit', read !== undefined && edit !== undefined, [...byName.keys()].join(','))
 
   // ── 声明层：宿主会在注册期与 execute 之前拿这份 schema 把关 ─────────────────────
   {
@@ -769,8 +769,8 @@ try {
       envOf: (id) => JSON.parse(byId.get(id)?.result?.content?.[0]?.text ?? '{}'),
     }
   }
-  const readCall = (id, args) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_read', arguments: args } })
-  const editCall = (id, args) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_edit', arguments: args } })
+  const readCall = (id, args) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: args } })
+  const editCall = (id, args) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_basetools_edit', arguments: args } })
 
   check('dist 产物存在（CLI + MCP）', fs.existsSync(bin) && fs.existsSync(mcpBin), `${bin} / ${mcpBin}`)
   {
@@ -860,7 +860,7 @@ try {
     } else {
       gap(
         `dist 产物（0.4.1）未包含 args.mjs 的"半坏末端必须拒绝"修复：${collapsed.length}/${HALF_BAD.length} 种被静默缩成单行`,
-        `复现：node dist/aura-basetools/bin/aura-mcp.mjs ← tools/call aura_read {file_path, lines:[2,"abc"]}；期望 code=READ_BAD_ARGS 的拒绝，实际 ${collapsed[0]}`,
+        `复现：node dist/aura-basetools/bin/aura-mcp.mjs ← tools/call aura_basetools_read {file_path, lines:[2,"abc"]}；期望 code=READ_BAD_ARGS 的拒绝，实际 ${collapsed[0]}`,
       )
     }
   }
@@ -930,7 +930,7 @@ try {
     } else {
       gap(
         'dist 产物（0.4.1）的 hunk 半坏区间被静默缩成"只改第 2 行"（源码面已修）',
-        `复现：aura_edit {file_path, hunks:[{start_line:2, end_line:"x", replace:"BAD"}]}；期望 ok=false，实际 ok=true 且盘面=${JSON.stringify(fs.readFileSync(ePath, 'utf8'))}`,
+        `复现：aura_basetools_edit {file_path, hunks:[{start_line:2, end_line:"x", replace:"BAD"}]}；期望 ok=false，实际 ok=true 且盘面=${JSON.stringify(fs.readFileSync(ePath, 'utf8'))}`,
       )
     }
   }
@@ -938,10 +938,10 @@ try {
   {
     // arguments 容错：JSON 字符串能用、解不开的字符串/数组回 BAD_ARGS、服务仍在
     const calls = [
-      { jsonrpc: '2.0', id: 90, method: 'tools/call', params: { name: 'aura_read', arguments: JSON.stringify({ file_path: mcpPath, start_line: 2, end_line: 4 }) } },
-      { jsonrpc: '2.0', id: 91, method: 'tools/call', params: { name: 'aura_read', arguments: '不是 JSON' } },
-      { jsonrpc: '2.0', id: 92, method: 'tools/call', params: { name: 'aura_read', arguments: [1, 2, 3] } },
-      { jsonrpc: '2.0', id: 93, method: 'tools/call', params: { name: 'aura_read', arguments: JSON.stringify({ file_path: mcpPath, lines: [3, 3] }) } },
+      { jsonrpc: '2.0', id: 90, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: JSON.stringify({ file_path: mcpPath, start_line: 2, end_line: 4 }) } },
+      { jsonrpc: '2.0', id: 91, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: '不是 JSON' } },
+      { jsonrpc: '2.0', id: 92, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: [1, 2, 3] } },
+      { jsonrpc: '2.0', id: 93, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: JSON.stringify({ file_path: mcpPath, lines: [3, 3] }) } },
     ]
     const { replies, envOf, res, expected } = mcpRun(calls)
     check('C 面 MCP：4 条请求全部有回包', replies.length === expected, `收到 ${replies.length}，期望 ${expected}`)
@@ -974,7 +974,7 @@ try {
     const { replies, envOf, expected } = mcpRun(calls)
     check('C 面 MCP：6 条坏输入全部有回包', replies.length === expected, `收到 ${replies.length}，期望 ${expected}`)
     const want = [
-      [100, 'BAD_ARGS', '参数名写成 file'],
+      [100, 'ARGS_UNKNOWN_KEY', '参数名写成 file'],
       [101, 'READ_BAD_MODE', 'mode 写错'],
       [102, 'FS_NOT_FOUND', '文件不存在'],
       [103, 'BAD_ARGS', 'hunks 不是数组'],
@@ -1005,14 +1005,14 @@ try {
     const versionRun = run(['--version'])
     check(`dist 产物版本可读（${versionRun.json.version}）`, versionRun.json.ok === true && typeof versionRun.json.version === 'string')
 
-    const comma = run(['read', '--file', cliPath, '--lines', '2,4'])
+    const comma = run(['basetools', 'read', '--file', cliPath, '--lines', '2,4'])
     check(
       'C 面 CLI：--lines "2,4" 读到正确区间且 mode=lines',
       comma.json.ok === true && comma.json.mode === 'lines' && JSON.stringify(rowsOf(comma.json.text)) === JSON.stringify(rowsFor([2, 4])),
       JSON.stringify(comma.json).slice(0, 110),
     )
 
-    const editCli = run(['edit', '--file', cliPath, '--hunks', JSON.stringify([{ start_line: 6, end_line: 6, replace: 'CLI-EDIT' }])])
+    const editCli = run(['basetools', 'edit', '--file', cliPath, '--hunks', JSON.stringify([{ start_line: 6, end_line: 6, replace: 'CLI-EDIT' }])])
     check(
       'C 面 CLI：hunk 用 start_line/end_line 能定位并落盘',
       editCli.json.ok === true && fs.readFileSync(cliPath, 'utf8').split('\n')[5] === 'CLI-EDIT',
@@ -1022,9 +1022,9 @@ try {
     // CLI 是旗标面：行区间只有 `--lines a,b` 一种写法，而**写坏时它不拒绝、只是静默丢掉**。
     // 这与"明确拒绝而不是静默"是同一个判据，所以按缺口记账而不是放它过去。
     const silent = [
-      ['--lines "2-4"', ['read', '--file', cliPath, '--lines', '2-4']],
-      ['--lines "从第2行到第3行"', ['read', '--file', cliPath, '--lines', '从第2行到第3行']],
-      ['--start-line 2 --end-line 4', ['read', '--file', cliPath, '--start-line', '2', '--end-line', '4']],
+      ['--lines "2-4"', ['basetools', 'read', '--file', cliPath, '--lines', '2-4']],
+      ['--lines "从第2行到第3行"', ['basetools', 'read', '--file', cliPath, '--lines', '从第2行到第3行']],
+      ['--start-line 2 --end-line 4', ['basetools', 'read', '--file', cliPath, '--start-line', '2', '--end-line', '4']],
     ].map(([label, args]) => {
       const r = run(args)
       return { label, mode: r.json.mode, ok: r.json.ok, code: r.json.code }

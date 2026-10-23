@@ -28,6 +28,13 @@ import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const { applyEditToProvider, applyEditsToProvider, MT_POOL, MT_MAX_TARGETS, planHunks } = await import('./write-path.mjs')
+
+/**
+ * 0.8.1：回执里的新句柄带**文件身份标签**（`h<id><fingerprint>:a-b`）。多目标与单目标用例
+ * 各自用不同的 `identityKey` 隔离账本，于是身份标签不同——这不是渲染分叉。
+ * 比对逐字节回执时只归一这 4 位身份标签，指纹与行号仍逐字比。
+ */
+const normalizeHandleIdentity = (text) => text.replace(/h[0-9a-f]{4}[0-9a-f]{8}:/g, 'h<id>:')
 const { createNodeFsProvider } = await import('../aura-standalone/lib/fs-provider.mjs')
 
 const say = (m) => fs.writeSync(1, `${m}\n`)
@@ -165,7 +172,7 @@ async function caseThreeFiles() {
       }),
     )
   }
-  const same = multi.edits.every((edit, index) => JSON.stringify(edit.receipt) === JSON.stringify(singles[index]))
+  const same = multi.edits.every((edit, index) => normalizeHandleIdentity(JSON.stringify(edit.receipt)) === normalizeHandleIdentity(JSON.stringify(singles[index])))
   check(same, 'A6 逐项回执与"单独调一次单目标"逐字节相同', same ? '3/3 相同' : '有分叉')
   check(
     multi.edits.every((edit, index) => edit.receipt?.write_verify?.level === 'bytes' && edit.index === index),
@@ -351,8 +358,8 @@ async function caseSingleTargetIsDirect() {
     `${multiProvider.calls.length} 次：${multiProvider.calls.join(' → ')}`,
   )
   check(
-    JSON.stringify(multi.edits[0].receipt) === JSON.stringify(direct),
-    'E3 N=1 的逐项回执与直调回执逐字节相同（零包装）',
+    normalizeHandleIdentity(JSON.stringify(multi.edits[0].receipt)) === normalizeHandleIdentity(JSON.stringify(direct)),
+    'E3 N=1 的逐项回执与直调回执逐字节相同（零包装；句柄身份标签归一）',
     multi.summary,
   )
 }

@@ -170,7 +170,7 @@ const mkCtx = () => ({
   fs: fsService,
   ...contextServices(),
   tools: {
-    register: (t) => (t.name === 'aura_read' ? (readTool = t) : (editTool = t)),
+    register: (t) => (t.name === 'aura_basetools_read' ? (readTool = t) : (editTool = t)),
     get: () => readTool,
   },
   systemPrompt: { section: () => () => {} },

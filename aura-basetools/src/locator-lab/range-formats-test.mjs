@@ -239,7 +239,8 @@ const FIXTURES = [
     lines: ['defmodule Alpha do', '  def beta(a), do: a + 1', 'end'] },
   { file: 'a.exs', indexed: true, gap: false, sym: null, cue: 'beta', // 同上
     lines: ['defmodule Alpha do', '  def beta(a), do: a + 1', 'end'] },
-  { file: 'a.erl', indexed: true, gap: false, sym: 'alpha', span: [1, 1], cue: 'module',
+  // T2：函数子句已能提取；这里改断函数（模块断言仍在 lang-coverage 的 erl 夹具里）。
+  { file: 'a.erl', indexed: true, gap: false, sym: 'beta', span: [4, 5], cue: 'beta',
     lines: ['-module(alpha).', '-export([beta/1]).', '', 'beta(A) ->', '    A + 1.'] },
   // 裁决（主代理）：hrl/nim/zig 三种**已从语言表里移除**（作者单步实测后熔断停手：
   // `$param*`/`$ident*` 吃不下 "逗号+字面量"、`$mods*` 与 `proc` 互抢 token、末尾 `$ident*` 退化）。

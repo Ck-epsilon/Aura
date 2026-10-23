@@ -14,7 +14,7 @@
  * `locator-api.mjs` 每次 `locate()` 都现算 `indexStructure`，`locateAnchor()` 每次都现建 `indexFile`，
  * 而同一份内容在一轮里会被问好几次（read 的 map→digest→target、edit 的 plan→verify）。
  * 本仓最大的引擎文件（本目录的 `struct-core.mjs`）实测：`indexStructure` **15.8 ms/次**，
- * `indexFile` **28.1 ms/次** —— 这就是 aura_read 端到端时延随文件体量上升的那部分。
+ * `indexFile` **28.1 ms/次** —— 这就是 aura_basetools_read 端到端时延随文件体量上升的那部分。
  *
  * ## C14：大文件档为什么曾经不命中，这一条怎么验
  *

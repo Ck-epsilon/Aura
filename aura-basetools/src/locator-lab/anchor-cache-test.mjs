@@ -1026,10 +1026,11 @@ say('=== 段E. 与 struct-core 额度策略的关系：只有一处额度计算�
   const a = { maxBytes: QUOTA.anchorCapBytes, maxEntries: QUOTA.anchorMaxEntries, availableBytes: QUOTA.availableBytes, budgetSource: QUOTA.anchorSource }
   const s = { maxBytes: QUOTA.structCapBytes, maxEntries: QUOTA.structMaxEntries, availableBytes: QUOTA.availableBytes, budgetSource: QUOTA.structSource }
 
-  // ① 源码扫描：引擎清单取自 build/make-bundle.mjs（**不是手写**：漏打包 = 判据自己失真）
-  const bundle = fs.readFileSync(path.join(pkgRoot, 'build', 'make-bundle.mjs'), 'utf8')
-  const engine = [...(/const ENGINE = \[([\s\S]*?)\]/.exec(bundle)?.[1] ?? '').matchAll(/'([^']+\.mjs)'/g)].map((m) => m[1])
-  check(engine.length >= 7, `从打包清单读出 ${engine.length} 个引擎文件（判据取自 make-bundle，不是手写）`, engine.join(','))
+  // ① 源码扫描：引擎清单取自 build/bundle-layout.mjs（**不是手写**：漏打包 = 判据自己失真）。
+  // 直接 import 清单，不再正则解析 make-bundle.mjs：清单搬家后正则读出 0 个文件，
+  // 下面的 `computes.length === 1` 只会报“一处都没找到”，看起来像实现没了。
+  const { ENGINE: engine } = await import(pathToFileURL(path.join(pkgRoot, 'build', 'bundle-layout.mjs')).href)
+  check(engine.length >= 7, `从打包清单读出 ${engine.length} 个引擎文件（判据取自 bundle-layout，不是手写）`, engine.join(','))
   /**
    * 判据是**代码**，不是散文：先把注释去掉再扫。
    *

@@ -494,16 +494,15 @@ say('=== 段E：负向不变量 —— 回执带原文不得让「找不到」�
    * MT6 给失败回执加"可修复地址"时，`oldNotFoundError` / `oldAmbiguityError` / `notFoundDetail`
    * / `locateByOld` 各多收一个 `ctx`（这一次编辑的账本键与 BOM——铸句柄要的正是这两个事实），
    * 于是调用点的字面从 `(label, lines, oldRows, hunk)` 变成 `(label, lines, oldRows, hunk, ctx)`。
-   * 这条判据要钉的是"**唯一**调用点 + 在 `throw` 位置、不在 `return` 位置"，与第几个实参无关，
-   * 所以正则只把实参表改成 `\([^)]*\)`；**同时新增**"恰好一处调用点"这个计数断言——
-   * 原先的写法连"出现了两次"都看不出来，现在它看得出来（这一处是收紧，不是放松）。
+   * 这条判据要钉的是"**调用点都在 `throw` 位置**、不在 `return` 位置"，与第几个实参无关；
+   * 0.10.2 起合法调用有两处（单处 `old` 与 `replace_all`），两处都必须是 throw。
    */
   check(
-    'E22 oldNotFoundError 的唯一调用点在 throw 位置（回执不可能变成一次成功）',
+    'E22 oldNotFoundError 的调用点都在 throw 位置（回执不可能变成一次成功）',
     /throw oldNotFoundError\([^)]*\)/.test(writePathSrc) &&
       !/return oldNotFoundError/.test(writePathSrc) &&
-      // 数的是**调用**（`throw …(`），不是那个函数定义行（定义行也含 `oldNotFoundError(`）
-      (writePathSrc.match(/throw oldNotFoundError\(/g) ?? []).length === 1,
+      // 数的是**调用**（`throw …(`），不是那个函数定义行（定义行也含 `oldNotFoundError(`）。
+      (writePathSrc.match(/throw oldNotFoundError\(/g) ?? []).length === 2,
     `throw 调用点 ${(writePathSrc.match(/throw oldNotFoundError\(/g) ?? []).length} 处`,
   )
 }
@@ -554,7 +553,7 @@ say('=== 段E：负向不变量 —— 回执带原文不得让「找不到」�
       JSON.stringify(mentioned) === JSON.stringify(shown),
     JSON.stringify(receipt.message),
   )
-  // 模型真正看得见的那一层：aura_edit 读的是 `error.message`（`intentVerdict`），不是候选字段。
+  // 模型真正看得见的那一层：aura_basetools_edit 读的是 `error.message`（`intentVerdict`），不是候选字段。
   let alignThrown = null
   try {
     planHunks(ALIGN_SRC, [{ anchor: AMB_ANCHOR, replace: 'X' }])

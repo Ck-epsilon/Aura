@@ -1,5 +1,5 @@
 /**
- * aura-read-schema-test.mjs —— 把 `aura_read` 的真实输出，逐一对照它**自己声明的 schema** 校验。
+ * aura-read-schema-test.mjs —— 把 `aura_basetools_read` 的真实输出，逐一对照它**自己声明的 schema** 校验。
  *
  * ## 为什么这个测试是必需的
  *
@@ -7,10 +7,10 @@
  *
  *   1. 输出 schema 漏声明 `text`，而渲染器返回的正是 `text` →
  *      每条成功路径都被框架以 additionalProperties:false 拒绝：
- *        tool "aura_read" returned invalid output: "value.text" is not a declared property
+ *        tool "aura_basetools_read" returned invalid output: "value.text" is not a declared property
  *   2. `version` 在 around／lines／search 三种模式以及**所有未索引扩展名**上是 undefined，
  *      而 schema 声明它必填 → 在真实会话里 .json／.yml／.md 一个都读不了：
- *        tool "aura_read" returned invalid output: missing required property "value.version"
+ *        tool "aura_basetools_read" returned invalid output: missing required property "value.version"
  *
  * 两次的根因相同，而且都不是"引擎算错了"，而是**引擎与工具壳的契约对不上**：
  * 引擎返回的信封，与工具声明给框架的 schema，是两份各自演化的东西。

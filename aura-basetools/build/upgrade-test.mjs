@@ -115,6 +115,10 @@ async function killWhen(home, args, extraEnv, predicate, timeoutMs = 30000) {
     env: { ...process.env, ...netEnv, AURA_CACHE_DIR: path.join(home, '.aura', 'cache'), ...extraEnv },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+  let out = ''
+  let err = ''
+  child.stdout?.on('data', (d) => { out += String(d) })
+  child.stderr?.on('data', (d) => { err += String(d) })
   const exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })))
   const deadline = Date.now() + timeoutMs
   let hit = false
@@ -128,7 +132,7 @@ async function killWhen(home, args, extraEnv, predicate, timeoutMs = 30000) {
   }
   if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
   const end = await exited
-  return { hit, ...end }
+  return { hit, ...end, out, err }
 }
 
 // ── 路径与判据 ───────────────────────────────────────────────────────────────
@@ -243,7 +247,7 @@ function health(dir) {
   const sample = path.join(scratch, 'sample.mjs')
   if (!fs.existsSync(sample)) fs.writeFileSync(sample, 'export function alpha() {\n  return 1;\n}\n\nexport function beta() {\n  return 2;\n}\n')
   const env = { ...process.env, ...netEnv, AURA_CACHE_DIR: path.join(scratch, 'cache') }
-  const cli = spawnSync(process.execPath, [path.join(dir, 'bin', 'aura.mjs'), 'read', '--file', sample, '--mode', 'map'], { encoding: 'utf8', timeout: 30000, env })
+  const cli = spawnSync(process.execPath, [path.join(dir, 'bin', 'aura.mjs'), 'basetools', 'read', '--file', sample, '--mode', 'map'], { encoding: 'utf8', timeout: 30000, env })
   const frames = [
     JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'upgrade-test', version: '1' } } }),
     JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
@@ -264,13 +268,18 @@ function health(dir) {
   const names = replies.filter((msg) => Array.isArray(msg.result?.tools)).flatMap((msg) => msg.result.tools.map((tool) => tool.name))
   return {
     cliOk: cli.status === 0 && (cli.stdout ?? '').includes('alpha'),
-    mcpOk: names.includes('aura_read') && names.includes('aura_edit'),
+    mcpOk: names.includes('aura_basetools_read') && names.includes('aura_basetools_edit'),
     serverInfo: replies.find((msg) => msg.result?.serverInfo !== undefined)?.result.serverInfo ?? null,
   }
 }
 
-const realAura = path.join(os.homedir(), '.aura')
-const realAuraBefore = listing(realAura)
+/**
+ * 边界判据只盯**安装器会写的那几处**：`~/.aura` 下的 pkg / install.json / manifest。
+ * 不比对整棵 ~/.aura：事务、锁、观测缓存是其它会话会正常写入的，整棵比对会把并行活动误判成套件越界。
+ */
+const realAuraTargets = ['pkg', 'install.json', 'manifest.json'].map((name) => path.join(os.homedir(), '.aura', name))
+const realAuraSnapshot = () => realAuraTargets.map((target) => `${target}:${listing(target)}`).join('\n')
+const realAuraBefore = realAuraSnapshot()
 const install = (home, from = payload, extra = []) => runJson(home, ['--yes', '--from', from, ...extra])
 
 try {
@@ -425,13 +434,13 @@ try {
     const target = makePkg('kill-swap-new', NEXT_VERSION)
     const newDigest = digest(target)
     const killed = await killWhen(home, ['--upgrade', '--from', target, '--json'], { AURA_UPGRADE_FAULT: 'after-swap', AURA_UPGRADE_FAULT_DELAY_MS: '30000' }, () => versionOf(live) === NEXT_VERSION)
-    check('③ 真 SIGKILL（换名完成之后）：现网是完整新版、previous/ 是完整旧版', killed.hit && digest(live) === newDigest && digest(previousDir(home)) === oldDigest)
+    check('③ 真 SIGKILL（换名完成之后）：现网是完整新版、previous/ 是完整旧版', killed.hit && digest(live) === newDigest && digest(previousDir(home)) === oldDigest, `hit=${killed.hit} code=${String(killed.code)} signal=${String(killed.signal)} liveMatch=${digest(live) === newDigest} prevMatch=${digest(previousDir(home)) === oldDigest} prevExists=${fs.existsSync(previousDir(home))} out=${JSON.stringify(killed.out.slice(-300))} err=${JSON.stringify(killed.err.slice(-300))}`)
     const back = runJson(home, ['--rollback', '--json'])
     const healed = health(live)
     check(
       '③ 真 SIGKILL 后还能 --rollback 退回完整旧版（CLI+MCP 可用）',
       back.status === 0 && digest(live) === oldDigest && healed.cliOk && healed.mcpOk,
-      `exit=${back.status}`,
+      `exit=${back.status} liveMatch=${digest(live) === oldDigest} cli=${healed.cliOk} mcp=${healed.mcpOk}`,
     )
     check('③ 真 SIGKILL 后 --rollback 收尾干净：--doctor 全部正常', runJson(home, ['--doctor', '--json']).env?.ok === true)
   }
@@ -743,10 +752,11 @@ try {
       `fresh=${fresh.status} upgrade=${up.status} 版本=${String(versionOf(pkgDir(home, prefix)))}`,
     )
     check('边界：给了 --prefix 时三份客户端配置仍逐字节未动', configDigest(home) === configsBefore)
+    const realAuraNow = realAuraSnapshot()
     check(
-      '边界：整个套件没往真实 $HOME 写东西（~/.aura 清单逐项含 mtime 不变）',
-      listing(realAura) === realAuraBefore,
-      realAuraBefore === '(不存在)' ? '~/.aura 之前不存在、现在仍不存在' : '逐项比对一致',
+      '边界：整个套件没往真实 $HOME 的安装目标写东西（~/.aura/{pkg,install.json,manifest.json} 不变）',
+      realAuraNow === realAuraBefore,
+      realAuraNow === realAuraBefore ? '安装器目标路径逐项一致' : `现在：${realAuraNow}`,
     )
 
     const noSource = run(home, ['--upgrade'])

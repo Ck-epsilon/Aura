@@ -7,7 +7,7 @@
  * 拒绝本身是对的：磁盘一个字节都没动（本套件逐条复验 sha256）。要改的是**说的内容**。
  * 改动前实测（两个面各跑一遍，读数逐字如下）：
  *
- *   DSH `aura_read` / `aura_edit`（后端是裸 `TextDecoder`）：
+ *   DSH `aura_basetools_read` / `aura_basetools_edit`（后端是裸 `TextDecoder`）：
  *     抛出错误 → 框架只取 error.message: "The encoded data was not valid for encoding utf-8"
  *                error.code = "ERR_ENCODING_INVALID_ENCODED_DATA"
  *   ——不说哪个文件、不说为什么、不说下一步。
@@ -298,7 +298,7 @@ const FORBIDDEN_VERDICTS = ['needs_choice', 'not_found', 'already_applied']
  * 「可执行的拒绝」的四件事，逐个查。
  * @param label - 读数标签
  * @param text - 回执正文（DSH 侧是 error.message，独立面是 env.error）
- * @param shape - `{verb: 'read'|'patch', path: <绝对路径>, tool: 'aura_read'|'aura_edit'}`
+ * @param shape - `{verb: 'read'|'patch', path: <绝对路径>, tool: 'aura_basetools_read'|'aura_basetools_edit'}`
  */
 function checkRefusal(label, text, { verb, path: displayPath, tool }) {
   const missing = Object.entries(MUST).filter(([, needle]) => !text.includes(needle))
@@ -330,7 +330,7 @@ const writeTexts = {}
       `A/读·${shape} 没有被伪装成结果通道的判决（回执里没有 outcome）`,
     )
     readTexts[shape] = out.threw ? String(out.error?.message ?? out.error) : ''
-    checkRefusal(`A/读·${shape}`, readTexts[shape], { verb: 'read', path: gbkPath, tool: 'aura_read' })
+    checkRefusal(`A/读·${shape}`, readTexts[shape], { verb: 'read', path: gbkPath, tool: 'aura_basetools_read' })
     check(
       out.threw && typeof out.error?.code === 'string' && out.error.code.length > 0,
       `A/读·${shape} 码原样保留（区分"不是 UTF-8"与别的工具级故障）`,
@@ -345,12 +345,12 @@ const writeTexts = {}
     'A/读·独立面 readEnvelope：码仍是 ERR_ENCODING_INVALID_ENCODED_DATA（没有退化成 catch-all）',
     `code=${readEnv.code} outcome=${readEnv.outcome}`,
   )
-  checkRefusal('A/读·独立面', String(readEnv.error ?? ''), { verb: 'read', path: gbkPath, tool: 'aura_read' })
+  checkRefusal('A/读·独立面', String(readEnv.error ?? ''), { verb: 'read', path: gbkPath, tool: 'aura_basetools_read' })
   readTexts.standalone = String(readEnv.error ?? '')
 
-  const readCli = runCli(['read', '--file', gbkPath])
+  const readCli = runCli(['basetools', 'read', '--file', gbkPath])
   check(readCli.status === 2 && readCli.env?.ok === false, 'A/读·CLI 真进程：exit=2 且 ok:false（结构化拒绝）', `exit=${readCli.status}`)
-  checkRefusal('A/读·CLI 真进程', String(readCli.env?.error ?? ''), { verb: 'read', path: gbkPath, tool: 'aura_read' })
+  checkRefusal('A/读·CLI 真进程', String(readCli.env?.error ?? ''), { verb: 'read', path: gbkPath, tool: 'aura_basetools_read' })
   check(
     String(readCli.env?.error ?? '') === readTexts.standalone,
     'A/读·CLI 真进程与 readEnvelope 是同一句话（同一个面只有一份文案）',
@@ -373,7 +373,7 @@ const writeTexts = {}
       `A/写·${shape} 没有被伪装成结果通道的判决（回执里没有 outcome）`,
     )
     writeTexts[shape] = out.threw ? String(out.error?.message ?? out.error) : ''
-    checkRefusal(`A/写·${shape}`, writeTexts[shape], { verb: 'patch', path: gbkPath, tool: 'aura_edit' })
+    checkRefusal(`A/写·${shape}`, writeTexts[shape], { verb: 'patch', path: gbkPath, tool: 'aura_basetools_edit' })
   }
 
   const writeEnv = await editEnvelope(provider, { file: gbkPath, hunks })
@@ -383,12 +383,12 @@ const writeTexts = {}
     'A/写·独立面 editEnvelope：码仍是 ERR_ENCODING_INVALID_ENCODED_DATA',
     `code=${writeEnv.code}`,
   )
-  checkRefusal('A/写·独立面', String(writeEnv.error ?? ''), { verb: 'patch', path: gbkPath, tool: 'aura_edit' })
+  checkRefusal('A/写·独立面', String(writeEnv.error ?? ''), { verb: 'patch', path: gbkPath, tool: 'aura_basetools_edit' })
   writeTexts.standalone = String(writeEnv.error ?? '')
 
-  const writeCli = runCli(['edit', '--file', gbkPath, '--lines', '1', '--replace', 'export const a = 9;'])
+  const writeCli = runCli(['basetools', 'edit', '--file', gbkPath, '--lines', '1', '--replace', 'export const a = 9;'])
   check(writeCli.status === 2 && writeCli.env?.ok === false, 'A/写·CLI 真进程：exit=2 且 ok:false', `exit=${writeCli.status}`)
-  checkRefusal('A/写·CLI 真进程', String(writeCli.env?.error ?? ''), { verb: 'patch', path: gbkPath, tool: 'aura_edit' })
+  checkRefusal('A/写·CLI 真进程', String(writeCli.env?.error ?? ''), { verb: 'patch', path: gbkPath, tool: 'aura_basetools_edit' })
 
   // 预演也走同一条读：它必须先读到内容才能规划 hunk，所以也必须给同一句话。
   const dry = await runShell(editPlugin, 'raw', { file_path: gbkPath, hunks, dry_run: true })
@@ -541,7 +541,7 @@ say('=== 段E 不写用户真实 home：观测缓存一律落本套件的临时�
   //    这是「指路真的生效」的正向对照：没有它，E1/E3 只能证明「哪儿都没写」，
   //    分不出「指对了」与「运气好」（先例：observation-store-identity-test 段A 的正向对照同义）。
   const probePath = write('probe.mjs', PLAIN_SRC)
-  const probe = runCli(['read', '--file', probePath, '--mode', 'full'])
+  const probe = runCli(['basetools', 'read', '--file', probePath, '--mode', 'full'])
   check(probe.status === 0 && probe.env?.ok === true, 'E2 真 CLI 子进程照常成功（段E 的探针读）', `exit=${probe.status}`)
   const ledgerFile = path.join(CACHE, 'observations.json')
   const ledgerText = fs.existsSync(ledgerFile) ? fs.readFileSync(ledgerFile, 'utf8').toLowerCase() : ''

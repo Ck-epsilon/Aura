@@ -2,8 +2,8 @@
  * disable-check.mjs —— 停掉 tool-fs 之前，先查两个会致命的缺口。
  *
  * 用户的意图是"强制走 Aura"，但实际可用性取决于两件事：
- *   ① aura_edit 能不能**创建**不存在的文件（否则新建文件的能力整个没了）
- *   ② aura_read 对**未知扩展名**能不能给内容（否则读 .yml/.json/.md 的能力整个没了）
+ *   ① aura_basetools_edit 能不能**创建**不存在的文件（否则新建文件的能力整个没了）
+ *   ② aura_basetools_read 对**未知扩展名**能不能给内容（否则读 .yml/.json/.md 的能力整个没了）
  *
  * 第二个尤其要紧：.yml 是用户自己的预设、.json/.md 是任何仓库里最常见的文件。
  * 不查清就停用，等于把这两类文件变成不可读。
@@ -16,7 +16,7 @@ import { apply as applyEdit } from '../aura-edit/index.js'
 
 const say = (m) => fs.writeSync(1, `${m}\n`)
 
-say('=== ① aura_read 对未知扩展名给什么 ===')
+say('=== ① aura_basetools_read 对未知扩展名给什么 ===')
 for (const [label, file] of [
   ['YAML', 'x.yml'],
   ['JSON', 'x.json'],
@@ -30,7 +30,7 @@ for (const [label, file] of [
 }
 
 say('')
-say('=== ② aura_edit 能不能创建不存在的文件 ===')
+say('=== ② aura_basetools_edit 能不能创建不存在的文件 ===')
 const tmp = path.join(os.tmpdir(), `aura-create-${Date.now()}`)
 fs.mkdirSync(tmp, { recursive: true })
 const newFile = path.join(tmp, 'brand-new.js')

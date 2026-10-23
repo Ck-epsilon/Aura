@@ -37,7 +37,7 @@ import { HANDLE_MAX_PER_RECEIPT, fnv1a32, handleCharsFor, mintHandle } from './h
  * 而不是在引擎里另写一份。两份判定一旦分叉，症状是"同一个目标，单独调用读得出来、
  * 放进 targets 里就报参数错"——而两边各自的测试都会绿（契约 §2.1 那句"同一个校验器"）。
  */
-import { LINE_ADDRESS_HINT, MT_MAX_TARGETS, MT_POOL, asLinePair, gaveLineAddress, inferReadMode, lineRangeOf } from './args.mjs'
+import { MT_MAX_TARGETS, MT_POOL, asLinePair, normalizeReadRequest } from './args.mjs'
 
 /**
  * 多目标形状的**契约上限**（fs-contract-v2 §2.1）不是本地判据，而是从参数面 `args.mjs` **转出**：
@@ -939,7 +939,7 @@ function renderChanged(base, source, lines, request, symbolsIndex = null, ledger
    * 先前这里把非字符串的 `since` 当成"首读哨兵"并返回 `version: null`。那个 null 传不下去：
    * 工具声明的 schema 里 version 是 string，框架对字符串字段做类型校验
    * （dsh-tools/lib/index.js:495 `typeof value === "string"`），于是 null 会被判违规：
-   *   tool "aura_read" returned invalid output: "value.version" must be a string
+   *   tool "aura_basetools_read" returned invalid output: "value.version" must be a string
    * 更糟的是它**没意义**：回执的 next 让模型"把 version 传回来"，而 null 传回来又落回同一分支——
    * 一个永远解不开的环。现在首读也给真令牌，环就断了。
    */
@@ -981,14 +981,22 @@ function renderChanged(base, source, lines, request, symbolsIndex = null, ledger
     }
   }
   if (prev === null) {
-    // 缓存未命中：换进程、或读完太多轮被淘汰。诚实说明，不假装能比对。
+    /**
+     * 缓存未命中：换进程、被淘汰，或**大文件只记了令牌、没保留全文**（`source_omitted`）。
+     * 最后一种不是“过期”，说成“no longer cached”会让调用方以为重读一次就能修好——
+     * 它即使重读，>256 KiB 的全文仍然不会进缓存。把两种事实分开说。
+     */
+    const omitted = prevEntry?.source_omitted === true
+    const note = omitted
+      ? 'that revision is in the ledger, but the file exceeds 256 KiB so its full text was not retained — cannot diff; read the regions you need'
+      : 'that version is no longer cached — cannot diff; read the regions you need'
     return {
       ...base,
       mode: 'changed',
       version,
-      note: 'that version is no longer cached — cannot diff; read the regions you need',
+      note,
       next: 'mode=map then mode=lines',
-      text: 'that version is no longer cached — cannot diff; read the regions you need (next: mode=map then mode=lines)',
+      text: `${note} (next: mode=map then mode=lines)`,
     }
   }
 
@@ -1119,7 +1127,7 @@ export function contentToken(source, byteOrderMark = false) {
  *
  * ## 它治的是什么
  *
- * 实测：15,935 次 aura_read 里 **63.8%** 是同一会话内对**已读文件**的重复读，
+ * 实测：15,935 次 aura_basetools_read 里 **63.8%** 是同一会话内对**已读文件**的重复读，
  * 那些回执合计 53.8M 字符。重复读里绝大多数行根本没变——再发一遍全文，
  * 是把已经给过的东西再收一次钱。
  *
@@ -1524,8 +1532,17 @@ function planIncremental(request, lines, version) {
       : { kind: 'skip' }
   }
   // 身份键在手就递下去（宿主事实优先）：观测账本本来就按身份键记，这里少一次"写法 vs 盘上"的对不上。
-  const before = recallRead(filePath, entry.version, request.identityKey)
+  const beforeEntry = seenEntry(filePath, entry.version, request.identityKey)
+  const before = beforeEntry === null ? null : beforeEntry.source
   if (before === null) {
+    /**
+     * 账本说“你读过”，但没有可 diff 的全文。两种原因要分开：
+     *   · `source_omitted`：文件超过 256 KiB，**按设计**不保留全文（重读也不会改变）；
+     *   · 否则：有界缓存淘汰 / 换进程（重读可以恢复）。
+     */
+    if (beforeEntry?.source_omitted === true) {
+      return { kind: 'degrade', asked, reason: `the baseline you read earlier (${entry.version}) is in the ledger, but this file exceeds 256 KiB so its full text was not retained; cannot diff — the full text follows` }
+    }
     // 账本说"你读过"，缓存却说"我没有那份内容"——有界缓存淘汰或换进程都会走到这里
     return { kind: 'degrade', asked, reason: `the baseline you read earlier (${entry.version}) is no longer in the bounded observation cache, so it cannot be diffed; the full text follows` }
   }
@@ -1659,15 +1676,29 @@ function renderFull(base, lines, symbolsIndex = null) {
  *
  * @returns {{mode: string, reason: string, sizes: object}}
  */
-export function suggestMode(source, filePath) {
-  const sizes = { full: source.length }
+export function suggestMode(source, filePath, budget = null) {
+  /**
+   * 宿主预算（`request.budget`）优先：它是调用方**实际会执行**的剪枝阈值，缺省才是 8192。
+   * 内容上限必须减去两层信封开销（{@link DEFAULT_ENVELOPE_ALLOWANCE}），与 `readWith` 的
+   * `contentCeiling` 同一口径——否则 auto 会以为“装得下”，实际渲染时又被信封挤出去。
+   */
+  const hostBudget = Number.isInteger(budget) && budget > 0 ? budget : DEFAULT_PRUNE_BUDGET
+  const contentBudget = Math.max(0, hostBudget - DEFAULT_ENVELOPE_ALLOWANCE)
+  /**
+   * `full` 的渲染长度**不是** `source.length`：每行有 `N: ` 行号前缀，736 行的文件会多出
+   * 约 1.6KB。旧判据拿原始字符数比预算，于是 5902 字符 / 736 行被判成“全文装得下”，
+   * 实际渲染时剪掉 193 行，`auto` 理由还写着 “complete answer”。这里直接用 full 的真实
+   * 渲染结果（`omitted === undefined` 才算完整）作判据。
+   */
+  const fullProbe = readWith(source, { filePath, mode: 'full', budget: hostBudget, probe: true })
+  const sizes = { full: fullProbe.text?.length ?? source.length }
   const lang = filePath === null || filePath === undefined ? null : langOf(filePath)
   let symbols = null
   if (lang !== null) {
     symbols = listSymbols(indexStructure(source, lang)).length
-    sizes.map = readWith(source, { filePath, mode: 'map' }).text?.length ?? 0
+    sizes.map = readWith(source, { filePath, mode: 'map', budget: hostBudget, probe: true }).text?.length ?? 0
     if (sizes.map <= sizes.full) {
-      sizes.digest = readWith(source, { filePath, mode: 'digest' }).text?.length ?? 0
+      sizes.digest = readWith(source, { filePath, mode: 'digest', budget: hostBudget, probe: true }).text?.length ?? 0
     }
   }
 
@@ -1698,11 +1729,11 @@ export function suggestMode(source, filePath) {
    * 为什么用预算而不是固定字符数：预算是算出来的（内容预算随信封收紧），
    * 而固定字符数会随着预算变化而变成另一个隐含的错值。
    */
-  const FULL_TEXT_FITS = source.length <= CONTENT_BUDGET
+  const FULL_TEXT_FITS = fullProbe.ok === true && fullProbe.omitted === undefined
   if (FULL_TEXT_FITS) {
     return {
       mode: 'full',
-      reason: `the whole text fits the content budget (${source.length} ≤ ${CONTENT_BUDGET} chars), so it is the complete answer`,
+      reason: `the whole text fits the content budget (${sizes.full} ≤ ${contentBudget} chars rendered; host budget ${hostBudget}, envelope allowance ${DEFAULT_ENVELOPE_ALLOWANCE}), so it is the complete answer`,
       sizes,
     }
   }
@@ -1730,13 +1761,17 @@ export function suggestMode(source, filePath) {
     return n > 0 && n >= source.length * 0.01
   }
   const top = Object.entries(sizes).sort((a, b) => a[1] - b[1])
-  const ranked = top.filter(([name]) => name === 'full' || delivered(name))
+  // `full` 通常不受“1% 交付”门槛限制（它的少是预算裁剪，有解释）；
+  // 但渲染长度是 0 的 full 是**空壳**，不能因为“叫 full”就被选中。
+  const ranked = top.filter(([name]) => (name === 'full' ? sizes.full > 0 : delivered(name)))
   const candidates = ranked.length > 0 ? ranked : [['full', sizes.full]]
   const best = candidates[0]
   const reason =
-    best[0] === 'full'
-      ? `full text is the smallest option (${source.length} chars)`
-      : `${best[0]} is ${(sizes.full / best[1]).toFixed(1)}x smaller than the full text`
+    best[1] === 0
+      ? `no mode can render text at host budget ${hostBudget} (below the minimum envelope); raise the budget or pass maxChars`
+      : best[0] === 'full'
+        ? `full text is the smallest option (${sizes.full} chars rendered)`
+        : `${best[0]} is ${(sizes.full / best[1]).toFixed(1)}x smaller than the full text`
   return { mode: best[0], reason, sizes, ...(symbols === null ? {} : { symbols }) }
 }
 
@@ -1827,16 +1862,15 @@ async function readManyTarget(provider, rawTarget, index, probeBom) {
     throw Object.assign(new Error(`targets[${index}] needs a file_path string`), { code: MT_BAD_TARGETS })
   }
   /**
-   * 行区间：`gaveLineAddress` + `lineRangeOf` 与单目标**同一对判定器**，这里不另写一份。
-   * 给了但解不出来 ⇒ 逐项拒绝（结果通道），理由与 `readEnvelope` 那处一字不差：
-   * 静默退回 auto 会让人以为是别的问题。
+   * 行区间 / 分页 / 模式推断：与单目标**同一个** `normalizeReadRequest`。
+   * 旧版只转发 `around/lines/search/since/maxChars`，于是 `offset/limit/context/kind/budget`
+   * 在多目标里被静默丢掉（同一个元素单独读与放进 targets 读会得到两种结果）。
+   * 这里先只判形状；读到内容后再用它做 offset 越界与尾行截断。
    */
-  const range = lineRangeOf(request)
-  if (range === undefined && gaveLineAddress(request)) {
-    return mtFailure(index, [filePath, filePath], 'READ_BAD_ARGS', LINE_ADDRESS_HINT)
+  const shape = normalizeReadRequest(request)
+  if (shape.ok !== true) {
+    return mtFailure(index, [filePath, filePath], 'READ_BAD_ARGS', shape.error)
   }
-  const mode = inferReadMode(request, range)
-  const lines = asLinePair(range)
   /**
    * `provider.resolve` 的两种返回形状**都认**（`await` 对同步值等价，所以旧提供方一行不用改）：
    *   · **字符串** —— 旧形状（CLI/MCP 的 `createNodeFsProvider`、绝大多数测试）：它就是显示路径，
@@ -1848,7 +1882,7 @@ async function readManyTarget(provider, rawTarget, index, probeBom) {
    * `he6dd015d4840:…` —— 指纹段相同、**身份标签段不同**）：句柄的身份标签按
    * `ledgerIdentityKey(filePath, identityKey)` 算，而单目标那条路（`readEnvelope` 前的壳）递的正是
    * `ctx.fs.resolve()` 的 `targetKey`。多目标若只把路径串当身份，就会对**同一份盘上文件**发出两个
-   * 不同的句柄，后果具体：拿批量读来的句柄去 `aura_edit` ⇒ `PATCH_HANDLE_IDENTITY_MISMATCH`。
+   * 不同的句柄，后果具体：拿批量读来的句柄去 `aura_basetools_edit` ⇒ `PATCH_HANDLE_IDENTITY_MISMATCH`。
    *
    * 身份口径**不新造第三份**：宿主给的 `targetKey` 就是既有那一份（@see ledgerIdentityKey / IDENTITY_KEYS）；
    * 元素自带的 `identityKey`（与写侧 `editTargetRequests` 同名的那个键）只作为提供方给不出事实时的回落。
@@ -1908,14 +1942,21 @@ async function readManyTarget(provider, rawTarget, index, probeBom) {
       byteOrderMark = false
     }
   }
+  const requestShape = normalizeReadRequest(request, source.split(/\r?\n/).length)
+  if (requestShape.ok !== true) {
+    return mtFailure(index, [target, filePath], 'READ_BAD_ARGS', requestShape.error)
+  }
   const env = readWith(source, {
-    mode,
+    mode: requestShape.mode,
     around: request.around,
-    lines,
+    lines: asLinePair(requestShape.lines),
     search: request.search,
     since: request.since,
     // 读侧两层叫法不同：宿主面 `max_chars`，引擎面 `maxChars`（与 `readEnvelope` 同源）。
     maxChars: request.max_chars ?? request.maxChars,
+    ...(request.context === undefined ? {} : { context: request.context }),
+    ...(request.kind === undefined ? {} : { kind: request.kind }),
+    ...(request.budget === undefined ? {} : { budget: request.budget }),
     byteOrderMark,
     /**
      * `filePath` 给的是 **provider.resolve 之后的那个串**，不是调用方原样给的路径。
@@ -1924,7 +1965,7 @@ async function readManyTarget(provider, rawTarget, index, probeBom) {
      * 而账本键进句柄的身份标签。单目标那条路（`readEnvelope`）给的正是 `provider.resolve(file)`，
      * 于是这里若给原样的 `file_path`，同一个文件在两条路上会得到**两个不同的句柄**
      * ——`multi-read-test` 段A 的"逐项回执与单独跑一次逐字节相同"当场变红，
-     * 而且更坏的是：拿批内句柄去 `aura_edit` 会查不到那一条观测。
+     * 而且更坏的是：拿批内句柄去 `aura_basetools_edit` 会查不到那一条观测。
      *
      * 回执里显示哪一份由 `file_path` 字段负责（下面那条）——两件事分开，各归各的字段。
      */
@@ -2143,7 +2184,7 @@ export function readWith(source, request = {}) {
     // 实测后果：changed 在真实会话里只被用过 1 次、且那一次没带 since——工具递出了钥匙，引擎不接。
     else if (request.since !== undefined || request.token !== undefined || request.previous !== undefined) mode = 'changed'
     else {
-      auto = suggestMode(source, request.filePath ?? null)
+      auto = suggestMode(source, request.filePath ?? null, request.budget)
       mode = auto.mode
     }
   }
@@ -2170,7 +2211,7 @@ export function readWith(source, request = {}) {
    * 增量层的判定也放在循环外：它只看账本、缓存与内容，不看预算。
    * 放进 `render` 会让收敛的每一轮把差分重做一遍（大文件上那就是百毫秒级 × 8 轮）。
    */
-  const incremental = mode === 'full' ? planIncremental(request, lines, version) : { kind: 'skip' }
+  const incremental = mode === 'full' && request.probe !== true ? planIncremental(request, lines, version) : { kind: 'skip' }
   /**
    * 顺扫判定同样放在循环外：它只看请求与会话账本（不看预算），而且
    * 「这一次是不是同一段顺扫的下一段」不应该随收敛轮次变。
@@ -2189,7 +2230,7 @@ export function readWith(source, request = {}) {
      *
      * 这个字段曾经被 `mode === 'changed' || lang === null` 这个条件剥掉，后果是一整类
      * 调用被框架直接拒绝（schema 声明它必填）：
-     *   tool "aura_read" returned invalid output: missing required property "value.version"
+     *   tool "aura_basetools_read" returned invalid output: missing required property "value.version"
      * 实测命中的组合：`around`／`lines`／`search` 三种模式（它们经 windowEnvelope 再铺 base，
      * 而 base 里已经被剥掉了），以及**所有未索引扩展名**上的内容读取——
      * `.json`／`.yml`／`.md` 一个都读不了。
@@ -2204,12 +2245,12 @@ export function readWith(source, request = {}) {
      * 版本令牌与**观测记录**：每一模式都要。
      *
      * `changed` 自己也会记一次（同一键重复记无害），而其余模式此前不记——
-     * 实测后果：普通 `aura_read` 之后拿那个令牌去问 `changed`，得到的是
+     * 实测后果：普通 `aura_basetools_read` 之后拿那个令牌去问 `changed`，得到的是
      * “that version is no longer cached — cannot diff”，把“上次观测”当判据的路直接断掉。
      */
     delivery = null
     // 账本键换成**身份键**（有的话）：`filePath` 只用于显示与语言判定
-    if (filePath !== null) rememberRead(ledgerKey, version, source, bom, request.identityKey)
+    if (filePath !== null && request.probe !== true) rememberRead(ledgerKey, version, source, bom, request.identityKey)
     const base = {
       ok: true,
       mode,
@@ -2312,7 +2353,28 @@ export function readWith(source, request = {}) {
     Number.isInteger(request.maxChars) && request.maxChars > 0
       ? Math.min(request.maxChars, contentCeiling)
       : contentCeiling
-  let result = render(budget)
+  /**
+   * 0.9.8：确定性的回执 metrics。`mode` / `totalLines` / `text` / `symbols` 本来就在信封里，
+   * 但调用方要自己数字符、自己判断有没有裁剪；这里统一附一份，三面同形。
+   * 不加 `elapsedMs`（墙钟有噪声），只放**可由内容复算**的事实。
+   *
+   * **必须进收敛循环**：metrics 本身也占字节；事后贴上去会让 `sizeBy(result)` 少算几十字节，
+   * 实测把 8192 档顶到 8250。所以每次 render 后立刻附 metrics，再量尺寸。
+   */
+  const withMetrics = (env) => env.ok === false ? env : ({
+    ...env,
+    metrics: {
+      mode: env.mode,
+      lines: env.totalLines,
+      chars: (env.text ?? '').length,
+      ...(env.symbols === undefined ? {} : { symbols: env.symbols }),
+      // `truncated` = **被预算裁过**，不是“有任何 omitted”。map 的 “nested locals omitted”
+      // 是刻意不列（不是内容被裁），旧判据会把它误报成 truncated。
+      truncated: typeof env.omitted === 'string' && /content budget|minimum envelope|host result limit|withheld|truncated/i.test(env.omitted),
+    },
+  })
+  const renderMeasured = (chars) => withMetrics(render(chars))
+  let result = renderMeasured(budget)
   /** 每轮额外多收的余量：只按"超出多少"收窄会恰好贴着上限，信封随内容缩短而重算时容易再涨回去。 */
   const SHRINK_MARGIN = 64
   /** 轮数上限：收敛是单调的，几轮就够；给足是为了让下面那道硬断言根本不触发。 */
@@ -2323,7 +2385,7 @@ export function readWith(source, request = {}) {
     const next = Math.max(0, budget - (size - ceiling) - SHRINK_MARGIN)
     if (next >= budget) break // 收不动了，交给下面那道硬断言
     budget = next
-    result = render(budget)
+    result = renderMeasured(budget)
   }
   /**
    * 收不到上限时，缩到最小再试一次。
@@ -2340,19 +2402,28 @@ export function readWith(source, request = {}) {
    */
   const finalSize = sizeBy(result)
   if (finalSize > ceiling) {
-    const minimal = render(0)
+    const minimal = renderMeasured(0)
     const minimalSize = sizeBy(minimal)
     // 记账必须发生在**确定要发哪一份之后**：账本决定下一次还能不能做差量。
-    recordDelivery(ledgerKey, minimal, version, total, bom, delivery)
-    recordScan(mode, ledgerKey, version, minimal, total)
+    // probe（`suggestMode` 的选型探针）只量渲染长度，不改账本、也不触发增量。
+    if (request.probe !== true) {
+      recordDelivery(ledgerKey, minimal, version, total, bom, delivery)
+      recordScan(mode, ledgerKey, version, minimal, total)
+    }
     if (minimalSize <= ceiling) return minimal
     return {
       ...minimal,
+      metrics: {
+        ...minimal.metrics,
+        truncated: true,
+      },
       omitted: `${minimal.omitted === undefined ? '' : `${minimal.omitted}; `}output is already at its minimum envelope (${minimalSize} chars) and still exceeds the host result limit (${ceiling}); the limit is below what a read result can physically be`,
     }
   }
-  recordDelivery(ledgerKey, result, version, total, bom, delivery)
-  recordScan(mode, ledgerKey, version, result, total)
+  if (request.probe !== true) {
+    recordDelivery(ledgerKey, result, version, total, bom, delivery)
+    recordScan(mode, ledgerKey, version, result, total)
+  }
   return result
 }
 

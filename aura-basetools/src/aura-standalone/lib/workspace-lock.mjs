@@ -20,6 +20,8 @@ import crypto from 'node:crypto'
 
 const DEFAULT_TIMEOUT_MS = 5000
 const DEFAULT_STALE_MS = 10 * 60 * 1000
+/** 空锁（已创建、PID 还没写进去）的宽限：短于这个年龄不判陈旧，避免抢走刚持有的锁。 */
+const EMPTY_LOCK_GRACE_MS = 2000
 const RETRY_MS = 50
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -99,16 +101,35 @@ export async function withWorkspaceLock(root, fn, options = {}) {
     } catch (error) {
       if (error?.code !== 'EEXIST') throw error
       const holder = readLock(file)
-      const age = Date.now() - Number(holder?.createdAt ?? 0)
-      const stale = holder === null || age > staleMs || !processAlive(holder.pid)
+      /**
+       * **空锁不是陈旧锁**：`open(..., 'wx')` 与写入 PID 之间有窗口，另一个进程此时读到的
+       * 是空文件（`readLock` 返回 null）。旧判据把 `holder === null` 直接当陈旧 ⇒ 会删掉
+       * 一个刚被持有、还没写完元数据的锁，两个进程同时进入临界区。实测：4 个进程并发改
+       * 同一文件的不同行，偶发 1 个进程的陈旧闸门报错、两行修改丢失。
+       * 现在空锁给 2 秒宽限：只有 mtime 超过宽限（或超过 staleMs）才回收。
+       */
+      let stale
+      if (holder === null) {
+        let mtime = 0
+        try {
+          mtime = fs.statSync(file).mtimeMs
+        } catch {
+          continue // 锁刚被释放，下一轮重试
+        }
+        stale = Date.now() - mtime > Math.min(staleMs, EMPTY_LOCK_GRACE_MS)
+      } else {
+        const age = Date.now() - Number(holder.createdAt ?? 0)
+        stale = age > staleMs || !processAlive(holder.pid)
+      }
       if (stale) {
         try { fs.rmSync(file, { force: true }) } catch { /* 下一轮再试 */ }
         continue
       }
       if (Date.now() - started > timeoutMs) {
-        throw Object.assign(new Error(`workspace is locked by pid ${holder.pid}`), {
+        const holderLabel = holder === null ? 'an empty lock (pid not written yet)' : `pid ${holder.pid}`
+        throw Object.assign(new Error(`workspace is locked by ${holderLabel}`), {
           code: 'WORKSPACE_LOCKED',
-          holder,
+          holder: holder ?? null,
         })
       }
       await sleep(RETRY_MS)

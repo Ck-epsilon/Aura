@@ -176,10 +176,14 @@ say('=== A. 行内片段 old ⇒ 只换命中跨度，行内其余字节逐字�
   )
   check(
     r.ok && /columns 7-16/.test(String(r.out.applied[0].tier)),
-    'A3 回执把这跨行跨度的起止写在第 1 行内（`line.slice(endCol)` 能直接切到后半行）',
+    'A3 回执把这跨行跨度的起止写在第 1 行内；末行后缀由 endLineCol 单独保留',
     r.ok ? String(r.out.applied[0].tier) : '',
   )
-  check(bytesEqual(c.file, 'let x let x = 7\nlet y = 8\nlet z = 3\n'), 'A3 磁盘：第 3 行一字未动', JSON.stringify(readTextFile(c.file)))
+  check(
+    bytesEqual(c.file, 'let x let x = 7\nlet y = 8 2\nlet z = 3\n'),
+    'A3 磁盘：末行 `let y =` 之后的 ` 2` 逐字保留（跨行片段只换跨度，不吞末行后缀），第 3 行一字未动',
+    JSON.stringify(readTextFile(c.file)),
+  )
 }
 {
   /**

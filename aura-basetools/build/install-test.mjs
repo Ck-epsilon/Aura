@@ -96,7 +96,7 @@ if (first.status !== 0 || first.out?.ok !== true) {
   process.exit(1)
 }
 check('A2 装：CLI 自检 ok', first.out?.selftest?.cli === 'ok', String(first.out?.selftest?.cli))
-check('A3 装：MCP 自检列出两个工具', String(first.out?.selftest?.mcp).startsWith('ok: aura_read, aura_edit'), String(first.out?.selftest?.mcp))
+check('A3 装：MCP 自检列出两个工具', String(first.out?.selftest?.mcp).startsWith('ok: aura_basetools_read, aura_basetools_edit'), String(first.out?.selftest?.mcp))
 check(
   'A4 装：三家配置都写入',
   first.out?.registrations?.map((r) => `${r.agent}:${r.action}`).join(',') === 'codex:added,claude:added,cursor:added',
@@ -277,7 +277,7 @@ check(
   fs.writeFileSync(path.join(profileDir, 'cordis.patch.yml'), '[]')
   const reg = runJson(dshHome, ['--yes', '--agents', 'dsh', '--dsh-profile', 'web'])
   check(
-    'I1 注册 dsh：写入两个工具行',
+    'I1 注册 dsh：写入两个模块行（三个工具）',
     reg.status === 0 && reg.out?.registrations?.some((r) => r.agent === 'dsh' && r.action === 'added'),
     JSON.stringify(reg.out?.registrations?.map((r) => `${r.agent}:${r.action}`)),
   )
@@ -361,7 +361,7 @@ check('G5 --version --json 可解析（卸载后 ok=false）', versionJson.ok ==
 //
 // 真事，不是假想：本机 `~/.dsh/profiles/auratest` 是 9/21 23:07 建的实验 profile，
 // 依赖 `dist/aura-tools/aura-tools-0.2.1.tgz`（那个 dist 目录后来整个没了），而
-// `dsh --profile auratest` **真的会**加载那份 0.2.1 的 aura_read / aura_edit。
+// `dsh --profile auratest` **真的会**加载那份 0.2.1 的 aura_basetools_read / aura_basetools_edit。
 // 它躺了 8 天，而三面版本、完整性、注册项、CLI/MCP 自检、全部测试**都是绿的**——
 // 因为那些判据都只看得见**本安装目录**，没有一条会往 profile 那一侧看一眼。
 // K 段把那一侧钉进体检，三种形态各一条（三种病，三种修法）。

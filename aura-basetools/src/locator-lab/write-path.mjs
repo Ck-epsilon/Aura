@@ -99,6 +99,36 @@ function replaceTextOf(text) {
 }
 
 /**
+ * 0.10.0：`replace` 的换行风格。
+ *
+ * 内置 `Edit` 会把新行的 LF 适配成文件已有的 CRLF；aura 原先严格按 `replace` 原样写，
+ * 模型写 `\n` 就会在 CRLF 文件里制造混合行尾。判据分三档：
+ *   · `auto`（默认）：用**被替换区域末行**的行尾（没有就看首行/文件里第一个非空行尾）作目标；
+ *   · `preserve`：保持 `replace` 原样（旧的逐字节口径，含混合行尾）；
+ *   · `lf` / `crlf`：强制成统一行尾。
+ */
+function targetEolFor(endings, startLine, endLine) {
+  const last = endings[endLine - 1]
+  if (typeof last === 'string' && last !== '') return last
+  const first = endings[startLine - 1]
+  if (typeof first === 'string' && first !== '') return first
+  return endings.find((ending) => typeof ending === 'string' && ending !== '') ?? '\n'
+}
+
+function adaptReplaceEol(text, mode, targetEol) {
+  if (mode === 'preserve' || text === '') return { text, adapted: false }
+  const target = mode === 'auto' ? targetEol : mode === 'lf' ? '\n' : mode === 'crlf' ? '\r\n' : null
+  if (target === null) {
+    throw new PatchError(
+      `unknown eol mode ${JSON.stringify(mode)}; use auto, preserve, lf, or crlf — nothing was written`,
+      'PATCH_BAD_EOL',
+    )
+  }
+  const normalized = text.replace(/\r?\n/g, target)
+  return { text: normalized, adapted: normalized !== text }
+}
+
+/**
  * 这份内容是不是**混合行尾**（同时存在 `\r\n` 与裸 `\n`）。
  *
  * 为什么需要它：`editText` 只在行尾**统一**时逐字节等价（normalize/restore 在纯 LF / 纯 CRLF / 纯 CR
@@ -173,9 +203,44 @@ function staleConflicts(observedSource, content, hunks, matches, filePath, revis
   // 这里曾经挂着 `currentToken`（当前内容的版本令牌），但全函数没有任何地方用它——死码，删掉；
   // 账本令牌的 BOM 那一半只有 {@link regionGate} 算 `basis` 时用得上。
   const conflicts = []
+  /**
+   * `replace_all` 的观测侧判据：**出现次数**前后一致。
+   *
+   * 它没有“一处区域”可比——一次 hunk 对应 N 处，`regionTextIn` 只会给其中一处（或因为不唯一
+   * 返回 null）。真正会发生的事故是“你读的时候有 3 处，现在只剩 2 处”：再全量替换就会
+   * 少改一处，且回执不会说。次数变了就拒；次数没变时，内容地址本来就该吸收位移。
+   */
+  const replaceAllObservedCounts = new Map()
+  const observedAllCount = (hunk) => {
+    const oldText = oldAddressOf(hunk)
+    if (typeof oldText !== 'string') return 0
+    /**
+     * 层序必须与 {@link locateAllByOld} 逐字一致（片段优先）：两边取不同层时，
+     * 同一个 `old` 会在“现在有几处”和“读过时有几处”上给出两个数，闸门就会误拒。
+     */
+    const fragment = findFragmentTier(observedRows(), oldText)
+    if (fragment.spans.length > 0) return nonOverlappingCandidates(fragment.spans, true).length
+    const rows = addressRows(oldText)
+    const aligned = findWindowTier(observedRows(), rows)
+    return nonOverlappingCandidates(aligned.starts.map((start) => ({ start, span: rows.length })), false).length
+  }
+  const replaceAllReported = new Set()
   for (const match of matches) {
     const hunk = hunks[match.hunk]
     if (hunk === undefined) continue
+    if (hunk.replace_all === true) {
+      if (replaceAllReported.has(match.hunk)) continue
+      replaceAllReported.add(match.hunk)
+      if (!replaceAllObservedCounts.has(match.hunk)) {
+        replaceAllObservedCounts.set(match.hunk, observedAllCount(hunk))
+      }
+      const was = replaceAllObservedCounts.get(match.hunk)
+      const now = matches.filter((candidate) => candidate.hunk === match.hunk).length
+      if (was !== now) {
+        conflicts.push({ lines: [match.line, match.end], tier: match.tier, reason: 'occurrences-changed', was, now })
+      }
+      continue
+    }
     // 带了 `expect` 的 hunk 不走这里：它自己的断言就是闸门（且报错里会贴出原文）。
     // **句柄 hunk 是例外**（D3）：句柄是"更准的读过的区间"，它要**喂给**闸门，
     // 而不是借 `expect` 从闸门下面绕过去——句柄不是绕过 `PATCH_STALE_REGION` 的路。
@@ -333,6 +398,8 @@ function staleRegionRefusal(displayPath, conflicts) {
         ? `the text you addressed moved: line ${from} no longer holds it (it is now line ${first.nowAt})`
       : first.reason === 'moved-out'
           ? `the text you addressed is no longer at line ${from} and cannot be located unambiguously elsewhere`
+          : first.reason === 'occurrences-changed'
+            ? `\`replace_all\` matched ${first.now} occurrence(s) in the current file, but the version you read had ${first.was} (it would change a different set of places)`
           : first.reason === 'unobserved-revision'
             ? `the file now holds a revision this session has never read, so lines ${from}-${to} cannot be checked against what you saw (the text above them changed at some point)`
             : `lines ${from}-${to} were not present in the last observation — the file has changed shape since you read it`
@@ -353,6 +420,7 @@ function staleRegionRefusal(displayPath, conflicts) {
         lines: [from, to],
         ...(first.nowAt === undefined || first.nowAt === null ? {} : { now_at_line: first.nowAt }),
       },
+      ...(first.reason === 'occurrences-changed' ? { occurrence_count: { was: first.was, now: first.now } } : {}),
       others: conflicts.map((c) => ({
         lines: c.lines,
         by: 'unknown-writer',
@@ -514,6 +582,19 @@ function regionGate(hunks, content, planned, displayPath, options = {}) {
   const ledgerKey = ledgerIdentityKey(displayPath, options.identityKey)
   const observation = latestObservation(ledgerKey, { source: content })
   if (observation === null) return { clean: true, basis: 'none' }
+  /**
+   * 大文件观测只存令牌、不存全文（`observation-store` 的 `MAX_SOURCE`）。没有全文就没有
+   * 区域级比对可言——如实退回 `basis:'none'`，但**不改写**“这一版读过没有”的答案：
+   * 当前令牌在账本里 ⇒ `basis:'observation'`，否则 `none`。
+   */
+  if (typeof observation.source !== 'string') {
+    /**
+     * 只认**最新观测那一版**与当前内容相同。`hasObservedVersion` 还会命中更早的条目；
+     * 但“当前内容等于很久以前读过的某一版”不等于“它与最近一次观测一致”，
+     * 在没有全文可比时宁可标 `none`，也不冒充核对过。
+     */
+    return { clean: true, basis: observation.version === contentToken(content, byteOrderMark) ? 'observation' : 'none' }
+  }
   /**
    * 快路：**要判断的那份内容就是刚观测过的那一份**（逐字符相同）⇒ 没有陈旧可言（见顶部注释）。
    *
@@ -925,10 +1006,13 @@ function fragmentSpans(lines, fragment, norm) {
     const from = rawOf(at)
     const lastRaw = rawOf(at + chunk.length - 1)
     if (from === -1 || lastRaw === -1) return { from: 0, to: 0 }
-    /** 末字本身是空白时，把原文里同一段空白的整段都算进来（归一化把一段空白看成一个空格）。 */
-    let to = lastRaw + 1
-    while (to < rawLine.length && rawLine[to] === rawLine[lastRaw]) to += 1
-    return { from, to }
+    /**
+     * 末列就是命中末字本身（`to` 为 0-based 排他）。旧代码还会把“与末字相同的后续字符”
+     * 一并吞掉——那对 **exact** 层是实打实的越界（`old:"ax "` 会吃掉两个空格），
+     * 对 norm-space 层也从未生效（`collapse` 每行都 trim，归一化片段不会以空白结尾）。
+     * 片段层的承诺是“只换命中跨度自己”，所以这里不再做任何扩展。
+     */
+    return { from, to: lastRaw + 1 }
   }
   const spans = []
   const seen = new Set()
@@ -977,17 +1061,18 @@ function fragmentSpans(lines, fragment, norm) {
      */
     const firstText = start === end ? want : lines[start].slice(head.from, head.to) + normLines[start].slice(startAt + firstWidth)
     const lastText = start === end ? want : lines[end].slice(0, tail.to)
-    /** `want` 里首尾两段之间夹着的那些**整行**（跨行时才非空）。 */
-    const middleText = normLines.slice(start + 1, end).join('\n')
+    /** `want` 里首尾两段之间夹着的那些**整行**（跨行时才非空；空行也必须保留）。 */
+    const middleRows = normLines.slice(start + 1, end)
     /**
      * 单行时 `text` **从原文里取**（`lines[start].slice(startCol - 1, endCol)`）——归一化只用来
      * 回答“在哪”，回执里那一段必须是文件里逐字的原文，否则空白折叠层下调用方拿到的引文
-     * 在文件里根本搜不到。跨行时首尾各取自己那一半。
+     * 在文件里根本搜不到。跨行时首尾各取自己那一半；中间行**逐个**拼回去，
+     * 不能用 `join` 后过滤空串（那会把 `a\n\nb` 的空白行丢掉，`actual` 与 `expect` 随之错位）。
      */
     const text =
       start === end
         ? lines[start].slice(startCol - 1, endCol)
-        : [firstText, middleText, lastText].filter((part) => part !== '').join('\n')
+        : [firstText, ...middleRows, lastText].join('\n')
     spans.push({ start, span: end - start + 1, startCol, endCol, endLineCol: tail.to, text })
   }
   return spans
@@ -1207,7 +1292,7 @@ function clipReceiptLine(text) {
  *     行尾不入摘要、不裁行、不加行号前缀）。它逐字节来自**磁盘上读到的内容**，
  *     不是模型转述的引文，也不是回执里那份被 `clipReceiptLine` 剪过的展示文本。
  *   · **行号**（`:` 后那对）：取该段在**文件里的绝对行号**（1-based、含两端），与
- *     `aura_read` 印的行号是同一把尺子——所以回执里 `!N| ` 的那些 N 与句柄里的数字对得上。
+ *     `aura_basetools_read` 印的行号是同一把尺子——所以回执里 `!N| ` 的那些 N 与句柄里的数字对得上。
  *
  * 铸出来的柄因此**自描述**：写路径 `resolveHandleRegion` 拿当前文件那几行现算一遍摘要就能核对，
  * 不需要任何句柄表（`handle-core.mjs` 顶部那三条形状约束里的第 3 条）。
@@ -1543,7 +1628,7 @@ function notFoundDetail(lines, oldRows, hunk, budget, ctx = null) {
     `\`NOT copyable\`, which means the receipt clipped that one to stay inside its budget and only ` +
     `its beginning is shown. Two marks in front of each one are the receipt's own margin, not ` +
     `part of the file: the \`=\` / \`!\` says whether your old text has that line, and the \`N| \` ` +
-    `after it is a line number (the same numbering aura_read prints).\n`
+    `after it is a line number (the same numbering aura_basetools_read prints).\n`
   const fixed =
     `Closest region: lines ${region.startLine}-${region.endLine} of ${region.fileLines} — ${matchNote}${runNote}${diffNote}.\n` +
     bandIdentity
@@ -1615,8 +1700,8 @@ function notFoundDetail(lines, oldRows, hunk, budget, ctx = null) {
       region.run.len > 0
         ? `pass lines ${region.run.fileFrom}-${region.run.fileTo} exactly as they are on disk as \`old\` (your line(s) ${region.run.quoteFrom}-${region.run.quoteTo} are byte-for-byte those), then re-send the hunk`
         : region.basis === 'hint'
-          ? `re-read lines ${region.startLine}-${region.endLine} (aura_read), then pass the text exactly as it is there`
-          : 're-read the file (aura_read) and pass the text exactly as it is there — no line of your old text is in this file',
+          ? `re-read lines ${region.startLine}-${region.endLine} (aura_basetools_read), then pass the text exactly as it is there`
+          : 're-read the file (aura_basetools_read) and pass the text exactly as it is there — no line of your old text is in this file',
   }
 }
 
@@ -1955,7 +2040,6 @@ function locateByOld(lines, hunk, oldText, label, ctx = null) {
    * 片段层候选多带 `{startCol, endCol, text}`：这一层替换的**就是那一处跨度**，不是整行。
    * 收敛/就近两轮只看 `{start, span}`（行读数），所以它们原样沿用两层同一份代码。
    */
-  const frag = (c) => byFragment && typeof c?.text === 'string'
   let narrowed = ''
   if (candidates.length > 1 && ctxRows.length > 0) {
     const tight = candidates.filter((c) => contextSitsAt(lines, c.start, c.span, ctxRows, norm, 0))
@@ -1982,9 +2066,20 @@ function locateByOld(lines, hunk, oldText, label, ctx = null) {
   }
   if (candidates.length > 1) throw oldAmbiguityError(lines, candidates, label, total, ctx)
   const [chosen] = candidates
+  return oldHitFromCandidate(lines, hunk, chosen, { tierKey, narrowed, byNear })
+}
+
+/**
+ * 把一个 `old` 候选变成一份定位命中（单处与 replace_all 共用，判据只写一次）。
+ *
+ * `tierPrefix` 只改回执里的层名：`old`（单处）/ `old-all`（全量替换）。除此之外两者逐字同形——
+ * 回执字段、坐标核对、片段跨度、`after` 的取法都不分叉。
+ */
+function oldHitFromCandidate(lines, hunk, chosen, { tierKey, narrowed = '', byNear = false, tierPrefix = 'old' } = {}) {
+  const byFragment = typeof chosen.text === 'string'
   const startLine = chosen.start + 1
   const endLine = chosen.start + chosen.span
-  const tierBase = `old${tierKey === 'exact' ? '' : `~${tierKey}`}${narrowed}`
+  const tierBase = `${tierPrefix}${tierKey === 'exact' ? '' : `~${tierKey}`}${narrowed}`
   const range = lineRangeOf(hunk)
   const coordinatesAgree = range !== undefined && range.start === startLine && range.end === endLine
   const coordinateNote =
@@ -1995,8 +2090,8 @@ function locateByOld(lines, hunk, oldText, label, ctx = null) {
    * 受寻址区间的原文：整行对齐层是一整行（或几行）；片段层是**命中跨度自己**。
    * `expect` 闸门（{@link expectVerdict}）因此按真正被替换的那一段判，而不是按一行判。
    */
-  const addressed = frag(chosen) ? chosen.text : lines.slice(chosen.start, endLine).join('\n')
-  const fragmentNote = frag(chosen) ? fragmentNoteFor(startLine, chosen.startCol, chosen.endCol, chosen.text) : null
+  const addressed = byFragment ? chosen.text : lines.slice(chosen.start, endLine).join('\n')
+  const fragmentNote = byFragment ? fragmentNoteFor(startLine, chosen.startCol, chosen.endCol, chosen.text) : null
   /** 两条披露可能同时成立（片段层的跨度比整行窄 + 坐标与落点不符）：都写进 `tier`，各说各的事实。 */
   const notes = [fragmentNote, coordinateNote].filter((note) => note !== null)
   return {
@@ -2011,7 +2106,7 @@ function locateByOld(lines, hunk, oldText, label, ctx = null) {
      * 跨行时 `columns[1]` 是**首行坐标**（拼接层拿它切 `prefix` / `tail`），
      * 末行那一侧的列号另放 `endLineCol`。
      */
-    ...(frag(chosen)
+    ...(byFragment
       ? {
           fragment: {
             line: startLine,
@@ -2028,6 +2123,97 @@ function locateByOld(lines, hunk, oldText, label, ctx = null) {
       : { coordinateNote, coordinateConflict: { given: [range.start, range.end], actual: [startLine, endLine] } }),
     ...(byNear ? { byNear: true } : {}),
   }
+}
+
+/**
+ * `replace_all`：把 `old` 在文件里的**全部非重叠出现**各变成一份命中。
+ *
+ * 与 {@link locateByOld} 共用两层定位（整行对齐 → 行内片段）和同一份命中装配；差别有三点：
+ *   · 不再要求唯一，而是**逐处**返回（调用方一次改完）；
+ *   · **优先用片段层**。整行层对 `norm-space` 的语义是"换掉整行"，而 `replace_all` 的承诺是
+ *     "换掉这段文字"——整行优先会让同一段文字在行内出现时被漏掉（实测：
+ *     `old:"beta gamma"` 在 `  beta   gamma` 与独立一行各出现一次，整行层只看见后一处）；
+ *   · 重叠出现只保留最左边那一个（从左到右、不回头），与 `String.replaceAll` 的非重叠口径一致。
+ *     例：`old="aa"` 打在 `aaaa` 上得到两处（1-2、3-4），不会把重叠的三处叠进一次替换。
+ *
+ * 上下文/坐标/`near` 在这里没有意义（它们都是"收敛到一处"的工具），参数面已拒绝；
+ * 找不到任何一处时仍走 {@link oldNotFoundError}，回执与单处地址同一份。
+ */
+function locateAllByOld(lines, hunk, oldText, label, ctx = null) {
+  const oldRows = addressRows(oldText)
+  const fragment = findFragmentTier(lines, oldText)
+  let candidates
+  let tierKey
+  let byFragment = true
+  if (fragment.spans.length > 0) {
+    candidates = fragment.spans
+    tierKey = fragment.tier
+  } else {
+    /**
+     * 片段层找不到、整行层却有时才走这里（正常输入不会出现：整行原文本来就是片段层的一个子串）。
+     * 保留它是为了不把“找不到”的判决提前成另一种沉默——两层都空才是真的没有。
+     */
+    const aligned = findWindowTier(lines, oldRows)
+    if (aligned.starts.length === 0) throw oldNotFoundError(label, lines, oldRows, hunk, ctx)
+    candidates = aligned.starts.map((start) => ({ start, span: oldRows.length }))
+    tierKey = aligned.tier
+    byFragment = false
+  }
+  return nonOverlappingCandidates(candidates, byFragment).map((chosen) =>
+    oldHitFromCandidate(lines, hunk, chosen, { tierKey, tierPrefix: 'old-all' }),
+  )
+}
+
+/**
+ * 按“从左到右、不回头”筛掉重叠候选（保持输入顺序之外的确定性：先按行/列排序再筛）。
+ *
+ * 整行候选只比行区间；片段候选还要比列——同一行里的两处 `old` 是两次不同的替换，
+ * 不能因为落在同一行就当成重叠（那会把 `replace_all` 静默降成“只改每行第一处”）。
+ */
+function nonOverlappingCandidates(candidates, byFragment) {
+  const sorted = [...candidates].sort(
+    (a, b) => a.start - b.start || (byFragment ? a.startCol - b.startCol : 0),
+  )
+  const kept = []
+  for (const candidate of sorted) {
+    const previous = kept[kept.length - 1]
+    if (previous === undefined || !candidateOverlaps(previous, candidate, byFragment)) kept.push(candidate)
+  }
+  return kept
+}
+
+/** 两个候选在**被替换的字节**上是否重叠（整行层按行，片段层按行列）。 */
+function candidateOverlaps(a, b, byFragment) {
+  if (!byFragment) return a.start + a.span > b.start
+  if (a.start === b.start) return a.startCol <= b.endCol && b.startCol <= a.endCol
+  const [first, second] = a.start < b.start ? [a, b] : [b, a]
+  const firstEndExclusive = first.start + first.span
+  if (second.start > firstEndExclusive - 1) return false
+  if (second.start < firstEndExclusive - 1) return true
+  /**
+   * `endLineCol` 是末行的 0-based 排他列；转换成 1-based 闭区间末列正好等于它。
+   * 第二处从同一行更靠后的列开始 ⇒ 两段不相交。
+   */
+  const firstEndCol = first.endLineCol ?? first.endCol
+  return second.startCol <= firstEndCol
+}
+
+/**
+ * 已定好的两处替换是否重叠（拼接前最后一道）。
+ *
+ * 整行命中仍按行区间判（保守）；两处**片段**命中允许落在同一行，只要字节不相交——
+ * 这正是 `replace_all` 在同一行改多处所需要的那条路（`a` 与 `b` 各换各的那一段）。
+ */
+function matchesOverlap(a, b) {
+  if (a.fragment === undefined || b.fragment === undefined) return a.start < b.end && b.start < a.end
+  const asCandidate = (match) => ({
+    start: match.start,
+    span: match.end - match.start,
+    startCol: match.fragment.columns[0],
+    endCol: match.fragment.columns[1],
+    ...(match.fragment.endLineCol === undefined ? {} : { endLineCol: match.fragment.endLineCol }),
+  })
+  return candidateOverlaps(asCandidate(a), asCandidate(b), true)
 }
 
 // ── 内容寻址的第二条出路：这次编辑**已经落地**了 ─────────────────────────────
@@ -2081,6 +2267,16 @@ const ALREADY_APPLIED_TIER = 'already-applied'
  * （`X`、`}`、`-`、`ok`）在文件里出现一次与“调用方要的结果已经在那儿”不可区分。
  */
 const ALREADY_APPLIED_MIN_CHARS = 8
+
+/**
+ * 回执里“改动后行内区域”的**体量上限**（0.8.1）。
+ *
+ * 只对片段层（`fragment`）回填整行上下文：整行替换的 `replaced` 已经是完整的新区域，
+ * 再回一份 `after` 只是把同一段文本说两遍。片段层不同——`replaced` 只是行内那一段，
+ * 调用方看不到整行改完的样子；给整行才能确认前后缀没被挤坏。
+ * 上限 400 字符：足够覆盖常见一行，又不会让回执因为一个超长行翻倍。
+ */
+const RECEIPT_AFTER_CHARS = 400
 
 /**
  * 逐条判「已落地」：全过 ⇒ 回执数组（每条 hunk 一项）；任一条不成立 ⇒ `null`。
@@ -2171,7 +2367,12 @@ function resolveHandleRegion(lines, parsed, ctx) {
     return { startLine: parsed.startLine, endLine: parsed.endLine, rows: own, moved: false }
   }
   const observation = latestObservation(ctx.ledgerKey, { source: ctx.content })
-  if (observation === null) throw handleStaleError(ctx.label)
+  /**
+   * `source === null` 是**大文件的令牌-only 观测**（`observation-store` 的 `MAX_SOURCE`）：
+   * 没有全文就无法核对句柄携带的那段字节，与“账本里根本没有这条观测”同一条出路（`handleStaleError`）。
+   * 旧代码直接 `.split`，在 >256 KiB 的陈旧句柄上抛 TypeError，把可判定的拒绝变成工具故障。
+   */
+  if (observation === null || typeof observation.source !== 'string') throw handleStaleError(ctx.label)
   const thenRows = regionRowsAt(observation.source.split(/\r?\n/), parsed.startLine, parsed.endLine)
   if (thenRows === null) throw handleStaleError(ctx.label)
   const thenText = thenRows.join('\n')
@@ -2377,6 +2578,36 @@ function locateByHandle(lines, hunk, parsed, ctx) {
 }
 
 /**
+ * `intent` 与哪些字段**不能同时出现**（T16）。
+ *
+ * `intent` 是**自成一体的一层地址**：它由引擎决定落到哪个精确区间。若同时给出任何别的地址，
+ * 谁说了算就没有正确答案——挑一个执行就是一次静默换语义（调用方写的两个地址指向不同地方时，
+ * 改错的那次不会有任何提示）。所以参数面直接拒绝，而不是挑一个。
+ *
+ * 名单与 {@link planHunks} 的地址判据同源：`target` / `lines`（含别名 `range`）/ `start_line` /
+ * `end_line` / `line_cue` / `anchor` / `old` / `context` / `handle`。
+ * `near` / `expect` / `replace` **不在**名单里：前两个是修饰，第三个是动作。
+ *
+ * 「在场」的判据逐字段照搬它自己那一层的：字符串看非空（`anchor` 看长度、其余看 trim），
+ * 坐标看 `!== undefined && !== null`。判据写宽或写窄都会让某个形状在参数面与引擎里得到两种结论。
+ *
+ * @returns 冲突的字段名（按上面的固定顺序）；没有冲突时为空数组
+ */
+function intentAddressConflicts(hunk) {
+  const clashes = []
+  if (typeof hunk.target === 'string' && hunk.target.trim().length > 0) clashes.push('target')
+  for (const key of ['lines', 'range', 'start_line', 'end_line']) {
+    if (hunk[key] !== undefined && hunk[key] !== null) clashes.push(key)
+  }
+  if (typeof hunk.line_cue === 'string' && hunk.line_cue.trim().length > 0) clashes.push('line_cue')
+  if (typeof hunk.anchor === 'string' && hunk.anchor.length > 0) clashes.push('anchor')
+  if (oldAddressOf(hunk) !== null) clashes.push('old')
+  if (typeof hunk.context === 'string' && hunk.context.trim().length > 0) clashes.push('context')
+  if (typeof hunk.handle === 'string' && hunk.handle.trim().length > 0) clashes.push('handle')
+  return clashes
+}
+
+/**
  * 规划所有 hunk：逐个定位 → expect 核对 → 重叠检查 → 倒序拼接。
  * 任一 hunk 失败即抛错，调用方据此保证磁盘不变（事务性来自"先全部规划完再落盘"）。
  *
@@ -2425,6 +2656,75 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
     const hasCue = typeof hunk.line_cue === 'string' && hunk.line_cue.trim().length > 0
     const hasAnchor = typeof hunk.anchor === 'string' && hunk.anchor.length > 0
     const oldText = oldAddressOf(hunk)
+    /**
+     * `replace_all`（0.10.2）：把 `old` 的**全部非重叠出现**各改一次。
+     *
+     * 它不是第六种地址，而是 `old` 的一种作用范围；因此只认 `old` + 动作字段（`replace` /
+     * `expect` / `eol`）。把 `target`/`lines`/`context`/`near` 混进来意味着"既想全改又想收敛到一处"，
+     * 没有正确答案 —— 参数面直接拒绝，与 `intent` 的互斥同一条理由。
+     */
+    const replaceAll = hunk.replace_all
+    if (replaceAll !== undefined && typeof replaceAll !== 'boolean') {
+      throw new PatchError(
+        '`replace_all` must be true or false — nothing was written',
+        'PATCH_REPLACE_ALL_CONFLICT',
+      )
+    }
+    if (replaceAll === true) {
+      const clashes = []
+      if (hasTarget) clashes.push('target')
+      if (typeof hunk.intent === 'string' && hunk.intent.trim().length > 0) clashes.push('intent')
+      for (const key of ['lines', 'range', 'start_line', 'end_line']) {
+        if (hunk[key] !== undefined && hunk[key] !== null) clashes.push(key)
+      }
+      if (hasCue) clashes.push('line_cue')
+      if (hasAnchor) clashes.push('anchor')
+      if (typeof hunk.context === 'string' && hunk.context.trim().length > 0) clashes.push('context')
+      if (typeof hunk.handle === 'string' && hunk.handle.trim().length > 0) clashes.push('handle')
+      for (const key of ['line', 'position', 'near']) {
+        if (hunk[key] !== undefined && hunk[key] !== null) clashes.push(key)
+      }
+      if (oldText === null) {
+        throw new PatchError(
+          '`replace_all` needs `old`: the exact text to replace everywhere — nothing was written',
+          'PATCH_REPLACE_ALL_CONFLICT',
+        )
+      }
+      /**
+       * 片段层会把 `old` 首尾的换行去掉（那是“按行引用”的约定）。对 `replace_all` 来说，
+       * 这个静默归一很危险：`old:"a\n"` 会退化成在所有行里搜 `a`（`banana` 也中），
+       * 而单处地址至少还有唯一性兜底。这里直接拒绝，让调用方去掉尾换行后重试。
+       */
+      if (/^\n|\n$/.test(oldText.replace(/\r\n/g, '\n'))) {
+        throw new PatchError(
+          '`replace_all` cannot take `old` with a leading or trailing newline: the region is addressed by its text, not by the line ending — drop that newline from `old` and retry (the file\'s own ending stays) — nothing was written',
+          'PATCH_REPLACE_ALL_CONFLICT',
+        )
+      }
+      if (clashes.length > 0) {
+        throw new PatchError(
+          `\`replace_all\` applies \`old\` to every occurrence, so it cannot be combined with ${clashes.join(', ')} (replace / expect / eol are fine); drop either replace_all or those fields — nothing was written`,
+          'PATCH_REPLACE_ALL_CONFLICT',
+        )
+      }
+    }
+    /**
+     * 意图地址（T16）：`intent` 是**自成一体**的一层地址，与其余地址字段互斥。
+     *
+     * 冲突在**定位之前**就拒（参数面没成形，与 `PATCH_NO_ADDRESS` 同族），而不是在引擎里挑一个：
+     * 调用方写了两个地址说明它自己也没定，工具替它选一次就是一次看不见的换语义。
+     * `near` / `expect` / `replace` 不在此列——前两个是修饰，第三个是动作。
+     */
+    const hasIntent = typeof hunk.intent === 'string' && hunk.intent.trim().length > 0
+    if (hasIntent) {
+      const clashed = intentAddressConflicts(hunk)
+      if (clashed.length > 0) {
+        throw new PatchError(
+          `\`intent\` is a complete address by itself — it cannot be combined with ${clashed.join(', ')} (near / expect / replace are fine); drop either intent or those fields — nothing was written`,
+          'PATCH_INTENT_CONFLICT',
+        )
+      }
+    }
     /** 句柄的形状在这里判（不对就抛错）；`{handle, old}` 那一支的 `old` 仍然要命中区间内部。 */
     const parsedHandle = handleAddressOf(hunk)
     /**
@@ -2452,105 +2752,127 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
         'PATCH_NO_ADDRESS',
       )
     }
-    if (oldText === null && parsedHandle === null && !hasTarget && range === undefined && !hasCue && !hasAnchor) {
+    if (oldText === null && parsedHandle === null && !hasTarget && range === undefined && !hasCue && !hasAnchor && !hasIntent) {
       throw new PatchError(
-        gaveLineAddress(hunk) ? LINE_ADDRESS_HINT : 'each hunk needs one of: old, target, lines, line_cue, anchor',
+        gaveLineAddress(hunk) ? LINE_ADDRESS_HINT : 'each hunk needs one of: old, intent, target, lines, line_cue, anchor',
         'PATCH_NO_ADDRESS',
       )
     }
-    let hit
+    let hits
     if (parsedHandle !== null) {
       /**
        * 句柄优先（D7）：它在场时 `target` / `lines` / `line_cue` / `anchor` **一律不决定位置**，
        * 坐标（含 `expect` 之外的地址字段）与句柄冲突时被让开的一方走 `tier` 披露。
        * 句柄是工具自己那份逐字节副本，拄的 `old` 正是不可信的那一半。
        */
-      hit = locateByHandle(lines, hunk, parsedHandle, handleCtx)
+      hits = [locateByHandle(lines, hunk, parsedHandle, handleCtx)]
     } else if (oldText !== null) {
       /**
        * `old` 在场 ⇒ 走内容寻址，**其余地址字段一律不再决定位置**（坐标只用于核对与披露）。
        * 与 `target` 同时给时以 `old` 为准，同 {@link locateByOld} 的注释：
        * 一段可以被验证的原文，比一个可能来自旧视图的坐标/名字更接近“你想改的是这里”。
        */
-      hit = locateByOld(lines, hunk, oldText, filePath === null ? 'this file' : filePath, handleCtx)
+      hits = replaceAll === true
+        ? locateAllByOld(lines, hunk, oldText, filePath === null ? 'this file' : filePath, handleCtx)
+        : [locateByOld(lines, hunk, oldText, filePath === null ? 'this file' : filePath, handleCtx)]
     } else {
-      const found = locate(content, {
-        ...(hasTarget ? { target: hunk.target } : {}),
-        ...(range === undefined ? {} : { lines: range }),
-        ...(hunk.line_cue === undefined ? {} : { lineCue: hunk.line_cue }),
-        ...(hasTarget || range !== undefined || hunk.line_cue !== undefined ? {} : { anchor: hunk.anchor }),
-        ...(hunk.near === undefined ? {} : { near: hunk.near }),
-        ...(hunk.expect === undefined || hunk.expect === null ? {} : { assert: hunk.expect }),
-        ...(filePath === null ? {} : { filePath }),
-      })
+      /**
+       * 意图地址（T16）单独走一条请求：只带 `intent` / `near` / `expect` / `filePath`。
+       * 冲突字段在上面已经拒了，这里刻意**不再把其余地址字段递下去**——即便哪天冲突判据放宽，
+       * 引擎也不该从第二个地址里"顺手"拿到位置（那正是静默换语义的来路）。
+       */
+      const request = hasIntent
+        ? {
+            intent: hunk.intent,
+            ...(hunk.near === undefined ? {} : { near: hunk.near }),
+            ...(hunk.expect === undefined || hunk.expect === null ? {} : { assert: hunk.expect }),
+            ...(filePath === null ? {} : { filePath }),
+            ...(options.allowLoneCr === true ? { allowLoneCr: true } : {}),
+          }
+        : {
+            ...(hasTarget ? { target: hunk.target } : {}),
+            ...(range === undefined ? {} : { lines: range }),
+            ...(hunk.line_cue === undefined ? {} : { lineCue: hunk.line_cue }),
+            ...(hasTarget || range !== undefined || hunk.line_cue !== undefined ? {} : { anchor: hunk.anchor }),
+            ...(hunk.near === undefined ? {} : { near: hunk.near }),
+            ...(hunk.expect === undefined || hunk.expect === null ? {} : { assert: hunk.expect }),
+            ...(filePath === null ? {} : { filePath }),
+            ...(options.allowLoneCr === true ? { allowLoneCr: true } : {}),
+          }
+      const found = locate(content, request)
       if (!found.ok) {
         throw new PatchError(found.message, found.code, {
           ...(found.candidates === undefined ? {} : { candidates: found.candidates }),
         })
       }
-      hit = {
+      hits = [{
         startLine: found.startLine,
         endLine: found.endLine,
         tier: found.tier,
         actual: found.actual,
         ...(found.byNear === true ? { byNear: true } : {}),
+      }]
+    }
+    for (const hit of hits) {
+      const loc = {
+        start: hit.startLine - 1,
+        end: hit.endLine,
+        line: hit.startLine,
+        tier: hit.tier,
+        byNear: hit.byNear === true,
+        /**
+         * 片段层：替换范围是**命中跨度**（`fragment.columns`）而不是整行——拼接层据此只换这一段。
+         * 整行对齐层不带这个字段（它的跨度就是行首到行尾）。
+         */
+        ...(hit.fragment === undefined ? {} : { fragment: hit.fragment }),
+        /**
+         * 地址形态与调用方字面写法不符的**结构化**记录（`matches` 上；`applied` 不能加字段，见
+         * `locateByOld`）：片段层的跨度比整行窄、坐标与落点不一致——两条都回指事实，
+         * 让消费方能自己判断，而不必去解析 `tier` 里那句话。
+         */
+        ...(hit.fragmentNote === undefined ? {} : { fragmentNote: hit.fragmentNote }),
+        /**
+         * 句柄 hunk 多带一条：**句柄定下的整段区间**（坐标 + 字节）。
+         *
+         * 闸门拿它去和账本里那一段比对（{@link staleConflicts}）：句柄的凭据覆盖整个区间，
+         * 而 `line: k` / `old` 只是区间**内部**的相对定位——比错了一方就会误报。
+         */
+        ...(hit.handleRegion === undefined ? {} : { handleRegion: hit.handleRegion }),
+        ...(hit.coordinateNote === undefined
+          ? {}
+          : { coordinateNote: hit.coordinateNote, coordinateConflict: hit.coordinateConflict }),
       }
-    }
-    const loc = {
-      start: hit.startLine - 1,
-      end: hit.endLine,
-      line: hit.startLine,
-      tier: hit.tier,
-      byNear: hit.byNear === true,
+      const actual = hit.actual
       /**
-       * 片段层：替换范围是**命中跨度**（`fragment.columns`）而不是整行——拼接层据此只换这一段。
-       * 整行对齐层不带这个字段（它的跨度就是行首到行尾）。
-       */
-      ...(hit.fragment === undefined ? {} : { fragment: hit.fragment }),
-      /**
-       * 地址形态与调用方字面写法不符的**结构化**记录（`matches` 上；`applied` 不能加字段，见
-       * `locateByOld`）：片段层的跨度比整行窄、坐标与落点不一致——两条都回指事实，
-       * 让消费方能自己判断，而不必去解析 `tier` 里那句话。
-       */
-      ...(hit.fragmentNote === undefined ? {} : { fragmentNote: hit.fragmentNote }),
-      /**
-       * 句柄 hunk 多带一条：**句柄定下的整段区间**（坐标 + 字节）。
+       * `expect` 闸门 —— 判据本体是 {@link expectVerdict}（`locator-api.mjs`，**唯一一份**；C10）。
        *
-       * 闸门拿它去和账本里那一段比对（{@link staleConflicts}）：句柄的凭据覆盖整个区间，
-       * 而 `line: k` / `old` 只是区间**内部**的相对定位——比错了一方就会误报。
+       * 为什么只有**内容寻址**这一支在这里判：另一支（`locate` 的四层）已经在 `locate()` 的 `done()`
+       * 里用同一个函数判过同一个区间了（`hunk.expect` 就是作为 `assert` 传下去的），再判一次是同一件事
+       * 做两遍——每次都要全文件扫描一遍。两支合起来，一个 hunk 的 `expect` 恰好判一次，
+       * 而判它的永远是同一份实现。
+       *
+       * 这里曾经是 `normSpace(actual) !== normSpace(hunk.expect)`：与 `locate()` 的"包含且唯一"是
+       * **两份判据**，于是同一个 `expect` 在两条路径上判出两种结果——片段引文在 `locate()` 里通过，
+       * 到这里必被拒（实测：`planHunks` 的三种 `lines` 写法全拒）。改后这里不再有任何比较：
+       * 判据、阈值、候选清单形状都只在 `expectVerdict` 里，本函数只把结论翻成码。
        */
-      ...(hit.handleRegion === undefined ? {} : { handleRegion: hit.handleRegion }),
-      ...(hit.coordinateNote === undefined
-        ? {}
-        : { coordinateNote: hit.coordinateNote, coordinateConflict: hit.coordinateConflict }),
+      /**
+       * 句柄 hunk 也判 `expect`（只多不多）：句柄的摘要已经钉住了那段字节，而 `expect` 是调用方
+       * 显式写的断言——两条都成立才放行。零宽度的边界插入（`position`）没有可断言的区间，跳过。
+       */
+      if ((oldText !== null || parsedHandle !== null) && actual.length > 0 && hunk.expect !== undefined && hunk.expect !== null) {
+        const bad = expectVerdict(lines, loc.line, hit.endLine, actual, hunk.expect)
+        if (bad !== null) throw expectGateError(bad, loc.line, hit.tier, actual)
+      }
+      const eol = adaptReplaceEol(hunk.replace ?? '', hunk.eol ?? 'auto', targetEolFor(endings, loc.line, hit.endLine))
+      matches.push({ ...loc, hunk: hunkIndex, replace: eol.text, actual, ...(eol.adapted ? { eolAdapted: true } : {}) })
     }
-    const actual = hit.actual
-    /**
-     * `expect` 闸门 —— 判据本体是 {@link expectVerdict}（`locator-api.mjs`，**唯一一份**；C10）。
-     *
-     * 为什么只有**内容寻址**这一支在这里判：另一支（`locate` 的四层）已经在 `locate()` 的 `done()`
-     * 里用同一个函数判过同一个区间了（`hunk.expect` 就是作为 `assert` 传下去的），再判一次是同一件事
-     * 做两遍——每次都要全文件扫描一遍。两支合起来，一个 hunk 的 `expect` 恰好判一次，
-     * 而判它的永远是同一份实现。
-     *
-     * 这里曾经是 `normSpace(actual) !== normSpace(hunk.expect)`：与 `locate()` 的"包含且唯一"是
-     * **两份判据**，于是同一个 `expect` 在两条路径上判出两种结果——片段引文在 `locate()` 里通过，
-     * 到这里必被拒（实测：`planHunks` 的三种 `lines` 写法全拒）。改后这里不再有任何比较：
-     * 判据、阈值、候选清单形状都只在 `expectVerdict` 里，本函数只把结论翻成码。
-     */
-    /**
-     * 句柄 hunk 也判 `expect`（只多不多）：句柄的摘要已经钉住了那段字节，而 `expect` 是调用方
-     * 显式写的断言——两条都成立才放行。零宽度的边界插入（`position`）没有可断言的区间，跳过。
-     */
-    if ((oldText !== null || parsedHandle !== null) && actual.length > 0 && hunk.expect !== undefined && hunk.expect !== null) {
-      const bad = expectVerdict(lines, loc.line, hit.endLine, actual, hunk.expect)
-      if (bad !== null) throw expectGateError(bad, loc.line, hit.tier, actual)
-    }
-    matches.push({ ...loc, hunk: hunkIndex, replace: hunk.replace ?? '', actual })
   }
-  matches.sort((a, b) => a.start - b.start)
+  matches.sort(
+    (a, b) => a.start - b.start || (a.fragment?.columns[0] ?? 1) - (b.fragment?.columns[0] ?? 1),
+  )
   for (let i = 1; i < matches.length; i += 1) {
-    if (matches[i].start < matches[i - 1].end) {
+    if (matchesOverlap(matches[i - 1], matches[i])) {
       throw new PatchError(
         `hunks overlap: line ${matches[i - 1].line} and line ${matches[i].line}`,
         'PATCH_OVERLAP',
@@ -2573,29 +2895,34 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
      */
     const rep = m.replace === '' ? { lines: [], endings: [] } : splitLinesWithEndings(m.replace)
     if (m.fragment !== undefined) {
-      const line = out[m.start]
+      const firstLine = out[m.start]
       const [startCol, endCol] = m.fragment.columns
-      const prefix = line.slice(0, startCol - 1)
-      const tail = line.slice(endCol)
+      const prefix = firstLine.slice(0, startCol - 1)
       /**
-       * **去掉 `splitLinesWithEndings` 末尾那个构造空行**：`"a\nb"` 切成 `['a','b','']`、行尾
-       * `['\n','','']`——真写进文件就是凭空多一行。整行版无所谓（那一个空行正好被丢掉），
-       * 行内版留着就会把原行的行尾挤到下一行去（实测：`beta GAMMA\n` + `\n` + `delta`）。
+       * 跨行片段的后缀在**末行**，不在首行。旧代码从首行切 `line.slice(endCol)`，于是
+       * `old: "START\nEND"` 替换后把末行 `END bb` 的 ` bb` 整段丢了——回执还写“只换了列 4-11”。
+       * `endLineCol` 是 `fragmentSpans` 从原文量出的末行列号（0-based 排他）；单行时它等于 `endCol`。
        */
+      const tail = out[m.end - 1].slice(m.fragment.endLineCol ?? endCol)
+      const endsWithNewline = m.replace.endsWith('\n')
       const repLines = rep.lines.length > 1 && rep.lines[rep.lines.length - 1] === '' ? rep.lines.slice(0, -1) : rep.lines
       const parts =
         repLines.length === 0
           ? [`${prefix}${tail}`]
-          : [`${prefix}${repLines[0]}`, ...repLines.slice(1), `${tail}`]
+          : repLines.length === 1
+            ? endsWithNewline
+              ? [`${prefix}${repLines[0]}`, `${tail}`]
+              : [`${prefix}${repLines[0]}${tail}`]
+            : endsWithNewline
+              ? [`${prefix}${repLines[0]}`, ...repLines.slice(1), `${tail}`]
+              : [`${prefix}${repLines[0]}`, ...repLines.slice(1, -1), `${repLines[repLines.length - 1]}${tail}`]
+      // 逻辑行数：replace 末尾的换行会把后缀顶到下一行（`old:'hello', replace:'A\n'` 是两行）。
+      m.newLineCount = repLines.length === 0 ? 1 : repLines.length + (endsWithNewline ? 1 : 0)
       /**
-       * 行尾：行尾**不在被替换的跨度里**（跨度首尾都落在行的边界内）⇒ 无论 `replace` 怎么写，
-       * 原来那一行的行尾逐字不动。`parts` 里多出来的中间行用 `replace` 自己的行尾。
+       * 行尾：被替换跨度**末行**的行尾由原文继承；`parts` 里中间行用 replace 自己的行尾。
+       * 跨行时必须是 `m.end - 1`（末行），用 `m.start` 会把首行的行尾错接到新末行上。
        */
-      const partEndings = [...rep.endings.slice(0, parts.length - 1), outEndings[m.start] ?? '']
-      /**
-       * 回执里的 `replaced`：**被替换那一段的新文本**，不掺前后缀——就是调用方给的 `replace`
-       * （拿 `parts` 当 `replaced` 会把前后缀也算进去，回执就不再是“什么被换成了什么”）。
-       */
+      const partEndings = [...rep.endings.slice(0, parts.length - 1), outEndings[m.end - 1] ?? '']
       m.replacedText = rep.lines.join('\n')
       out = out.slice(0, m.start).concat(parts, out.slice(m.end))
       outEndings = outEndings.slice(0, m.start).concat(partEndings, outEndings.slice(m.end))
@@ -2607,11 +2934,60 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
      * `m.end === 0` 只有零宽度的边界插入（`position: before` 且区间从第 1 行开始）能造出来：
      * 既有七种地址形状下 `m.end ≥ 1` 恒成立，所以这一改**动不到既有语义**。
      */
+    /**
+     * 在**无尾换行**的文件末尾插入（`position:'after'` 最后一行）：前一行 ending 是 `''`，
+     * 直接拼会把 `c` 与 `d` 粘成 `cd`。补一个分隔行尾（沿用文件已有行尾），
+     * 但插入块自己的末行仍保持原来的 `''`——不能凭空给文件加尾换行。
+     */
+    const insertionAtEof = rep.lines.length > 0 && m.start > 0 && m.end === m.start && (outEndings[m.start - 1] ?? '') === ''
+    const tailEnding = insertionAtEof ? '' : (outEndings[m.end - 1] ?? outEndings[m.end] ?? '')
+    if (insertionAtEof) outEndings[m.start - 1] = outEndings.find((ending) => ending !== '') ?? '\n'
     if (rep.lines.length > 0) {
-      rep.endings[rep.endings.length - 1] = outEndings[m.end - 1] ?? outEndings[m.end] ?? ''
+      rep.endings[rep.endings.length - 1] = tailEnding
     }
+    m.newLineCount = rep.lines.length
     out = out.slice(0, m.start).concat(rep.lines, out.slice(m.end))
     outEndings = outEndings.slice(0, m.start).concat(rep.endings, outEndings.slice(m.end))
+  }
+  /**
+   * 改动后的坐标、行数变化与新句柄（0.8.1）：让调用方**不必回读**就能继续编辑。
+   *
+   * `applied[].line` 是**改前**坐标（契约，黄金集钉着）；`afterLine` / `afterEndLine` 是同一处
+   * 在**改后**文件里的坐标。两者不能互相替代：一次多 hunk 调用里，高位 hunk 的改后行号取决于
+   * 低位 hunk 增删了几行（`drift`），调用方手里只有改前文件，算不出来。
+   *
+   * `handle` 用改后内容现场铸一把：句柄只承诺“这段字节 + 这个区间”，不依赖读写两侧有共享状态；
+   * 下一次 `edit` 直接拿它寻址即可。删除（`newLineCount === 0`）没有可指的区间，不铸柄。
+   */
+  let drift = 0
+  /**
+   * 终态文本的**逻辑行**视图。片段层的 `out` 里 prefix/tail 是两个数组项、合起来仍是一行，
+   * 直接拿 `out.slice` 会多算行；以最终拼接文本为准，行号、回填文本与句柄三者同源。
+   */
+  const finalLines = joinLinesWithEndings(out, outEndings).split(/\r?\n/)
+  for (const m of matches) {
+    const oldCount = m.end - m.start
+    const newCount = m.newLineCount ?? oldCount
+    const afterLine = m.start + 1 + drift
+    const afterEndLine = afterLine + newCount - 1
+    m.afterLine = afterLine
+    m.afterEndLine = afterEndLine
+    m.delta = newCount - oldCount
+    const regionText = newCount > 0 ? finalLines.slice(afterLine - 1, afterEndLine).join('\n') : ''
+    if (m.fragment !== undefined) {
+      m.after = regionText.length > RECEIPT_AFTER_CHARS ? `${regionText.slice(0, RECEIPT_AFTER_CHARS)}…` : regionText
+      m.afterTruncated = regionText.length > RECEIPT_AFTER_CHARS
+    }
+    if (newCount > 0 && typeof handleCtx.ledgerKey === 'string' && handleCtx.ledgerKey.length > 0) {
+      m.handle = mintHandle({
+        ledgerKey: handleCtx.ledgerKey,
+        regionText,
+        byteOrderMark: handleCtx.byteOrderMark,
+        startLine: afterLine,
+        endLine: afterEndLine,
+      })
+    }
+    drift += m.delta
   }
   /**
    * 逐条回执：**一条 hunk 一条记录，每条只描述它自己那条 hunk**；数组顺序 = 调用方的**输入顺序**。
@@ -2652,6 +3028,10 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
       byNear: m.byNear === true,
       actual: m.actual,
       replaced: m.replacedText ?? replaceTextOf(m.replace),
+      ...(m.afterLine === undefined ? {} : { afterLine: m.afterLine, afterEndLine: m.afterEndLine, delta: m.delta }),
+      ...(m.after === undefined ? {} : { after: m.after, afterTruncated: m.afterTruncated === true }),
+      ...(m.handle === undefined ? {} : { handle: m.handle }),
+      ...(m.eolAdapted === true ? { eolAdapted: true } : {}),
     }))
   return { matches, content: joinLinesWithEndings(out, outEndings), applied }
 }
@@ -2852,6 +3232,38 @@ function errorCodeOf(error) {
 }
 
 /**
+ * 严格新鲜度（0.10.3）：要求**当前这版内容**在本会话里被读过（或由本工具写过）。
+ *
+ * 这是内置 `Edit` / `Write` 的 read-before-write 规则，在 aura 里的对应物。默认只在
+ * `aura_basetools_write` 的覆写路径开启；`aura_basetools_edit` 用 `require_observation` / `--require-observation`
+ * 显式开启。判据不是“账本里有这个路径”，而是**账本里有这个版本**：
+ *   · 从没读过 ⇒ `never-read`；
+ *   · 读过但之后变了（内容令牌不同）⇒ `changed-since-read`。
+ * 两种情况都拒绝，并让调用方先 `aura_basetools_read` 再重试——与区域级闸门（只看被寻址区域）不同，
+ * 这里明确要求整份修订被看过。
+ *
+ * 写成功后 `finishEditPlan` 会把这版内容记进账本，因此“自己刚写的内容”可以直接继续写，
+ * 不需要额外再读一次。
+ *
+ * @throws PatchError('PATCH_UNOBSERVED')
+ */
+export function requireObservedRevision({ displayPath, identityKey, content, byteOrderMark = false }) {
+  const ledgerKey = ledgerIdentityKey(displayPath, identityKey)
+  const observation = latestObservation(ledgerKey, { source: content })
+  const currentToken = contentToken(content, byteOrderMark)
+  if (observation !== null && observation.version === currentToken) return
+  const changed = observation !== null
+  throw new PatchError(
+    `cannot patch "${displayPath}": ${changed ? 'the file changed since your last read' : 'this file has not been read in this session'} — read it first (aura_basetools_read), then retry${changed ? ' against the current revision' : ''} — nothing was written`,
+    'PATCH_UNOBSERVED',
+    {
+      reason: changed ? 'changed-since-read' : 'never-read',
+      ...(changed ? { observed_version: observation.version, current_version: currentToken } : {}),
+    },
+  )
+}
+
+/**
  * 一次完整写回：读 → BOM 计数 → 规划 → 陈旧闸门 → 逐字节写（CAS） → 回读校验 → 刷新观测。
  *
  * 这是**与框架无关的编排**：DSH 壳、独立 CLI、MCP 服务都走它，只有 provider 不同。
@@ -2859,16 +3271,30 @@ function errorCodeOf(error) {
  * 而本机 provider 总是逐字节写，因此这里没有退化路径，也没有 `PATCH_NO_BYTE_EXACT_WRITE`。
  *
  * @param provider - 四方法契约，见本文件顶部注释
- * @param request - { displayPath, hunks, dryRun?, create?, signal?, identityKey? }
+ * @param request - { displayPath, hunks, dryRun?, create?, signal?, identityKey?, requireObservation?,
+ *   wholeFile?, eol?, skipStaleGate? }
  *   `identityKey` = **宿主给的身份键**（同一份盘上文件必给同一个串）：有它时账本记在它上面，
  *   而 `displayPath` 只管回执与诊断（模型看到的路径必须是它自己给的那个）；
  *   不给 ⇒ 与本参数存在之前**逐字节一致**（独立面 CLI/MCP 的那条路由磁盘存储自己做归一，见
  *   `aura-standalone/lib/observation-store.mjs` 的 `identityKey`）。
+ *   `requireObservation` = 严格新鲜度（见 {@link requireObservedRevision}）；`create` 不受它约束。
+ *   `wholeFile` = 整份替换（`aura_basetools_write` 覆写；与 `hunks` 互斥）：行区间**在本次读到的内容上**
+ *   现算，避免“先读一次算总行数、规划时又读一次”的 TOCTOU 尾巴。
+ *   `skipStaleGate` = 只允许与 `wholeFile` 同用：显式盲写逃生口（`allow_unobserved`）跳过区域闸。
  * @returns 回执字段（与 DSH 版同形：applied / dryRun / write_verify / unverified_region / operation）
- * @throws PatchError（PATCH_STALE_REGION / WRITE_VERIFY_FAILED / PATCH_NOT_FOUND …）
+ * @throws PatchError（PATCH_STALE_REGION / PATCH_UNOBSERVED / WRITE_VERIFY_FAILED / PATCH_NOT_FOUND …）
  */
 async function planEditToProvider(provider, request) {
-  const { displayPath, hunks = [], dryRun = false, create, signal } = request
+  const { displayPath, hunks = [], dryRun = false, create, signal, wholeFile, eol, skipStaleGate } = request
+  if (wholeFile !== undefined && typeof wholeFile !== 'string') {
+    throw new PatchError('`wholeFile` must be a string', 'PATCH_BAD_WHOLE_FILE')
+  }
+  if (wholeFile !== undefined && hunks.length > 0) {
+    throw new PatchError('`wholeFile` replaces the entire file and cannot be combined with `hunks`', 'PATCH_BAD_WHOLE_FILE')
+  }
+  if (skipStaleGate === true && wholeFile === undefined) {
+    throw new PatchError('`skipStaleGate` is only valid together with `wholeFile`', 'PATCH_BAD_WHOLE_FILE')
+  }
   /** 账本的键只算一次（{@link ledgerIdentityKey} 是全引擎唯一那道归一）。 */
   const ledgerKey = ledgerIdentityKey(displayPath, request.identityKey)
   const info = await provider.stat(displayPath, signal)
@@ -2878,7 +3304,7 @@ async function planEditToProvider(provider, request) {
   if (info !== undefined && typeof create === 'string') {
     throw new PatchError(`cannot create "${displayPath}": it already exists — pass hunks to change it`, 'PATCH_EXISTS')
   }
-  if (info !== undefined && hunks.length === 0) {
+  if (info !== undefined && hunks.length === 0 && wholeFile === undefined) {
     throw new PatchError(`cannot patch "${displayPath}": no hunks — pass at least one, or use \`create\` for a new file`, 'PATCH_NO_HUNKS')
   }
 
@@ -2889,20 +3315,43 @@ async function planEditToProvider(provider, request) {
         'PATCH_NOT_FOUND',
       )
     }
-    return { kind: 'create', ledgerKey, displayPath, content: create, create: true, dryRun: false }
+    return { kind: 'create', ledgerKey, displayPath, content: create, create: true, dryRun: dryRun === true }
   }
 
   const content = await provider.readText(displayPath, signal)
   const byteOrderMarks = await fileByteOrderMarkCount(provider, displayPath, signal)
+  /**
+   * 严格新鲜度排在规划之前：预演与真写拿到同一个判决（预演必须能预演出真写的拒绝）。
+   * `create` 已在上面返回，不受这条约束——建新文件没有“读过”可言。
+   */
+  if (request.requireObservation === true) {
+    requireObservedRevision({
+      displayPath,
+      ...(request.identityKey === undefined ? {} : { identityKey: request.identityKey }),
+      content,
+      byteOrderMark: byteOrderMarks > 0,
+    })
+  }
+  /**
+   * 整份替换的行区间**在这里现算**：它必须与 `content` 是同一次读到的版本。
+   * 旧实现由调用方先读一次算总行数、这里再读一次，两次之间文件变长就会只替换前缀、
+   * 把旧尾巴留在盘上（`allow_unobserved` 下没有观测闸兜底，实测可复现）。
+   */
+  const planningHunks =
+    wholeFile === undefined
+      ? hunks
+      : [{ lines: [1, content.split(/\r?\n/).length], replace: wholeFile, ...(typeof eol === 'string' ? { eol } : {}) }]
   let planned
   try {
     /**
      * 句柄路要的**两个事实**在这里一并递下去：身份键（句柄里的身份标签拿同一口径算）
      * 与"这份文件有没有 BOM"（摘要的另一半）。两者与 {@link regionGate} 拿到的是同一对。
      */
-    planned = planHunks(content, hunks, displayPath, {
+    planned = planHunks(content, planningHunks, displayPath, {
       ...(request.identityKey === undefined ? {} : { identityKey: request.identityKey }),
       byteOrderMark: byteOrderMarks > 0,
+      // wholeFile 是整份字节替换，不依赖行号模型；允许它越过 lone CR 的行地址闸。
+      ...(wholeFile === undefined ? {} : { allowLoneCr: true }),
     })
   } catch (error) {
     /**
@@ -2918,7 +3367,7 @@ async function planEditToProvider(provider, request) {
      * `already_applied` 这份结构化字段根本到不了模型眼前。
      */
     if (errorCodeOf(error) !== 'PATCH_NOT_FOUND') throw error
-    const hits = alreadyAppliedHits(content, hunks)
+    const hits = alreadyAppliedHits(content, planningHunks)
     if (hits === null) throw error
     return { kind: 'already_applied', ledgerKey, displayPath, hits, dryRun }
   }
@@ -2936,13 +3385,24 @@ async function planEditToProvider(provider, request) {
    * 而同样的 hunks 真数落盘时闸门报 "the text you addressed moved" —— **预演没能预演出真正的判决**。
    * 一个只在写入路径上生效的闸门，配上一个说“没事”的预演，比没有预演更坏。
    */
-  const gate = regionGate(hunks, content, planned, displayPath, {
-    byteOrderMark: byteOrderMarks > 0,
-    // 身份键往下传（有才传）：闸门按**同一个磁盘文件**记账，而回执与诊断里的路径仍是 displayPath。
-    ...(request.identityKey === undefined ? {} : { identityKey: request.identityKey }),
-  })
+  const gate =
+    skipStaleGate === true
+      ? { clean: true, basis: request.requireObservation === true ? 'observation' : 'none' }
+      : regionGate(planningHunks, content, planned, displayPath, {
+          byteOrderMark: byteOrderMarks > 0,
+          // 身份键往下传（有才传）：闸门按**同一个磁盘文件**记账，而回执与诊断里的路径仍是 displayPath。
+          ...(request.identityKey === undefined ? {} : { identityKey: request.identityKey }),
+        })
   if (!gate.clean) throw new PatchError(gate.message, 'PATCH_STALE_REGION', gate.extras)
-  if (dryRun) return { kind: 'dry_run', ledgerKey, displayPath, applied: planned.applied, dryRun: true }
+  if (dryRun) {
+    /**
+     * 预演**不铸可复用句柄**：句柄指向“盘上那段字节”，而 dry-run 一个字节都没写；
+     * 把它发出去，下一次拿它编辑必然 `PATCH_HANDLE_STALE`。afterLine/delta 仍然给，
+     * 足以让调用方判断“会落到哪几行”；要句柄就真写（或写完再读）。
+     */
+    const applied = planned.applied.map(({ handle: _handle, ...rest }) => rest)
+    return { kind: 'dry_run', ledgerKey, displayPath, applied, basis: gate.basis, dryRun: true }
+  }
   return {
     kind: 'patch',
     ledgerKey,
@@ -2975,6 +3435,7 @@ async function planEditToProvider(provider, request) {
  */
 async function writeEditPlan(provider, request, plan) {
   if (plan.kind === 'create') {
+    if (plan.dryRun === true) return false
     await provider.writeText(request.displayPath, plan.content, { kind: 'createIfAbsent' }, request.signal)
     return true
   }
@@ -3013,7 +3474,27 @@ async function finishEditPlan(provider, request, plan) {
       dryRun: plan.dryRun,
     }
   }
-  if (plan.kind === 'dry_run') return { path: displayPath, applied: plan.applied, dryRun: true }
+  if (plan.kind === 'dry_run') {
+    return {
+      path: displayPath,
+      applied: plan.applied,
+      dryRun: true,
+      // 预演也要如实说“这次没有可核对的基准”，否则它比不上真写诚实。
+      ...(plan.basis === 'none' ? { unverified_region: true } : {}),
+    }
+  }
+  /**
+   * 预演的“新建”**不落盘**，也不能回读校验（盘上没有东西）。旧实现只把 `dryRun` 用在已有文件
+   * 的路径上，`create + dry_run` 会真的建文件并把回执写成 `dryRun:false`——预演做了真事。
+   */
+  if (plan.kind === 'create' && plan.dryRun === true) {
+    return {
+      path: displayPath,
+      operation: 'create',
+      applied: [{ line: 1, tier: 'create', actual: '', replaced: plan.content }],
+      dryRun: true,
+    }
+  }
   const verification = await verifyWriteBack(provider, displayPath, plan.content, displayPath, signal)
   const view = providerView(plan.content)
   const byteOrderMark = plan.content.startsWith(BYTE_ORDER_MARK)
@@ -3122,6 +3603,9 @@ function singleRequestFrom(item, request) {
   if (identityKey !== undefined) out.identityKey = identityKey
   const dryRun = item.dryRun === undefined ? request?.dryRun : item.dryRun
   if (dryRun !== undefined) out.dryRun = dryRun
+  /** 严格新鲜度是整批的默认值；元素自己给了就听元素的（与 `dryRun` 同一口径）。 */
+  const requireObservation = item.requireObservation === undefined ? request?.requireObservation : item.requireObservation
+  if (requireObservation !== undefined) out.requireObservation = requireObservation
   if (request?.signal !== undefined) out.signal = request.signal
   return out
 }
@@ -3187,6 +3671,15 @@ function groupRequest(group, request) {
       create: first.create,
       identityKey: first.identityKey,
       dryRun: first.dryRun,
+      /**
+       * 同文件合并时把元素级 `requireObservation` 一并带过去：否则它只对“单独一个目标”
+       * 那条路生效，多个目标命中同一文件时被静默丢掉。任一成员要求严格 ⇒ 整组严格（安全方向）。
+       */
+      ...(group.members.some((member) =>
+        member.requireObservation === undefined ? request?.requireObservation === true : member.requireObservation === true,
+      )
+        ? { requireObservation: true }
+        : {}),
     },
     request,
   )
@@ -3194,9 +3687,10 @@ function groupRequest(group, request) {
 
 /** 回执是哪一态（`applied` / `created` / `already_applied` / `dry_run`）—— 汇总行与 `landed` 都用它。 */
 function receiptKindOf(receipt) {
+  // 预演优先：`create + dry_run` 的 operation 仍是 create，但盘上一个字节都没写。
+  if (receipt.dryRun === true) return 'dry_run'
   if (receipt.operation === 'create') return 'created'
   if (receipt.outcome === 'already_applied') return 'already_applied'
-  if (receipt.dryRun === true) return 'dry_run'
   return 'applied'
 }
 
@@ -3298,6 +3792,8 @@ function mtEnvelope(edits, meta = {}) {
   return {
     targets: edits.length,
     applied,
+    // 整批都是预演时才把顶层的 dryRun 置 true；混有真写时不能声称“什么都没写”。
+    dryRun: edits.every((edit) => edit.receipt?.dryRun === true),
     summary: parts.join(' ｜ '),
     unchanged: landed === 0,
     landed_paths: paths(true),
@@ -3305,6 +3801,59 @@ function mtEnvelope(edits, meta = {}) {
     ...(meta.aborted === undefined ? {} : { aborted: meta.aborted }),
     ...(meta.partial === true ? { partial: true } : {}),
     edits,
+  }
+}
+
+/**
+ * 事务回滚之后，把**已经装配好的批回执**改写成最终磁盘状态。
+ *
+ * `applyEditsToProvider` 只负责写；事务层（CLI/MCP）在 `ok:false` 时回滚已落地的文件。
+ * 旧版把回滚前的批回执原样返回，于是 `landed_paths` / `applied` / `summary` 仍说“改成了”，
+ * 而盘上已经恢复原文——回执与磁盘相反，是比失败更坏的形态。
+ *
+ * 判据：
+ *   · `rollback.status === 'rolled_back'` 且确实有文件落地过 ⇒ 逐项改成 `rolled_back`、
+ *     `landed:false`、`applied:0`、`landed_paths:[]`、`unchanged:true`，并由 `mtEnvelope`
+ *     重算汇总行（不再出现 `applied 1` / `landed 1`）。
+ *   · 回滚有冲突（`recovery_required`）⇒ **不谎称**已全部恢复：保留逐项 landed，标
+ *     `recovery_required:true`，把冲突原样交给调用方。
+ *   · 根本没落地过（规划阶段失败）⇒ 保留原回执，只附 `rollback` 事实。
+ *
+ * @param batch - 引擎刚返回的批回执（含 `edits`）
+ * @param rollback - `tx.rollback()` 的返回值
+ * @returns 新回执；`ok` 由调用方（事务层）决定，这里不伪造成功
+ */
+export function rebuildAfterRollback(batch, rollback) {
+  const edits = Array.isArray(batch?.edits) ? batch.edits : []
+  const hadLanded = edits.some((edit) => edit.landed === true)
+  if (!hadLanded || rollback?.status !== 'rolled_back') {
+    return {
+      ...batch,
+      rollback,
+      ...(rollback?.status === 'recovery_required' ? { recovery_required: true } : {}),
+    }
+  }
+  const finalEdits = edits.map((edit) => {
+    if (edit.landed !== true) return { ...edit, landed: false }
+    return {
+      ...edit,
+      outcome: 'rolled_back',
+      landed: false,
+      rolled_back: true,
+      note: 'written, then rolled back — the file is back to its pre-call content',
+      // 旧的 receipt 描述的是“写下去的内容”；回滚后它不再等于磁盘，不能原样留着。
+      receipt: {
+        path: edit.file_path,
+        applied: [],
+        dryRun: false,
+        rolled_back: true,
+      },
+    }
+  })
+  return {
+    ...mtEnvelope(finalEdits, { aborted: 'rollback' }),
+    rolled_back: true,
+    rollback,
   }
 }
 

@@ -1,0 +1,100 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  full-gate:
+    name: full-gate · ubuntu-latest · node-22
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Host peer packages (public)
+        # release-check runs the DSH shell suites as well; the host packages are public but
+        # are not dependencies of the core package (it must stay DSH-free).
+        run: >-
+          npm install --no-save --no-package-lock --ignore-scripts
+          @deepseek-ai/dsh-tools@0.2.1-rc.2
+          @deepseek-ai/dsh-shell@0.2.1-rc.2
+          @deepseek-ai/dsh-fs@0.2.1-rc.2
+          @deepseek-ai/schemastery@3.18.5
+      - name: Build bundle
+        run: node build/make-bundle.mjs --pack
+      - name: Full release gate
+        # The single source of truth: every suite, range fixtures, packaged suite, installer,
+        # split-package install and consistency checks. Skipped optional suites are shown as ⏭;
+        # a skipped CRITICAL_SUITES entry fails the gate.
+        run: node build/release-check.mjs
+
+  smoke:
+    name: smoke · node-${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: CLI + MCP runtime smoke
+        run: |
+          set -euo pipefail
+          export AURA_CACHE_DIR="$RUNNER_TEMP/aura-cache"
+          f="$RUNNER_TEMP/smoke.txt"
+          printf 'alpha\n' > "$f"
+          node src/aura-standalone/bin/aura.mjs basetools read --file "$f" --mode full > /dev/null
+          node src/aura-standalone/bin/aura.mjs basetools edit --file "$f" --lines 1 --replace beta > /dev/null
+          grep -q 'beta' "$f"
+          node src/aura-standalone/bin/aura.mjs basetools write --file "$RUNNER_TEMP/new.txt" --content $'hello\n' > /dev/null
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | node src/aura-standalone/bin/aura-mcp.mjs > "$RUNNER_TEMP/mcp.out"
+          grep -q '"aura_basetools_read"' "$RUNNER_TEMP/mcp.out"
+          grep -q '"aura_basetools_write"' "$RUNNER_TEMP/mcp.out"
+
+  test:
+    name: node-${{ matrix.node }} · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            node: 22
+          - os: macos-26
+            node: 22
+          - os: macos-15
+            node: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Core file-tool suites
+        # 独立面测试不依赖 DSH peer；引擎壳套件（byte/stale/write-verify）需要宿主，留在本地/DSH 环境跑。
+        run: node src/aura-standalone/test/standalone-test.mjs
+      - name: Build bundle
+        # --pack now also derives the split npm packages (dist/npm), so this one command
+        # produces everything the later checks install from.
+        run: node build/make-bundle.mjs --pack
+      - name: Split package install/use
+        # Installs both tarballs into a temp project and runs CLI / MCP / npx from the installed
+        # core. DSH adapter import is skipped loudly here (no host peers); static resolution runs.
+        run: node build/split-package-test.mjs
+      - name: Packaged / byte-boundary suites
+        run: |
+          node dist/aura-basetools/test/standalone-test.mjs
+          node src/aura-standalone/test/range-bytes-test.mjs

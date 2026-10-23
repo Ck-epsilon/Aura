@@ -27,7 +27,7 @@
  *                   临界区里比对版本，不符抛 `FS_STALE_VERSION`
  *
  * 于是本文件测的是“真机链路”：mixed 两条（编辑第 4 行、非目标行的行尾被整份归一）今天必红，
- * 因为 aura_edit 的写回也走 editText。段 D 还从反面钉住 mock 的保真度（那条链子确实会毁掉混合行尾）。
+ * 因为 aura_basetools_edit 的写回也走 editText。段 D 还从反面钉住 mock 的保真度（那条链子确实会毁掉混合行尾）。
  */
 import fs from 'node:fs'
 import os from 'node:os'
@@ -144,7 +144,7 @@ const readPlugin = await import('../aura-read/index.js')
 const editPlugin = await import('../aura-edit/index.js')
 let readTool = null
 let editTool = null
-const tools = { register: (t) => (t.name === 'aura_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
+const tools = { register: (t) => (t.name === 'aura_basetools_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
 const mkCtx = () => ({
   fs: fsService,
   ...contextServices(),
@@ -273,9 +273,10 @@ for (const name of ['empty.md', 'empty_bom.md', 'lone_cr.md']) {
   } catch (e) {
     error = e
   }
+  const wantCode = name === 'lone_cr.md' ? 'LOCATOR_LONE_CR' : 'LOCATOR_OUT_OF_RANGE'
   check(
-    error === null && out?.outcome === 'not_found' && out?.code === 'LOCATOR_OUT_OF_RANGE',
-    `${name} 第 2 行不存在 ⇒ 结构化拒绝走结果通道（outcome=not_found / LOCATOR_OUT_OF_RANGE）`,
+    error === null && out?.outcome === 'not_found' && out?.code === wantCode,
+    `${name} 第 2 行不存在 ⇒ 结构化拒绝走结果通道（outcome=not_found / ${wantCode}）`,
     error ? `throw ${error.code}` : `outcome=${out?.outcome} code=${out?.code}`,
   )
   check(
@@ -303,7 +304,7 @@ for (const name of ['empty.md', 'empty_bom.md', 'lone_cr.md']) {
     error = e
   }
   check(
-    error === null && out?.outcome === 'not_found' && out?.code === 'LOCATOR_OUT_OF_RANGE',
+    error === null && out?.outcome === 'not_found' && out?.code === 'LOCATOR_LONE_CR',
     '单 \\r 文件的 lines= ⇒ not_found 走结果通道（不是工具级故障）',
     error ? `throw ${error.code}` : `outcome=${out?.outcome} code=${out?.code}`,
   )
@@ -314,32 +315,33 @@ for (const name of ['empty.md', 'empty_bom.md', 'lone_cr.md']) {
   )
   check(readBytesFile(file).equals(form.bytes), '单 \\r 文件拒绝时磁盘未变', describe(readBytesFile(file)))
   fs.writeFileSync(file, form.bytes)
-  const wholeOut = await edit(file, [{ lines: [1, 1], replace: 'EDITED' }])
+  // 拒绝信息指向的出口：按**逐字原文**整份替换（old 片段不依赖行号模型）。
+  const wholeOut = await edit(file, [{ old: 'alpha\rbeta\rgamma\r', replace: 'EDITED' }])
   check(
-    wholeOut.applied[0]?.tier === 'lines' && decode(readBytesFile(file)) === 'EDITED',
-    '单 \\r 文件整份替换（lines=[1,1]）可用且字节保真',
+    wholeOut.applied[0]?.tier?.startsWith('old') && decode(readBytesFile(file)) === 'EDITED',
+    '单 \\r 文件按 old 原文整份替换可用且字节保真',
     JSON.stringify(readBytesFile(file).toString('latin1')),
   )
 }
 
 // ── C 段：replace 自带行尾时按 replace 写（反例守卫） ───────────────────────
 say('')
-say('=== C. replace 自带行尾时必须照 replace 写 ===')
+say('=== C. eol:preserve 时，replace 自带行尾必须照 replace 写（旧逐字节口径） ===')
 {
   const file = path.join(tmp, 'c_crlf_file.md')
   fs.writeFileSync(file, bytesOf(CRLF))
-  await edit(file, [{ lines: [2, 2], replace: 'EDITED\nSECOND' }])
+  await edit(file, [{ lines: [2, 2], replace: 'EDITED\nSECOND', eol: 'preserve' }])
   const after = readBytesFile(file)
   const expected = bytesOf('alpha\r\n', 'EDITED\nSECOND', '\r\ngamma\r\n')
-  check(after.equals(expected), 'replace 自带 LF：文件是 CRLF 也照 LF 写（内部行尾来自 replace）', JSON.stringify(after.toString('latin1')))
+  check(after.equals(expected), 'replace 自带 LF：eol=preserve 时文件是 CRLF 也照 LF 写（内部行尾来自 replace）', JSON.stringify(after.toString('latin1')))
 }
 {
   const file = path.join(tmp, 'c_lf_file.md')
   fs.writeFileSync(file, bytesOf(LF))
-  await edit(file, [{ lines: [2, 2], replace: 'EDITED\r\nSECOND' }])
+  await edit(file, [{ lines: [2, 2], replace: 'EDITED\r\nSECOND', eol: 'preserve' }])
   const after = readBytesFile(file)
   const expected = bytesOf('alpha\n', 'EDITED\r\nSECOND', '\ngamma\n')
-  check(after.equals(expected), 'replace 自带 CRLF：文件是 LF 也照 CRLF 写', JSON.stringify(after.toString('latin1')))
+  check(after.equals(expected), 'replace 自带 CRLF：eol=preserve 时文件是 LF 也照 CRLF 写', JSON.stringify(after.toString('latin1')))
 }
 
 // ── H 段：后端没有 writeText 时，混合行尾必须拒绝（不得降级去走会改坏字节的路） ──

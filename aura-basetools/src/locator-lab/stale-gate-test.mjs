@@ -92,7 +92,7 @@ const readPlugin = await import('../aura-read/index.js')
 const editPlugin = await import('../aura-edit/index.js')
 let readTool = null
 let editTool = null
-const tools = { register: (t) => (t.name === 'aura_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
+const tools = { register: (t) => (t.name === 'aura_basetools_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
 const mkCtx = () => ({
   fs: fsService,
   ...contextServices(),
@@ -362,7 +362,7 @@ say('=== E. 同一轮里对同一区域连编两次：都成功（写成功后�
 
 // ── 段F：从未读过的文件 ────────────────────────────────────────────────────
 say('')
-say('=== F. 从未被 aura_read 读过的文件：不拦，但回执带 unverified_region ===')
+say('=== F. 从未被 aura_basetools_read 读过的文件：不拦，但回执带 unverified_region ===')
 {
   const file = path.join(tmp, 'f_never_read.md')
   writeBytes(file, F1_BEFORE)
@@ -380,7 +380,7 @@ say('=== F. 从未被 aura_read 读过的文件：不拦，但回执带 unverifi
 }
 
 // ── H：普通读也记账（闸门的判据要能拿到“上次观测”）──────────────────────────
-// 背景（真机实测）：普通 `aura_read`（非 changed）之后，`changed since=<那个令牌>` 报
+// 背景（真机实测）：普通 `aura_basetools_read`（非 changed）之后，`changed since=<那个令牌>` 报
 // “that version is no longer cached — cannot diff”——因为 `rememberRead` 只在 changed 路径被调用。
 // 要拿“上次观测”当判据，必须让普通读也记账。
 say('')

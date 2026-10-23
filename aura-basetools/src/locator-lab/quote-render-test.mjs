@@ -529,7 +529,7 @@ say('=== 段C：最坏情况下回执体量 ≤ 宿主结果阈值 ===')
         ),
     ],
     [
-      'C5 同上，走 locator-api（aura_read 那一侧）',
+      'C5 同上，走 locator-api（aura_basetools_read 那一侧）',
       () => ({ ok: false, error: locate(fatSrc, { lines: { start: 1, end: 20 }, assert: NOPE, filePath: 'fat.mjs' }) }),
     ],
     ['C6 候选清单 · 20 条候选 × 每条 2 行（写路径 old 歧义）', () => planOr({ planHunks }, dupSrc, [{ old: 'const sameA = 1\nconst sameB = 2', replace: 'X' }], 'dup.mjs')],

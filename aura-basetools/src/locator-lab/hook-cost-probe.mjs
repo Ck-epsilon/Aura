@@ -2,7 +2,7 @@
  * hook-cost-probe.mjs —— C6：PreToolUse 钩子「每次工具调用的固定税」的**构成分解**与**降本方案读数**。
  *
  * 背景（会话日志实测，本探针会自己复算一遍）：hook/result 自带 durationMs，PreToolUse p50≈686ms，
- *   而 aura_read 端到端 p50=200ms、aura_edit p50=252ms —— 固定税 > 工具自身耗时。
+ *   而 aura_basetools_read 端到端 p50=200ms、aura_basetools_edit p50=252ms —— 固定税 > 工具自身耗时。
  *
  * 本探针回答三个问题（全部只读，不改宿主、不写仓库）：
  *   ① 这 686ms 花在哪：pwsh 进程启动 / pwsh 拉起子进程的管道 / node 启动 / 钩子模块图 / 钩子判定与落账 / 宿主桥
@@ -570,10 +570,10 @@ if (g('L2') !== null) {
   })
 }
 if (g('L3') !== null && inproc) {
-  const cover = guard.preTool > 0 ? (['aura_read', 'aura_edit'].reduce((a, n) => a + (guard.byTool.get(n) ?? 0), 0) / guard.preTool) : null
+  const cover = guard.preTool > 0 ? (['aura_basetools_read', 'aura_basetools_edit'].reduce((a, n) => a + (guard.byTool.get(n) ?? 0), 0) / guard.preTool) : null
   push({
     id: 'C3',
-    title: '逻辑内联进工具：aura_read / aura_edit 在自己进程里判',
+    title: '逻辑内联进工具：aura_basetools_read / aura_basetools_edit 在自己进程里判',
     gain: `被覆盖的调用每次省掉整个钩子税（${r1(PROD.p50)}ms），自身代价 = 同进程 main() ${r1(inproc.mainMs)}ms；` +
       (cover !== null ? `生产窗口里这两个工具占 ${(cover * 100).toFixed(0)}%（${guard.preTool} 条 pre_tool 口径），均摊到全部调用约省 ${r1(PROD.p50 * cover)}ms/次。` : '覆盖率要用本工作区的工具分布算。'),
     semantics: '⚠ 只能覆盖「我们自己的工具」。要保护栏语义不变，钩子必须保留给其它工具 ⇒ 省的是这两个工具那一份，不是把钩子撤掉。',

@@ -12,13 +12,11 @@
  *   · **内容哈希**。
  * 本文件把这条测出来，免得以后有人在别处写出依赖 mtime 的逻辑。
  *
- * ## T28：Rust `pub const` 提不出符号（机制未查明）
+ * ## T28：Rust `pub const` 提不出符号（已修）
  *
- * 顺带把已确认的形状差异钉住：`const` / `static` 能出，`pub static` 能出，
- * 但 **`pub const` 不行**（而 `pub(crate) const` 又能）。本机**零个 `.rs` 文件**，
- * 所以这条无法用真实语料量化——只能把"当前已知行为"固定下来，避免它悄悄变化而无人知。
- * 这里**不**断言正确值（那会变成把 bug 写成契约），只断言"与已记录的形状一致"，
- * 并在不符时把差异打出来——下次修它时，这条会先红。
+ * 机制：`const` 同时是 Rust 的 modifier 与规则字面量，`$mods*` 原先只做「全吃 / 不吃」两档回溯，
+ * 于是 `pub const G` 要么把 `const` 吃进修饰符段、要么在 `pub` 上对不上字面量。
+ * 修法是把 `$mods*` 改成逐长度回溯（吃 `pub`、留 `const`）。下面把当时缺的形状升为正向断言。
  */
 import fs from 'node:fs'
 import os from 'node:os'
@@ -61,27 +59,27 @@ say('=== T23：时间戳分辨率 ===')
 }
 
 say('')
-say('=== T28：Rust 修饰符变量绑定的已知形状 ===')
+say('=== T28：Rust 修饰符变量绑定（pub const 已修）===')
 {
   /**
-   * 已实测的形状（本轮两次独立确认）：
-   *   const A: i32 = 1            → 有
-   *   static A: i32 = 1           → 有
-   *   pub static A: i32 = 1       → 有
-   *   pub(crate) const C: u8 = 2  → 有
-   *   pub const A: i32 = 1        → **无**（机制未查明）
-   *   pub const B: u8 = 2;        → **无**
-   * 只断言"出得来"的那几个（它们是真收益）；`pub const` 的缺失**记为已知差异**，
-   * 不写成断言——否则修好它反而会红。
+   * 已实测的形状（T28 修复后全部为真）：
+   *   const A / static B / pub static C            → 有
+   *   pub(crate) const D                           → 有
+   *   pub const G / pub const B / pub unsafe const H → 有
+   * `pub const fn` 仍是 function：变量规则不能把它抢成 variable。
    */
   const lang = langOf('x.rs')
   check('Rust 已登记（否则本段无意义）', lang !== null)
-  const names = (src) => listSymbols(indexStructure(src, lang)).map((s) => s.name)
+  const symbols = (src) => listSymbols(indexStructure(src, lang))
+  const names = (src) => symbols(src).map((s) => s.name)
   const CASES = [
     ['const A: i32 = 1', 'A'],
     ['static B: i32 = 1', 'B'],
     ['pub static C: i32 = 1', 'C'],
     ['pub(crate) const D: u8 = 2', 'D'],
+    ['pub const G: i32 = 1', 'G'],
+    ['pub const B: u8 = 2;', 'B'],
+    ['pub unsafe const H: i32 = 1', 'H'],
     ['pub fn e() {}', 'e'],
     ['pub struct F;', 'F'],
   ]
@@ -89,12 +87,8 @@ say('=== T28：Rust 修饰符变量绑定的已知形状 ===')
     const got = names(src)
     check(`Rust ${JSON.stringify(src)} → 含 ${want}`, got.includes(want), JSON.stringify(got))
   }
-  // 已知差异：不判红，但把事实打印出来，免得它被忘掉或悄悄变化。
-  const gap = names('pub const G: i32 = 1')
-  say(`  ⚠ 已知差异：\`pub const G: i32 = 1\` → ${JSON.stringify(gap)}（机制未查明，本机零 .rs 语料，无法量化）`)
-  if (gap.includes('G')) {
-    say('  ⚠ 这条已经能出了——请更新 T28 的记录并把它升为断言')
-  }
+  const fnKinds = symbols('pub const fn f() {}').map((s) => `${s.kind}:${s.name}`)
+  check('Rust `pub const fn` 仍是 function，不被变量规则抢成 variable', fnKinds.includes('function:f') && !fnKinds.includes('variable:f'), JSON.stringify(fnKinds))
 }
 
 fs.rmSync(tmp, { recursive: true, force: true })

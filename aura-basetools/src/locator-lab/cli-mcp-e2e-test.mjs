@@ -65,9 +65,9 @@ say('=== A. 端到端：read 拿令牌 → edit 用它 → 磁盘与回执都对
 {
   const f = path.join(tmp, 'article.md')
   fs.writeFileSync(f, utf8('alpha\nbravo\ncharlie\ndelta\n'))
-  const read = runCli(['read', '--file', f, '--mode', 'full'])
+  const read = runCli(['basetools', 'read', '--file', f, '--mode', 'full'])
   check(read.status === 0 && typeof read.out?.version === 'string', 'A1 read 给出令牌', `${read.status} ${String(read.out?.version ?? read.out?.error ?? '').slice(0, 60)}`)
-  const edit = runCli(['edit', '--file', f, '--hunks', JSON.stringify([{ lines: [3, 3], replace: 'CHARLIE' }])])
+  const edit = runCli(['basetools', 'edit', '--file', f, '--hunks', JSON.stringify([{ lines: [3, 3], replace: 'CHARLIE' }])])
   check(edit.status === 0 && edit.out?.ok === true, 'A2 用该令牌 edit 成功', JSON.stringify(edit.out?.error ?? edit.out?.result?.applied ?? '').slice(0, 100))
   check(fs.readFileSync(f, 'utf8') === 'alpha\nbravo\nCHARLIE\ndelta\n', 'A3 磁盘内容正确', JSON.stringify(fs.readFileSync(f, 'utf8')))
   check(edit.out?.result?.write_verify?.level === 'bytes', 'A4 回执带字节级回读证据', String(edit.out?.result?.write_verify?.level))
@@ -78,12 +78,12 @@ say('=== B. 端到端：令牌过期必须拒绝（不静默改错地方）===')
 {
   const f = path.join(tmp, 'stale.md')
   fs.writeFileSync(f, utf8('one\ntwo\nthree\nfour\nfive\n'))
-  const read = runCli(['read', '--file', f, '--mode', 'full'])
+  const read = runCli(['basetools', 'read', '--file', f, '--mode', 'full'])
   check(read.status === 0, 'B1 先 read 建立观测')
   // 第三方在**同一次调用之间**改文件（这正是账本要拦的形状：调用前发生的第三方写入，
   // 对单次调用内部的版本 CAS 来说是"当前状态"，不是冲突）
   fs.writeFileSync(f, utf8('one\ntwo\nTHREE-CHANGED\nfour\nfive\n'))
-  const edit = runCli(['edit', '--file', f, '--hunks', JSON.stringify([{ lines: [3, 3], replace: 'MINE' }])])
+  const edit = runCli(['basetools', 'edit', '--file', f, '--hunks', JSON.stringify([{ lines: [3, 3], replace: 'MINE' }])])
   check(edit.status === 2 && edit.out?.ok === false, 'B2 被寻址区域被第三方改过 ⇒ 结构化拒绝（exit 2）', `exit=${edit.status} code=${edit.out?.code ?? '—'}`)
   check(String(edit.out?.code ?? '') === 'PATCH_STALE_REGION', 'B3 拒绝码是 PATCH_STALE_REGION', String(edit.out?.code ?? ''))
   check(fs.readFileSync(f, 'utf8') === 'one\ntwo\nTHREE-CHANGED\nfour\nfive\n', 'B4 磁盘保持第三方内容（我们一字未落）', JSON.stringify(fs.readFileSync(f, 'utf8')))
@@ -97,10 +97,10 @@ say('=== C. 集成：同一缓存目录下，两个不同文件互不干扰 ==='
   const b = path.join(tmp, 'b.md')
   fs.writeFileSync(a, utf8('a1\na2\na3\n'))
   fs.writeFileSync(b, utf8('b1\nb2\nb3\n'))
-  runCli(['read', '--file', a, '--mode', 'full'])
-  runCli(['read', '--file', b, '--mode', 'full'])
-  const ea = runCli(['edit', '--file', a, '--hunks', JSON.stringify([{ lines: [2, 2], replace: 'A2' }])])
-  const eb = runCli(['edit', '--file', b, '--hunks', JSON.stringify([{ lines: [2, 2], replace: 'B2' }])])
+  runCli(['basetools', 'read', '--file', a, '--mode', 'full'])
+  runCli(['basetools', 'read', '--file', b, '--mode', 'full'])
+  const ea = runCli(['basetools', 'edit', '--file', a, '--hunks', JSON.stringify([{ lines: [2, 2], replace: 'A2' }])])
+  const eb = runCli(['basetools', 'edit', '--file', b, '--hunks', JSON.stringify([{ lines: [2, 2], replace: 'B2' }])])
   check(ea.status === 0 && eb.status === 0, 'C1 两个文件都能改（账本按路径分开）')
   check(fs.readFileSync(a, 'utf8') === 'a1\nA2\na3\n' && fs.readFileSync(b, 'utf8') === 'b1\nB2\nb3\n', 'C2 两份文件各自正确', `${JSON.stringify(fs.readFileSync(a, 'utf8'))} ${JSON.stringify(fs.readFileSync(b, 'utf8'))}`)
 }
@@ -113,14 +113,14 @@ say('=== D. 集成：并发多进程改同一文件 ⇒ 不丢更新、不留半
   const f = path.join(tmp, 'race.md')
   const base = Array.from({ length: 200 }, (_, i) => `line ${i + 1}`).join('\n') + '\n'
   fs.writeFileSync(f, utf8(base))
-  runCli(['read', '--file', f, '--mode', 'full'])
+  runCli(['basetools', 'read', '--file', f, '--mode', 'full'])
   const hunkA = JSON.stringify([{ lines: [5, 5], replace: 'A-WROTE-HERE' }])
   const hunkB = JSON.stringify([{ lines: [6, 6], replace: 'B-WROTE-HERE' }])
   // 同时起两个进程（不 await），随后各自看退出码
   const { spawn } = await import('node:child_process')
   const launch = (hunks) =>
     new Promise((resolve) => {
-      const child = spawn(process.execPath, [cli, 'edit', '--file', f, '--hunks', hunks], { cwd: tmp, env })
+      const child = spawn(process.execPath, [cli, 'basetools', 'edit', '--file', f, '--hunks', hunks], { cwd: tmp, env })
       let stdout = ''
       child.stdout.on('data', (d) => (stdout += d))
       child.on('close', (code) => resolve({ code, stdout }))
@@ -149,14 +149,14 @@ say('=== E. MCP：JSON-RPC over stdio 的整条往返 ===')
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
     { jsonrpc: '2.0', method: 'notifications/initialized' },
     { jsonrpc: '2.0', id: 2, method: 'tools/list' },
-    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aura_read', arguments: { file_path: mcpFile, mode: 'full' } } },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file_path: mcpFile, mode: 'full' } } },
     {
       jsonrpc: '2.0',
       id: 4,
       method: 'tools/call',
-      params: { name: 'aura_edit', arguments: { file_path: mcpFile, hunks: [{ lines: [2, 2], replace: '  return 42' }] } },
+      params: { name: 'aura_basetools_edit', arguments: { file_path: mcpFile, hunks: [{ lines: [2, 2], replace: '  return 42' }] } },
     },
-    { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'aura_read', arguments: { file_path: mcpFile, mode: 'lines', lines: [2, 2] } } },
+    { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file_path: mcpFile, mode: 'lines', lines: [2, 2] } } },
   ]
   const res = spawnSync(process.execPath, [mcp], { input: `${frames.map((f) => JSON.stringify(f)).join('\n')}\n`, encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 })
   const replies = String(res.stdout)
@@ -174,7 +174,7 @@ say('=== E. MCP：JSON-RPC over stdio 的整条往返 ===')
   const byId = new Map(replies.map((r) => [r.id, r]))
   check(byId.get(1)?.result?.serverInfo?.name === 'aura-basetools', 'E1 initialize 握手带回 serverInfo', JSON.stringify(byId.get(1)?.result?.serverInfo ?? null))
   const tools = byId.get(2)?.result?.tools?.map((t) => t.name) ?? []
-  check(tools.includes('aura_read') && tools.includes('aura_edit'), 'E2 tools/list 列出两个工具', tools.join(','))
+  check(tools.includes('aura_basetools_read') && tools.includes('aura_basetools_edit') && tools.includes('aura_basetools_write'), 'E2 tools/list 列出读/改/整写三个工具', tools.join(','))
   const readText = byId.get(3)?.result?.content?.[0]?.text ?? ''
   check(typeof byId.get(3)?.result?.structuredContent?.version === 'string' || /version/.test(readText), 'E3 读回的令牌在回包里', readText.slice(0, 60))
   const editRes = byId.get(4)?.result
@@ -189,7 +189,7 @@ say('=== F. MCP：坏参数必须回包而不是挂死客户端 ===')
   const frames = [
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
     // 不给 file_path：契约要求回一个结构化错误包，而不是抛异常（抛了客户端会一直等）
-    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'aura_read', arguments: {} } },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: {} } },
   ]
   const res = spawnSync(process.execPath, [mcp], { input: `${frames.map((f) => JSON.stringify(f)).join('\n')}\n`, encoding: 'utf8', env, timeout: 20000 })
   const lines = String(res.stdout).trim().split('\n').filter(Boolean)

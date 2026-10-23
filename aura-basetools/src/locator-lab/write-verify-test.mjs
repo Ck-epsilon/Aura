@@ -104,7 +104,7 @@ const readPlugin = await import('../aura-read/index.js')
 const editPlugin = await import('../aura-edit/index.js')
 let readTool = null
 let editTool = null
-const tools = { register: (t) => (t.name === 'aura_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
+const tools = { register: (t) => (t.name === 'aura_basetools_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
 const mkCtx = () => ({
   fs: fsService,
   ...contextServices(),

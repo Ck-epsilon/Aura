@@ -2,9 +2,9 @@
  * make-bundle.mjs —— 把 aura 读写工具打成**一个可安装的包**，同时服务两拨用户：
  *
  *   ① DSH 用户：`dsh plugin --profile web add <包名|tarball|git|目录>` —— 包里带
- *      `dsh.bundle.patch`（`cordis.patch.yml`），装上就是 aura_read / aura_edit 两个工具；
- *   ② 别的 agent（Codex / Claude Code / Cursor …）：`npx -y aura-basetools mcp` 起 MCP stdio 服务，
- *      或直接用 `aura` CLI —— **不要求对方装 DSH**，也不要求任何操作系统特定的东西。
+ *      `dsh.bundle.patch`（`cordis.patch.yml`），装上就是 aura_basetools_read / aura_basetools_edit / aura_basetools_write 三个工具；
+ *   ② 别的 agent（Codex / Claude Code / Cursor …）：`npx -y --package aura-basetools aura basetools mcp`
+ *      起 MCP stdio 服务，或直接用 `aura` CLI —— **不要求对方装 DSH**，也不要求任何操作系统特定的东西。
  *
  * 两种用法的路径因此都必须是可移植的：
  *   · patch 里的 `name` 用 **patch 相对路径**（`./aura-read/index.js`）——加载器把它转成相对
@@ -25,6 +25,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { walkFiles, writeZip } from './zip.mjs'
+import { BIN_ENTRIES, ENGINE, HOOK_SHELL, INSTALLER, SHELLS, STANDALONE, shipsStandaloneFile } from './bundle-layout.mjs'
 // 语言表直接读引擎：生成的 README 里那个"N 种源码扩展名"必须与引擎一致，
 // 写死的数字会漂（F1 扩了 21 种格式，文档里就得多改几处）。
 import { LANGS } from '../src/locator-lab/struct-core.mjs'
@@ -33,46 +34,6 @@ const root = path.resolve(import.meta.dirname, '..')
 const out = path.join(root, 'dist', 'aura-basetools')
 /** 源都在 <项目>/src/ 下：四个目录是相对引用的一套，整体搬动不影响彼此。 */
 const src = path.join(root, 'src')
-
-/** 引擎：四个判据/结构文件 + 写路径（C9–C14 的保真、闸门、回读都在最后这个里）。 */
-const ENGINE = [
-  'read-core.mjs',
-  'locator-api.mjs',
-  'struct-core.mjs',
-  'anchor-core.mjs',
-  'write-path.mjs',
-  'args.mjs',
-  // 仓库级地图（T26）：`aura_read` 传目录时由它渲染。两个壳都 import 它，漏打包 = 包内直接崩。
-  'repo-map.mjs',
-  // 区间句柄（HD1）：`aura_read` 发、`aura_edit` 解析。两个壳都经引擎碰到它，漏打包 = 包内直接崩。
-  'handle-core.mjs',
-]
-/** DSH 面：两个工具壳（宿主代码，走 ctx.fs）。 */
-const SHELLS = [
-  ['aura-read', 'index.js'],
-  ['aura-edit', 'index.js'],
-]
-/**
- * 钩子执行器（宿主面）：`ctx.shell` 的替代实现，摘掉每次工具调用的外层壳税。
- *
- * 【为什么要随包发货】profile 里那一行 `name:` 指到哪儿，宿主就从哪儿 import。
- * 指向仓库工作区（`dsh/argv-shell.mjs`）等于把整套东西绑在
- * 「这个仓库必须存在、必须在这个路径」上；指向安装副本才与两个工具壳同一条先例 ——
- * 包装在哪儿都成立（`<prefix>/node_modules/aura-basetools/aura-read/index.js` 就是这么指的）。
- *
- * 它要 spawn 子进程（钩子命令串 → argv），所以 kind 用 'host'：允许 node:fs，
- * 仍禁盘符与平台分支（与两个壳同一档守卫）。
- * 包内路径与源树**同名**（`dsh/argv-shell.mjs`），安装副本里因此不多出一层相对布局。
- */
-const HOOK_SHELL = ['dsh/argv-shell.mjs', 'dsh/hook-inproc.mjs']
-/** 独立面：CLI + MCP + node:fs 提供方（宿主代码，允许直接用 node:fs）。 */
-const STANDALONE = [
-  ['aura-standalone/bin', 'bin'],
-  ['aura-standalone/lib', 'lib'],
-  ['aura-standalone/test', 'test'],
-]
-/** 一键安装器：跟包一起发（`node install.mjs`），它自己带平台分支，因此走 installer 档守卫。 */
-const INSTALLER = ['build/install.mjs', 'install.mjs']
 
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'))
 const versions = new Set(SHELLS.map(([dir]) => readJson(path.join(src, dir, 'package.json')).version))
@@ -105,9 +66,7 @@ for (const f of ENGINE) copyFile(path.join(src, 'locator-lab', f), path.join(out
 for (const [fromDir, toDir] of STANDALONE) {
   const abs = path.join(src, fromDir)
   for (const name of fs.readdirSync(abs)) {
-    // 靶场（`range-*.mjs`）是**项目级**的：它们按项目布局（`dist/`、`src/`）找路径，塞进包里跑不起来。
-    // 包里只留真能在包内跑的验收（`standalone-test.mjs`）——不发一份跑不动的东西。
-    if (!name.endsWith('.mjs') || name.startsWith('range-')) continue
+    if (!shipsStandaloneFile(name)) continue
     copyFile(path.join(abs, name), path.join(out, toDir, name), 'host')
   }
 }
@@ -133,6 +92,7 @@ const patch = `# 由 build/make-bundle.mjs 生成 —— 不要手改（改源�
 # （dsh-app-boot/README.md:59），因此包装在 Windows / macOS / Linux、装在任意目录都成立。
 #
 # 内置 read / write / edit / read_image 一个都没停用：只加不减。
+# aura_basetools_write 与 aura_basetools_edit 由同一个插件模块注册（只多一个工具，不多一行 patch）。
 # read_image 没有 Aura 替代品，停用 tool-fs 会净损失读图能力。
 - insert:
     - id: tool-aura-read
@@ -151,11 +111,11 @@ const pkg = {
   name: 'aura-basetools',
   version,
   description:
-    'Aura read/edit tools — one package, two ways in: install it as a DeepSeek Harness bundle (aura_read / aura_edit), or run the standalone `aura` CLI / MCP server from Codex, Claude Code, Cursor or any other agent. Symbol-aware reading, intent-addressed byte-exact editing, stale-region gate, read-back verification.',
+    'Aura read/edit/write tools — one package, two ways in: install it as a DeepSeek Harness bundle (aura_basetools_read / aura_basetools_edit / aura_basetools_write), or run the standalone `aura` CLI / MCP server from Codex, Claude Code, Cursor or any other agent. Symbol-aware reading, intent-addressed byte-exact editing, whole-file write, stale-region gate, read-back verification.',
   license: 'MIT',
   type: 'module',
   engines: { node: '>=18' },
-  bin: { aura: './bin/aura.mjs', 'aura-mcp': './bin/aura-mcp.mjs' },
+  bin: BIN_ENTRIES,
   keywords: ['dsh', 'deepseek-harness', 'plugin', 'bundle', 'mcp', 'read', 'edit', 'codex'],
   // test/ 也发：用户与 CI 能直接跑包里那份验收（"测你真正要发的东西" —— 开发树里路径不对，跑不起来）
   // dsh/ 必须在这一行里：npm pack 只发 files 列到的东西 —— 漏了它，包里就没有那个执行器，
@@ -220,10 +180,10 @@ npm i -g ./aura-basetools-${version}.tgz      # 或者项目内 npm i ./aura-bas
 
 \`\`\`bash
 # Codex（子命令形状已实测：codex mcp add <NAME> -- <COMMAND>…）
-codex mcp add aura -- aura mcp
+codex mcp add aura -- aura basetools mcp
 
 # Claude Code（同形：claude mcp add [options] <name> -- <command> [args…]）
-claude mcp add aura -- aura mcp
+claude mcp add aura -- aura basetools mcp
 \`\`\`
 
 其它 MCP 客户端（Cursor / Zed / …）写进自己的配置，形状都一样：
@@ -233,19 +193,20 @@ claude mcp add aura -- aura mcp
 \`\`\`
 
 没做全局安装时：把 command 换成 npx、args 换成 ["aura", "mcp"]（项目内安装）。
-**已发布到 npm** 时才有 npx -y aura-basetools … 这种写法（本包当前按 tarball 分发）。
+**已发布到 npm** 时也可以用 \`npx -y --package aura-basetools aura basetools mcp\`（本包当前按 tarball 分发）。
+两个 bin（\`aura\` / \`aura-mcp\`）都不叫 \`aura-basetools\`，所以 npx 必须用 \`--package\` 指定包名。
 
 CLI 也可以直接调：
 
 \`\`\`bash
-aura read  --file src/app.ts --mode map
-aura edit  --file src/app.ts --hunks '[{"target":"main","replace":"…"}]'
+aura basetools read  --file src/app.ts --mode map
+aura basetools edit  --file src/app.ts --hunks '[{"target":"main","replace":"…"}]'
 aura --help
 \`\`\`
 
 Windows / macOS / Linux 同一套命令（纯 Node，≥18，无原生依赖）。
 
-**先读后改**：\`aura read\` 会给出一个 \`version\` 令牌；\`aura edit\` 会核对"这块区域在你读之后有没有被改过"。
+**先读后改**：\`aura basetools read\` 会给出一个 \`version\` 令牌；\`aura basetools edit\` 会核对"这块区域在你读之后有没有被改过"。
 观测缓存默认落在 \`~/.aura/observations.json\`，可用环境变量 \`AURA_CACHE_DIR\` 改（CI 里建议设成临时目录）。
 
 ## 三、DSH 用户（DeepSeek Harness）
@@ -277,9 +238,9 @@ dsh plugin --profile web remove aura-basetools
 
 ## 它带来什么
 
-- \`aura_read\`（MCP 工具 / \`aura read\`）：\`map\` 符号目录、\`digest\` 接口、\`full\`、\`around\`、\`lines\`、
+- \`aura_basetools_read\`（MCP 工具 / \`aura basetools read\`）：\`map\` 符号目录、\`digest\` 接口、\`full\`、\`around\`、\`lines\`、
 七种取景；${Object.keys(LANGS).length} 种源码扩展名的符号表（由引擎语言表决定）；未索引扩展名自动退到整份内容。
-- \`aura_edit\`（MCP 工具 / \`aura edit\`）：\`target\` / \`lines\` / \`line_cue\` / \`anchor\` 四层寻址，
+- \`aura_basetools_edit\`（MCP 工具 / \`aura basetools edit\`）：\`target\` / \`lines\` / \`line_cue\` / \`anchor\` 四层寻址，
   \`expect\` 断言、\`dry_run\` 预演、多 hunk 原子（任一失败则磁盘不变）、逐字节写回、
   区域级新鲜度闸门、落盘后整份回读校验。
 
@@ -323,8 +284,8 @@ cd <解压目录> && node aura-basetools/install.mjs --yes
 
 \`\`\`bash
 npm i -g ./aura-basetools-${version}.tgz       # 两个命令就上 PATH：aura、aura-mcp
-codex mcp add aura -- aura mcp            # Codex（codex mcp add <NAME> -- <COMMAND>…）
-claude mcp add aura -- aura mcp           # Claude Code（同形）
+codex mcp add aura -- aura basetools mcp            # Codex（codex mcp add <NAME> -- <COMMAND>…）
+claude mcp add aura -- aura basetools mcp           # Claude Code（同形）
 \`\`\`
 
 其它 MCP 客户端写进自己的配置即可：
@@ -359,7 +320,7 @@ node aura-basetools/install.mjs --uninstall     # 只撤它自己加的东西；
 ## 自检（30 秒）
 
 \`\`\`bash
-aura read --file <随便一个源码文件> --mode map      # 应列出符号名与行号
+aura basetools read --file <随便一个源码文件> --mode map      # 应列出符号名与行号
 \`\`\`
 
 ## 同目录还有一份
@@ -369,7 +330,7 @@ aura read --file <随便一个源码文件> --mode map      # 应列出符号名
 
 ## 它不做什么
 
-不删文件、不改名、不写二进制；单 \`\\r\`（老 Mac）行尾不支持；\`aura edit\` 刻意不能整份覆写
+不删文件、不改名、不写二进制；单 \`\\r\`（老 Mac）行尾不支持；\`aura basetools edit\` 刻意不能整份覆写
 （要整份写就用你的编辑器）。
 `
 const handoffPath = path.join(root, 'dist', `aura-basetools-${version}-安装说明.md`)
@@ -496,4 +457,12 @@ if (process.argv.includes('--pack')) {
   const zipResult = writeZip(entries, zipPath)
   console.log(`\n交付包 → ${path.relative(root, zipPath)}  (${(zipResult.bytes / 1024).toFixed(1)} KB, ${zipResult.entries} 项)`)
   for (const entry of entries) console.log(`  ${entry.name}`)
+
+  // 拆包产物也从**刚打好的这份**派生。分成两条命令时，`dist/npm` 会静默停在旧字节上
+  // （与 manifest 陈旧同形：包看起来叫 0.7.0，里面是上一版）。一条重建命令 = 一份完整产物。
+  console.log('\n—— 由组合产物派生 npm 双包 ——')
+  execFileSync(process.execPath, [path.join(root, 'build', 'make-split-packages.mjs'), '--pack'], { cwd: root, stdio: 'inherit' })
+  // 能力清单也从同一份构建产物派生：语言表/地址档/限制全部读源码导出，不手抄。
+  console.log('\n—— 能力清单 ——')
+  execFileSync(process.execPath, [path.join(root, 'build', 'capabilities.mjs'), '--write'], { cwd: root, stdio: 'inherit' })
 }

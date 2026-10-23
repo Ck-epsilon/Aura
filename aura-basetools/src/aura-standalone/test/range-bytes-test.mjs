@@ -66,9 +66,9 @@ const write = (name, buf) => {
   fs.writeFileSync(p, buf)
   return { path: p, orig: Buffer.from(buf) }
 }
-const editArgs = (file, hunks, extra = []) => ['edit', '--file', file, '--hunks', JSON.stringify(hunks), ...extra]
+const editArgs = (file, hunks, extra = []) => ['basetools', 'edit', '--file', file, '--hunks', JSON.stringify(hunks), ...extra]
 const editLine = (file, line, replace) => call(editArgs(file, [{ lines: [line, line], replace }]))
-const readFull = (file) => call(['read', '--file', file, '--mode', 'full'])
+const readFull = (file) => call(['basetools', 'read', '--file', file, '--mode', 'full'])
 
 // ── 字节级工具 ─────────────────────────────────────────────────────────────
 /**
@@ -286,25 +286,28 @@ say('C 单 \\r（老 Mac 行尾）：结构化拒绝且磁盘不变')
   const res = editLine(f.path, 2, 'B')
   check(res.ok === false && res.__exit === 2, `寻址第 2 行 ⇒ 结构化拒绝（exit=${res.__exit}）`, JSON.stringify(res).slice(0, 160))
   check(typeof res.code === 'string' && res.code.length > 0, `回执带 code（${res.code}）`)
-  check(res.code === 'LOCATOR_OUT_OF_RANGE', `code = LOCATOR_OUT_OF_RANGE（实际 ${res.code}）`)
+  check(res.code === 'LOCATOR_LONE_CR', `code = LOCATOR_LONE_CR（实际 ${res.code}）`)
   check(String(res.error ?? res.message ?? '').includes('lone CR'), '拒绝信息点名单 \\r 行尾这条原因')
   check(fs.readFileSync(f.path).equals(loneBytes), '被拒之后磁盘逐字节不变')
   check(res.__stderr.trim() === '', '拒绝走回执而不是 stderr 兜底', res.__stderr.trim().slice(0, 80))
   const again = editLine(f.path, 2, 'B')
-  check(again.ok === false && again.code === 'LOCATOR_OUT_OF_RANGE', '同一条件下重复一次仍拒绝（行为稳定）')
-  // 产品给出的出口：整份替换 lines=[1,1]（拒绝信息里点名的恢复路径）。
-  // 这里钉住"出口真的能用"，否则模型会卡在同一个结构化拒绝上反复重试。
-  const whole = editLine(f.path, 1, 'alpha\rbeta\rgamma\r')
-  check(whole.ok === true && whole.__exit === 0, `lines=[1,1] 整份替换是可用出口（exit=${whole.__exit}）`, JSON.stringify(whole).slice(0, 160))
-  check(fs.readFileSync(f.path).equals(loneBytes), '整份替换后字节仍不变（replace 里的 \\r 是内容，逐字节写下）')
+  check(again.ok === false && again.code === 'LOCATOR_LONE_CR', '同一条件下重复一次仍拒绝（行为稳定）')
+  // 产品给出的出口：显式整文件写（aura write），而不是再用 lines 地址。
+  const whole = json(run(['basetools', 'write', '--file', f.path, '--content', 'alpha\rbeta\rgamma\r']))
+  check(whole.ok === true, `aura write 整份定稿是可用出口（${JSON.stringify(whole).slice(0, 100)}）`)
+  check(fs.readFileSync(f.path).equals(loneBytes), '整份写后字节仍不变')
 
-  // 拒绝不是"见到 \r 就拒"：\r 落在行**内容**里、行数正常时照常可编辑
+  // 拒绝不是"见到 \r 就拒"的推断：只要文件含 lone CR，行号模型就不可信；
+  // 这时 old 片段仍按逐字跨度工作。
   const mixedCr = utf8('alpha\r\nbeta\rgamma\n')
   const f2 = write('lone_cr_inline.md', mixedCr)
   readFull(f2.path)
-  const ok2 = editLine(f2.path, 2, 'EDITED')
-  check(ok2.ok === true && fs.readFileSync(f2.path).equals(expectedAfterEdit(mixedCr, 2, 'EDITED')),
-    '连字符行内的 \\r 是内容而不是行尾 ⇒ 第 2 行照常可编辑（拒绝只针对行号模型错位）')
+  const rejectInline = editLine(f2.path, 2, 'EDITED')
+  check(rejectInline.ok === false && rejectInline.code === 'LOCATOR_LONE_CR',
+    '同一文件含 lone CR ⇒ lines 地址拒绝（行号模型不可信）')
+  const oldInline = json(run(['basetools', 'edit', '--file', f2.path, '--old', 'beta\rgamma', '--replace', 'BETA\rGAMMA']))
+  check(oldInline.ok === true && fs.readFileSync(f2.path).equals(utf8('alpha\r\nBETA\rGAMMA\n')),
+    'old 片段仍可安全修改含 lone CR 的文件')
 }
 
 // ── D 二进制 ──────────────────────────────────────────────────────────────
@@ -373,8 +376,9 @@ say('E Unicode：emoji / CJK / 组合字符 / 零宽 / 制表符')
 
 // ── F 极端尺寸 ────────────────────────────────────────────────────────────
 // 0 字节；单行 100 KB；3000 行文件在"观测缓存 256 KiB"阈值两侧；阈值精确 ±1 字节。
-// 阈值判据在 observation-store.mjs：`source.length > 262144` 就不入缓存 ⇒ 编辑拿不到基准，
-// 回执带 `unverified_region`（降级如实标注）。ASCII 无 BOM 时 source.length == 字节数。
+// 0.10.5 起 `source.length > 262144` 仍记**令牌**、只是不存全文：读过之后编辑不降级；
+// 若读后文件又被第三方改过，当前令牌不在账本里 ⇒ 回执带 `unverified_region`
+// （G 段覆盖那条降级路径）。ASCII 无 BOM 时 source.length == 字节数。
 say('F 极端尺寸：0 字节 / 单行 100 KB / 3000 行 / 256 KiB 阈值两侧')
 {
   // 0 字节：读不能抛未捕获异常。实测空文件在工具里就是"1 个空行"，所以"读空文件"本身
@@ -384,7 +388,7 @@ say('F 极端尺寸：0 字节 / 单行 100 KB / 3000 行 / 256 KiB 阈值两侧
   check(zread.ok === true && zread.__exit === 0, `0 字节：read 正常回包、exit=${zread.__exit}`, JSON.stringify(zread).slice(0, 160))
   check(!/\n\s+at /.test(zread.__stderr), '0 字节：stderr 里没有未捕获异常的栈')
   check(zread.totalLines === 1, `0 字节：整份算 1 个空行（totalLines=${zread.totalLines}）⇒ 读本身无 code，符合实际语义`)
-  const zoor = call(['read', '--file', zero.path, '--lines', '5,6'])
+  const zoor = call(['basetools', 'read', '--file', zero.path, '--lines', '5,6'])
   check(zoor.ok === false && zoor.__exit === 2 && typeof zoor.code === 'string', `0 字节越界读给明确 code=${zoor.code}（exit=${zoor.__exit}）`)
   const zedit = editLine(zero.path, 2, 'x')
   check(zedit.ok === false && zedit.__exit === 2 && typeof zedit.code === 'string', `0 字节越界改给明确 code=${zedit.code}（exit=${zedit.__exit}）`)
@@ -399,7 +403,7 @@ say('F 极端尺寸：0 字节 / 单行 100 KB / 3000 行 / 256 KiB 阈值两侧
   const longLine = 'a'.repeat(102400)
   const hugeSrc = utf8(`${longLine}\nsecond\n`)
   const huge = write('huge_line.md', hugeSrc)
-  const hread = call(['read', '--file', huge.path, '--lines', '1,1'])
+  const hread = call(['basetools', 'read', '--file', huge.path, '--lines', '1,1'])
   check(hread.ok === true && hread.__exit === 0 && typeof hread.version === 'string', `100 KB 单行：read 成功且给令牌（exit=${hread.__exit}）`)
   check(hread.truncated !== undefined && Number(hread.truncated.omittedChars) > 0, `100 KB 单行：截断如实标注（omittedChars=${hread.truncated?.omittedChars}）`)
   // 顺带实测（未断言）：CLI 帮助里写着的 `--max-chars N` 在 0.4.1 上是**空转**——
@@ -407,7 +411,7 @@ say('F 极端尺寸：0 字节 / 单行 100 KB / 3000 行 / 256 KiB 阈值两侧
   // 实测 --max-chars 100 / 8000 / 400000 三档都得到 contentBudget=7680（预算只由 PRUNE_BUDGET 收敛定死）。
   // 不写断言：那是缺陷不是契约，钉住它反而会给修复添麻烦。
   check(utf8(String(hread.text ?? '')).length <= 7680 + 64, `100 KB 单行：渲染不超内容预算（实际 ${utf8(String(hread.text ?? '')).length} 字节）`)
-  const hline2 = call(['read', '--file', huge.path, '--lines', '2,2'])
+  const hline2 = call(['basetools', 'read', '--file', huge.path, '--lines', '2,2'])
   check(hline2.ok === true && String(hline2.text ?? '').includes('second'), '100 KB 单行：第 2 行照样读得到')
   const hedit = editLine(huge.path, 2, 'SECOND')
   check(hedit.ok === true && hedit.__exit === 0, `100 KB 单行：改第 2 行成功（exit=${hedit.__exit}）`, JSON.stringify(hedit).slice(0, 160))
@@ -416,14 +420,15 @@ say('F 极端尺寸：0 字节 / 单行 100 KB / 3000 行 / 256 KiB 阈值两侧
   check(hdisk.subarray(0, 102400).equals(utf8(longLine)), '100 KB 单行：第 1 行 102400 字节逐字节不变')
   check(hdisk[102400] === 0x0a, '100 KB 单行：第 1 行行尾仍是 LF')
 
-  // 3000 行：阈值两侧各一个（45 KB < 256 KiB；303 KB > 256 KiB）
+  // 3000 行：阈值两侧各一个（45 KB < 256 KiB；303 KB > 256 KiB）。
+  // 0.10.5 起 >256 KiB 也记**令牌**（只是不存全文）⇒ 读过之后编辑不再降级标注。
   const mk3000 = (pad) => `${Array.from({ length: 3000 }, (_, i) => `line ${String(i + 1).padStart(4, '0')} ${'y'.repeat(pad)}`).join('\n')}\n`
   const smallSrc = utf8(mk3000(4))
   const bigSrc = utf8(mk3000(90))
   check(smallSrc.length === 45000 && bigSrc.length === 303000, `3000 行夹具尺寸：${smallSrc.length} 字节（<256 KiB）与 ${bigSrc.length} 字节（>256 KiB）`)
-  for (const [label, src, file, expectUnverified] of [
-    ['3000 行 45 KB（<256 KiB）', smallSrc, 'lines3000_small.md', false],
-    ['3000 行 303 KB（>256 KiB）', bigSrc, 'lines3000_big.md', true],
+  for (const [label, src, file] of [
+    ['3000 行 45 KB（<256 KiB）', smallSrc, 'lines3000_small.md'],
+    ['3000 行 303 KB（>256 KiB）', bigSrc, 'lines3000_big.md'],
   ]) {
     const f = write(file, src)
     const before = readFull(f.path)
@@ -431,21 +436,22 @@ say('F 极端尺寸：0 字节 / 单行 100 KB / 3000 行 / 256 KiB 阈值两侧
     check(before.omitted !== undefined, `${label}：read 如实标注被预算裁掉的部分（${String(before.omitted).slice(0, 50)}）`)
     const res = editLine(f.path, 2, 'EDITED')
     check(res.ok === true && res.__exit === 0, `${label}：改第 2 行成功（exit=${res.__exit}）`, JSON.stringify(res).slice(0, 160))
-    check((res.result?.unverified_region === true) === expectUnverified,
-      `${label}：unverified_region ${expectUnverified ? '出现' : '不出现'}（实测 ${res.result?.unverified_region}）`)
+    check(res.result?.unverified_region === undefined,
+      `${label}：读过这一版 ⇒ 不标 unverified_region（实测 ${res.result?.unverified_region}）`)
     const disk = fs.readFileSync(f.path)
     check(disk.equals(expectedAfterEdit(src, 2, 'EDITED')), `${label}：磁盘逐字节 == 预期（${disk.length} 字节）`)
     check(JSON.stringify(lineDiff(src, disk)) === '[2]', `${label}：只有第 2 行变，其余 2999 行内容与行尾逐字节不变`)
   }
 
-  // 阈值精确到字节：262144（= 256 KiB）入缓存、262145 不入 ⇒ 回执的降级标注正好在这一字节上翻转
-  for (const [n, expectUnverified] of [[262144, false], [262145, true]]) {
+  // 阈值精确到字节：两侧都记令牌；>256 KiB 只是**不存全文**（区域闸退回 basis:none，
+  // 但“这一版读过没有”仍可回答）。外部改动的降级标注由 G 段单独覆盖。
+  for (const n of [262144, 262145]) {
     // 第一行保持小，总字节数精确落在阈值上；否则 edit 回执会把 262 KB 的
     // actual 原样带出来——在 macOS 的 spawnSync 上会撑成无法解析的超长行。
     const src = utf8(`a\n${'b'.repeat(n - 3)}\n`)
     const expected = utf8(`EDITED\n${'b'.repeat(n - 3)}\n`)
     const f = write(`threshold_${n}.md`, src)
-    const before = call(['read', '--file', f.path, '--mode', 'lines', '--lines', '1,1'])
+    const before = call(['basetools', 'read', '--file', f.path, '--mode', 'lines', '--lines', '1,1'])
     check(before.ok === true && typeof before.version === 'string', `阈值 ${n} 字节：read 给令牌`)
     const res = editLine(f.path, 1, 'EDITED')
     check(
@@ -453,8 +459,8 @@ say('F 极端尺寸：0 字节 / 单行 100 KB / 3000 行 / 256 KiB 阈值两侧
       `阈值 ${n} 字节：改第 1 行成功（exit=${res.__exit}）`,
       JSON.stringify({ ok: res.ok, code: res.code, error: res.error, transaction: res.transaction, rollback: res.rollback, stderr: String(res.__stderr ?? '').slice(0, 160) }),
     )
-    check((res.result?.unverified_region === true) === expectUnverified,
-      `阈值 ${n} 字节：unverified_region ${expectUnverified ? '出现' : '不出现'}（实测 ${res.result?.unverified_region}）`)
+    check(res.result?.unverified_region === undefined,
+      `阈值 ${n} 字节：读过这一版 ⇒ 不标 unverified_region（实测 ${res.result?.unverified_region}）`)
     check(fs.readFileSync(f.path).equals(expected), `阈值 ${n} 字节：写回逐字节 == 预期（${expected.length} 字节）`)
   }
 }
@@ -500,13 +506,14 @@ say('G 并发与陈旧：区域级新鲜度闸门')
   }
   check(allowed.length === 2 && allowed[0] === allowed[1], `无关区域的行为在两个独立文件上一致（${allowed.join(' / ')}）`)
 
-  // >256 KiB 的文件不入观测缓存 ⇒ 闸门**没有基准**，编辑照做，回执用 unverified_region 如实标注。
-  // 这是 observation-store.mjs 写明的既定语义（"不存就是没观测过，闸门放行并标注"），
-  // 不是漏判；代价是：超大文件上"被寻址区域被第三方改过"这条拦不住。
+  // >256 KiB 的文件**不存全文**（只记令牌）⇒ 第三方改动后当前令牌不在账本里，
+  // 区域闸没有基准可用：编辑照做，回执用 unverified_region 如实标注。
+  // 这是 observation-store.mjs 写明的既定语义，不是漏判；代价是：超大文件上
+  // “被寻址区域被第三方改过”这条拦不住。
   const bigSrc = utf8(`${Array.from({ length: 3000 }, (_, i) => `line ${String(i + 1).padStart(4, '0')} ${'y'.repeat(90)}`).join('\n')}\n`)
   const bf = write('stale_big.md', bigSrc)
   const bread = readFull(bf.path)
-  check(bread.ok === true, '>256 KiB：先 read（但这份源不入缓存）')
+  check(bread.ok === true, '>256 KiB：先 read（记令牌，但不存全文）')
   const bThird = expectedAfterEdit(bigSrc, 5, 'THIRD-PARTY')
   fs.writeFileSync(bf.path, bThird)
   const bres = editLine(bf.path, 5, 'MINE')
@@ -536,7 +543,7 @@ say('H 写回保真与令牌连续性（BOM + CRLF + Unicode 合成）')
   check(bomCount(fs.readFileSync(f.path)) === 1, `两次编辑后前导 BOM 仍是 1 个（实际 ${bomCount(fs.readFileSync(f.path))}）`)
   check(JSON.stringify(endingDiff(orig, fs.readFileSync(f.path))) === '[]', '两次编辑后所有行尾仍逐字节不变')
   const tok = readFull(f.path)
-  const changed = call(['read', '--file', f.path, '--mode', 'changed', '--since', String(tok.version)])
+  const changed = call(['basetools', 'read', '--file', f.path, '--mode', 'changed', '--since', String(tok.version)])
   check(changed.ok === true && String(changed.note ?? '').includes('no change'), `写回刷新了观测：编辑后立刻 changed = 无变化（${changed.note ?? changed.code}）`)
 }
 
@@ -554,8 +561,8 @@ say('I MCP：字节边界走 JSON-RPC 路径')
   const bigSrc = utf8(`${Array.from({ length: 3000 }, (_, i) => `line ${String(i + 1).padStart(4, '0')} ${'y'.repeat(90)}`).join('\n')}\n`)
   const f4 = write('mcp_big.md', bigSrc)
 
-  const readCall = (id, file) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_read', arguments: { file_path: file, mode: 'full' } } })
-  const editCall = (id, file, hunks) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_edit', arguments: { file_path: file, hunks } } })
+  const readCall = (id, file) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file_path: file, mode: 'full' } } })
+  const editCall = (id, file, hunks) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'aura_basetools_edit', arguments: { file_path: file, hunks } } })
   const m = mcpCall([
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
     { jsonrpc: '2.0', method: 'notifications/initialized' },
@@ -572,11 +579,11 @@ say('I MCP：字节边界走 JSON-RPC 路径')
   check(m.envOf(3).ok === true && m.envOf(3).result?.write_verify?.level === 'bytes', `MCP 改：写回校验 level=bytes（${m.envOf(3).result?.write_verify?.level}）`)
   check(fs.readFileSync(f1.path).equals(Buffer.concat([BOM, BOM, utf8('alpha\r\nEDITED\r\ngamma\r\n')])), 'MCP 改：2 个 BOM 与 CRLF 逐字节保真')
   check(bomCount(fs.readFileSync(f1.path)) === 2, `MCP 改：前导 BOM 个数仍是 2（实际 ${bomCount(fs.readFileSync(f1.path))}）`)
-  check(m.envOf(4).ok === false && m.envOf(4).code === 'LOCATOR_OUT_OF_RANGE' && fs.readFileSync(f2.path).equals(loneBytes),
+  check(m.envOf(4).ok === false && m.envOf(4).code === 'LOCATOR_LONE_CR' && fs.readFileSync(f2.path).equals(loneBytes),
     `MCP 改单 \\r：被拒且磁盘不变（code=${m.envOf(4).code}）`)
   check(m.envOf(5).ok === false && m.envOf(5).code === 'FS_NOT_TEXT' && fs.readFileSync(f3.path).equals(binBytes),
     `MCP 读二进制：被拒且磁盘不变（code=${m.envOf(5).code}）`)
-  check(m.envOf(7).ok === true && m.envOf(7).result?.unverified_region === true, `MCP 大文件改：unverified_region 标注到场（${m.envOf(7).result?.unverified_region}）`)
+  check(m.envOf(7).ok === true && m.envOf(7).result?.unverified_region === undefined, `MCP 大文件改：读过这一版 ⇒ 不标 unverified_region（${m.envOf(7).result?.unverified_region}）`)
   check(fs.readFileSync(f4.path).equals(expectedAfterEdit(bigSrc, 2, 'EDITED')), 'MCP 大文件改：磁盘逐字节 == 预期')
   check(m.res.status === 0 && String(m.res.stderr ?? '').trim() === '', 'MCP 服务退出码 0 且没靠 stderr 兜底', String(m.res.stderr ?? '').trim().slice(0, 80))
 }

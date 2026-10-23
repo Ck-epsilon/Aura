@@ -142,8 +142,14 @@ const listingOf = (dir) => {
   walk(dir)
   return rows.sort().join('|')
 }
-const realAura = path.join(os.homedir(), '.aura')
-const realAuraBefore = listingOf(realAura)
+/**
+ * 只盯**安装器会写的那几处**（与 `upgrade-test` 同一口径）：事务、锁、观测缓存是其它会话
+ * 会正常写入的，整棵 `~/.aura` 比对会把并行活动误判成本探针越界。
+ * 这仍能抓住原事故：忘了 `--home` 的安装会写 `~/.aura/pkg` / `install.json`。
+ */
+const realAuraTargets = ['pkg', 'install.json', 'manifest.json'].map((name) => path.join(os.homedir(), '.aura', name))
+const realAuraSnapshot = () => realAuraTargets.map((target) => `${target}:${listingOf(target)}`).join('\n')
+const realAuraBefore = realAuraSnapshot()
 const realCodex = path.join(os.homedir(), '.codex', 'config.toml')
 const realCodexBefore = fs.existsSync(realCodex) ? sha(realCodex) : null
 
@@ -372,10 +378,11 @@ try {
     `卸载前存在 [${leftoversBefore.join(', ') || '无'}]，卸载后 [${leftoversAfter.join(', ') || '无'}]`,
   )
   // ── ⑧ 边界：整个探针没碰真实 $HOME（本轮真实事故的守卫） ──────────────────
+  const realAuraNow = realAuraSnapshot()
   check(
-    '⑧ 探针全程没往真实 ~/.aura 写东西（清单含 mtime 逐项不变）',
-    listingOf(realAura) === realAuraBefore,
-    realAuraBefore === '(不存在)' ? '~/.aura 之前不存在、现在仍不存在' : '逐项比对一致',
+    '⑧ 探针全程没往真实 ~/.aura 的安装目标写东西（pkg / install.json / manifest 不变）',
+    realAuraNow === realAuraBefore,
+    realAuraNow === realAuraBefore ? '安装器目标路径逐项一致' : `现在：${realAuraNow}`,
   )
   check(
     '⑧ 探针全程没碰真实 ~/.codex/config.toml',

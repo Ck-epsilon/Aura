@@ -79,8 +79,7 @@ function argsOf(raw) {
  * @returns `[{ dir, cwd, mtime, text, calls }]`，只含确实发生过工具调用的会话，按时间升序
  *   `calls[i] = { name, args, isError }`；`text` 是解压后的原始日志（调用方可据此判定自测会话）
  */
-export function readSessionsDetailed(since = 0, root = path.join(process.env.USERPROFILE ?? '', '.dsh', 'sessions')) {
-  const rows = []
+export function* parseSessionsDetailed(since = 0, root = path.join(process.env.USERPROFILE ?? '', '.dsh', 'sessions'), { keepText = true, keepResultText = true } = {}) {
   for (const file of sessionFiles(root)) {
     const stat = fs.statSync(file)
     if (stat.mtimeMs < since) continue
@@ -127,6 +126,7 @@ export function readSessionsDetailed(since = 0, root = path.join(process.env.USE
          *
          * 保持向后兼容：既有读 `session.calls[i].isError` 的探针不受影响。
          */
+        if (!keepResultText) continue
         const textOf = (part) => {
           const own = typeof part?.text === 'string' ? part.text : ''
           const nested = Array.isArray(part?.content)
@@ -138,9 +138,29 @@ export function readSessionsDetailed(since = 0, root = path.join(process.env.USE
       }
     }
     if (calls.length === 0) continue
-    rows.push({ dir: path.basename(path.dirname(file)), cwd: cwdOf(text), mtime: stat.mtime, text, calls })
+    yield {
+      dir: path.basename(path.dirname(file)),
+      cwd: cwdOf(text),
+      mtime: stat.mtime,
+      ...(keepText ? { text } : {}),
+      calls,
+    }
   }
-  return rows.sort((a, b) => a.mtime - b.mtime)
+}
+
+/**
+ * 流式读法：**不保留日志正文与回执正文**，逐会话 yield。
+ *
+ * 为什么需要它：`coordinate-drift-experiment` 要扫全部历史会话，而 `text` 是整份解压日志、
+ * 回执正文也可能很长；`readSessionsDetailed` 把每一份都留在数组里，实测直接 OOM（4GB heap）。
+ * 分析只需要 `name/args/isError` 三个字段，流式处理后单个会话的正文可立刻回收。
+ */
+export function iterateSessionsDetailed(since = 0, root = path.join(process.env.USERPROFILE ?? '', '.dsh', 'sessions')) {
+  return parseSessionsDetailed(since, root, { keepText: false, keepResultText: false })
+}
+
+export function readSessionsDetailed(since = 0, root = path.join(process.env.USERPROFILE ?? '', '.dsh', 'sessions')) {
+  return [...parseSessionsDetailed(since, root)].sort((a, b) => a.mtime - b.mtime)
 }
 
 /**

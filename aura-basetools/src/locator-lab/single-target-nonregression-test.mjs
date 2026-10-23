@@ -111,16 +111,20 @@ const treeFilesSha = () =>
 const credentialsSha = (name) =>
   crypto.createHash('sha256').update(fs.readFileSync(path.join(FIXTURES, name))).digest('hex').slice(0, 16)
 
-const installedState = () => {
-  for (const candidate of [path.join(os.homedir(), '.aura', 'pkg', 'install.json')]) {
-    try {
-      const state = JSON.parse(fs.readFileSync(candidate, 'utf8'))
-      return { version: state.version ?? null, buildStamp: state.buildStamp ?? null }
-    } catch {
-      /* 没装过就没有，不当作判据 */
-    }
+/**
+ * 黄金集采自**源码树**的哪个版本。
+ *
+ * 这里曾经读 `~/.aura/pkg/install.json`（"本机装了什么"）。那是错的：黄金集比对的是
+ * 工作树里的引擎，而本机安装可能是任意旧版（实测重采时写成 0.6.18，当前源码是 0.8.0）。
+ * 版本只作元数据打印，不参与判据；但它写错会把排查引向错的那棵树。
+ */
+const sourceState = () => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(here, '..', 'aura-read', 'package.json'), 'utf8'))
+    return { version: pkg.version ?? null, buildStamp: null }
+  } catch {
+    return { version: null, buildStamp: null }
   }
-  return { version: null, buildStamp: null }
 }
 
 // ── 规范化（只有这三样被抹掉，理由见文件头） ──────────────────────────────
@@ -362,7 +366,7 @@ const providerRuns = await providerCallCases()
 const indexReadings = indexBuildCases()
 
 if (CAPTURE) {
-  const state = installedState()
+  const state = sourceState()
   const golden = {
     suite: 'single-target-nonregression-test',
     unit: 'mt1-redline',

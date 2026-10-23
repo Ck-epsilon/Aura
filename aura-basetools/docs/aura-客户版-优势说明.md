@@ -97,19 +97,21 @@
 
 ## 四、与原生工具共存（引入风险接近零）
 
-- **不替换、不停用**任何原生工具。原生 `read` / `write` / `edit` 与读图能力都保留。
-- **整份重写仍用原生 `write`**：Aura 刻意不提供整份覆写（它对你给出的内容是逐字节忠实的，
-  实测：给出 CRLF 就落 CRLF）。避免"随手全量覆盖"这类高危操作。
+- **不替换、不停用**任何原生工具。原生 `read` / `edit` 与读图能力都保留。
+- **整份重写用 `aura_basetools_write`**：新建/覆写、BOM 与文件既有行尾保留、事务/undo；覆写默认
+  要求先读过这一版（与原生 `write` 的 read-before-write 同形），`--allow-unobserved` 才是
+  显式盲写。避免“随手全量覆盖”这类高危操作。
 - **读图仍用原生 `read_image`**：Aura 没有替代品，我们也不会去停用它。
-- 推荐默认分工：**改文件优先 Aura，整份定稿与读图用原生**。这个分工建议可以直接写进团队的 AI 助手提示词。
+- 推荐默认分工：**改文件优先 Aura（局部用 `aura_basetools_edit`，整份定稿用 `aura_basetools_write`），读图用原生**。
+  这个分工建议可以直接写进团队的 AI 助手提示词。
 
 **支持形态**（同一套核心，四种接入方式）：
 
 | 接入方式 | 命令 / 配置 |
 | --- | --- |
 | DeepSeek Harness 插件 | `dsh plugin --profile <profile> add ./aura-basetools-<版本>.tgz` |
-| MCP 服务（Codex / Claude Code / Cursor / 任何 MCP 客户端） | `codex mcp add aura -- aura mcp`、`claude mcp add aura -- aura mcp`，或写入 `mcpServers` |
-| 命令行 | `aura read --file <路径> --mode map`、`aura edit --file <路径> --hunks '<JSON>'` |
+| MCP 服务（Codex / Claude Code / Cursor / 任何 MCP 客户端） | `codex mcp add aura -- aura basetools mcp`、`claude mcp add aura -- aura basetools mcp`，或写入 `mcpServers` |
+| 命令行 | `aura basetools read --file <路径> --mode map`、`aura basetools edit --file <路径> --hunks '<JSON>'` |
 | 一键安装器 | 双击 `一键安装.cmd`（Windows）/ `一键安装.command`（macOS），或 `node aura-basetools/install.mjs --yes` |
 
 ---
@@ -124,7 +126,7 @@
 
 **安装器会自动完成**：复制到用户目录 → 生成 `aura` / `aura-mcp` 两个命令 → 把 MCP 服务注册进
 **检测到的**客户端（Codex / Claude Code / Cursor）→ **跑一次真实自检**（命令行取景 + MCP 握手，
-两个工具都在才算通过）。
+核心工具都在才算通过）。
 
 **安全与可逆**：
 
@@ -149,9 +151,9 @@ Gatekeeper 提示，右键 →「打开」即可。
 
 ## 六、质量证据（可复核）
 
-- **18 个自动化验收套件、774 项断言全部通过**，其中与本文承诺直接相关的：
-  字节保真 94 项、寻址跨度 95 项、写回与回读校验 42 项、并发闸门 49 项、编码/行尾 32 项、
-  读接口 56 项、一键安装器 28 项、安装包自带验收 42 项（含 MCP 坏输入矩阵）。
+- **全量发布闸（87 个套件：单元/集成/验收/冒烟/端到端 + 三套靶场 + 包内验收 + 安装器 +
+  拆包安装 + 性能/任务基准）全部通过**；逐件读数以 `node build/release-check.mjs` 的输出为准，
+  不在本文手抄会过期的数字。
 - **独立验证而非自证**：安装包用第三方解压器解压核对文件清单与内容；压缩包内的权限位、
   安装后各客户端配置的合并结果、以及"装两次 → 卸载 → 配置逐字节复原"，都用外部工具复核过。
 - **对照实验可复跑**：§二的每一个数字都能在贵方机器上重跑一遍（方法见附录 A）。
@@ -166,8 +168,8 @@ Gatekeeper 提示，右键 →「打开」即可。
 | --- | --- |
 | 单 `\r`（老式 Mac）行尾 | 明确拒绝，并给出替代做法（不做半对半错的猜测） |
 | 二进制文件 | 拒绝读写 |
-| 超过 256 KiB 的文件 | 不进观测缓存；此时并发闸门**放行并在回执里标注** `unverified_region`（宁可少拦，不误拦） |
-| 整份覆写 | **不提供**（这是刻意设计，请用原生 `write` 或编辑器） |
+| 超过 256 KiB 的文件 | 只记观测令牌、不存全文；读后未变不降级，读后又被外部改动时并发闸门**放行并在回执里标注** `unverified_region`（宁可少拦，不误拦） |
+| 整份覆写 | 由 `aura_basetools_write` 提供：新建/覆写、BOM 与文件既有行尾保留、事务/undo、覆写默认要求先读过这一版 |
 | 读图片 | 不提供（请用原生 `read_image`） |
 | 并发闸门的适用范围 | 对"经由本工具观测过的区域"生效；跨进程/跨机器的最后一道防线是写盘时的版本校验 |
 
@@ -182,7 +184,7 @@ Gatekeeper 提示，右键 →「打开」即可。
 
 **验收清单（交给贵方工程师）**
 
-- [ ] `aura read --file <任一源文件> --mode map` 能列出符号与行号
+- [ ] `aura basetools read --file <任一源文件> --mode map` 能列出符号与行号
 - [ ] 用 §二 的两个夹具复跑对照实验，字节数与行尾计数与本说明一致
 - [ ] 让助手改一个带 BOM 的文件，确认 BOM 保留、diff 只含目标行
 - [ ] 让助手故意给错参数（如把 `file_path` 写成 `file`），确认返回可读错误且服务不中断
@@ -205,8 +207,8 @@ Copy-Item "$d\bom.js" "$d\bom.aura.js"; Copy-Item "$d\mixed.js" "$d\mixed.aura.j
 #    字节数、开头 3 字节、CRLF 与 LF 的计数
 # ② 用 Aura 做同一个改动：
 $aura="<解压目录>\aura-basetools\bin\aura.mjs"; $env:AURA_CACHE_DIR="$d\cache"
-node $aura read --file "$d\bom.aura.js" --mode map
-node $aura edit --file "$d\bom.aura.js" --hunks '[{"anchor":"const b = 2;","replace":"const b = 22;"}]'
+node $aura basetools read --file "$d\bom.aura.js" --mode map
+node $aura basetools edit --file "$d\bom.aura.js" --hunks '[{"anchor":"const b = 2;","replace":"const b = 22;"}]'
 # ③ 对比两组数字：原生应出现 -2 字节且 BOM 消失、整份 CRLF→LF；Aura 应 +1 字节且只有目标行变化
 ```
 

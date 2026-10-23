@@ -29,8 +29,8 @@ import { locate, directoryHint } from '../locator-lab/locator-api.mjs'
 import { normSpace } from '../locator-lab/anchor-core.mjs'
 // 单个 hunk 的“平铺形状”容错**只有一份**（住在 args.mjs，与行区间收敛同一层）：
 // DSH 壳与 CLI 共用它。同一套容错规则写两处，就一定会有一处与另一处不一致。
-import { assertEditTargets, assertKnownArgs, assertTargetShape, flatHunk } from '../locator-lab/args.mjs'
-// BOM 的字符形态与字节判据都住在引擎里：读路径（aura_read 的令牌）与写路径（这里）共用一份，
+import { MT_EDIT_ELEMENT_KEYS, assertEditTargets, assertKnownArgs, assertTargetShape, flatHunk } from '../locator-lab/args.mjs'
+// BOM 的字符形态与字节判据都住在引擎里：读路径（aura_basetools_read 的令牌）与写路径（这里）共用一份，
 // 否则"令牌说没 BOM、写回却带 BOM"这类不自洽会两处各修一遍。
 import {
   BYTE_ORDER_MARK,
@@ -53,6 +53,8 @@ import {
   regionTextIn,
   joinLinesWithEndings,
   planHunks,
+  // 0.10.3：严格新鲜度（read-before-write）。判据在引擎里，壳层只把宿主的事实递进去。
+  requireObservedRevision,
   // C49：「已落地」的**判据本体**（`old` 两层都不在 + `replace` 整行命中且全文唯一 + 去空白 ≥8 字符）。
   // 与 `planHunks` 同源、同住引擎：壳层只负责把它接进 outcome 通道，**不在这里写第二份判据**——
   // 引擎与壳层各写一份「已经改好了吗」的判断，就是两个判决面（本文件已被这类分叉坑过一次）。
@@ -71,6 +73,7 @@ import {
   // fs-contract-v2 §2.2/§3：多目标写侧的**唯一入口**。三阶段提交（全量规划 →
   // 全部可落才提交 → 回读校验）与逐项回执都在引擎里，壳层只把 `ctx.fs` 接成它要的 provider
   // 并把逐项回执渲染出来——本文件里**不写第二份**提交纪律。
+  applyEditToProvider,
   applyEditsToProvider,
 } from '../locator-lab/write-path.mjs'
 
@@ -101,7 +104,19 @@ const HUNK_PROPERTIES = {
     description:
       'Symbol to replace, e.g. `toTodoList`, `function:apply`, `Outer/Inner`, `name#2`. Skips all text matching, so it is immune to misremembered content.',
   },
-  // 与 aura_read 同一套宽容声明：模型把区间写成 `4, 6` 时那不是合法 JSON（宿主在参数层就拒），
+  /**
+   * 意图地址（T16）：调用方给一段**模糊**的意图串，引擎确定性地落到一个精确区间。
+   *
+   * 这是比 `target` 更弱、比 `anchor` 更自由的一层：它先当符号名解析（含 `name#n` 等写法），
+   * 再按符号名子串匹配，最后落到文本匹配。落不下来就报歧义并给候选，**不猜**。
+   * 它与其余地址字段互斥（`PATCH_INTENT_CONFLICT`）：同时给两个地址时谁说了算没有正确答案。
+   */
+  intent: {
+    type: 'string',
+    description:
+      'Fuzzy intent address: a symbol-name fragment, a phrase, or approximate text (e.g. `parseConfig`, `config loader`, `// retry the upload`). Resolved deterministically to one exact region; an ambiguous intent is refused with candidates. Use it alone (not with target/lines/line_cue/anchor/old/context/handle); `near` and `expect` are allowed.',
+  },
+  // 与 aura_basetools_read 同一套宽容声明：模型把区间写成 `4, 6` 时那不是合法 JSON（宿主在参数层就拒），
   // 写成 `"4,6"` / `4` 则是合法 JSON 但形状不对——声明宽一点，能容的都容下来。
   lines: {
     oneOf: [{ type: 'array' }, { type: 'string' }, { type: 'integer' }, { type: 'object', additionalProperties: true }],
@@ -156,6 +171,17 @@ const HUNK_PROPERTIES = {
     required: true,
     description: 'Replacement text. Empty string deletes the addressed region.',
   },
+  replace_all: {
+    type: 'boolean',
+    description:
+      'With `old`: replace every non-overlapping occurrence, not just a unique one. Left-to-right; cannot be combined with target/intent/lines/line_cue/anchor/context/handle/near (those narrow to one place). If the occurrence count changed since your last read, the whole patch is refused.',
+  },
+  eol: {
+    type: 'string',
+    enum: ['auto', 'preserve', 'lf', 'crlf'],
+    description:
+      'Line-ending style for the replacement. `auto` (default) matches the addressed region (CRLF file => CRLF, no mixed endings); `preserve` keeps the replacement exactly as written; `lf`/`crlf` force one style.',
+  },
   expect: {
     type: 'string',
     description:
@@ -179,7 +205,7 @@ const HUNK_PROPERTIES = {
   handle: {
     type: 'string',
     description:
-      'Opaque region handle handed out by `aura_read` (e.g. `h9f3ac1b2e4d5:120-160`) — the byte-exact region the tool read, so you never have to retype that text. Combine with `line` or `position` to address inside or beside the region. The handle wins over `old`/coordinates; whatever gets ignored is reported back in the receipt.',
+      'Opaque region handle handed out by `aura_basetools_read` (e.g. `h9f3ac1b2e4d5:120-160`) — the byte-exact region the tool read, so you never have to retype that text. Combine with `line` or `position` to address inside or beside the region. The handle wins over `old`/coordinates; whatever gets ignored is reported back in the receipt.',
   },
   /**
    * 段内**相对**定位：区间内第 k 行（1-based，相对区间起点）——整段替换与"只换其中一行"
@@ -251,11 +277,11 @@ function contentFlatHunk(source) {
    * 算不算给了"的判断一旦不同，同一个入参在两种形状下会得到不同结果。
    */
   const hunk = flatHunk(source) ?? {}
-  for (const key of ['replace', 'expect', 'near']) {
+  for (const key of ['replace', 'expect', 'near', 'eol', 'replace_all']) {
     if (hunk[key] !== undefined) continue
     const value = source[key]
     if (value === undefined || value === null) continue
-    if (typeof value === 'string' && value.length === 0) continue
+    if (typeof value === 'string' && value.length === 0 && key !== 'replace') continue
     hunk[key] = value
   }
   if (hasOld) hunk.old = source.old
@@ -280,7 +306,7 @@ function hunkListOf(args) {
  * 名单在这里是为了"被忽略的一方"能被逐字点名——不是第二份寻址判据：
  * 谁真的生效由引擎决定（`write-path.mjs`），这里只报告"调用方还给了这些"。
  */
-const ADDRESS_KEYS_BESIDE_HANDLE = ['old', 'context', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'target']
+const ADDRESS_KEYS_BESIDE_HANDLE = ['old', 'context', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'target', 'intent']
 
 /** 这个键这次**真的给了**吗（判据与 `flatHunk` 一致：跳过 undefined / null / 空串 / 空数组）。 */
 function gaveKey(source, key) {
@@ -342,11 +368,23 @@ export const EDIT_ARG_KEYS = [
   'hunks',
   'dry_run',
   'create',
+  'require_observation',
   // fs-contract-v2 §2.2：多目标形状。它与 `file_path`/`hunks` **互斥**——
   // 判据只有一份（引擎与壳共调 `assertEditTargets`），这里只登记名字。
   'targets',
   ...Object.keys(HUNK_PROPERTIES),
 ]
+
+/**
+ * `aura_basetools_write` 的顶层参数名（唯一一份，供未知参数守卫用）。
+ *
+ * 它与 `aura_basetools_edit` 是两个工具：这里没有 hunks/地址字段，只有“整份内容 + 落盘选项”。
+ * 未知键必须拒——拼错的 `content`/`file_path` 被静默忽略时，模型会看到一次成功。
+ */
+export const WRITE_ARG_KEYS = ['file_path', 'content', 'dry_run', 'no_overwrite', 'allow_unobserved', 'eol']
+
+/** `aura_basetools_write` 的 eol 模式（与 CLI/MCP/引擎同一组）。 */
+const WRITE_EOL_MODES = ['auto', 'preserve', 'lf', 'crlf']
 
 export const Config = z.object({})
 
@@ -519,10 +557,23 @@ const OUTCOME_BY_CODE = new Map([
   ['LOCATOR_ASSERT_MISMATCH', 'not_found'],
   ['LOCATOR_OUT_OF_RANGE', 'not_found'],
   ['LOCATOR_BAD_LINES', 'not_found'],
+  // 共享行 / lone CR：地址面明确拒绝（不是工具故障）；共享行给候选，属 needs_choice。
+  ['LOCATOR_LINE_SHARED', 'needs_choice'],
+  ['LOCATOR_LONE_CR', 'not_found'],
+  // 符号层（`resolveTarget`）的两种失败：它们与上面是同一类“地址对不上”，
+  // 必须走结果通道并带 next/候选；漏进工具故障会让模型只看到一句 error.message。
+  ['STRUCT_NOT_FOUND', 'not_found'],
+  ['STRUCT_AMBIGUOUS', 'needs_choice'],
+  // 符号跨度不完整 / 文件类型未知：可判定、可恢复，不是工具坏了。
+  ['LOCATOR_SPAN_INCOMPLETE', 'not_found'],
+  ['LOCATOR_NO_LANGUAGE', 'not_found'],
   // 需要调用方从候选里选一个
   ['PATCH_AMBIGUOUS', 'needs_choice'],
   ['LOCATOR_AMBIGUOUS', 'needs_choice'],
   ['LOCATOR_CUE_AMBIGUOUS', 'needs_choice'],
+  // 意图地址（T16）：落不下来时**拒绝并给候选**（不猜），没命中时给可执行的替代地址。
+  ['LOCATOR_INTENT_AMBIGUOUS', 'needs_choice'],
+  ['LOCATOR_INTENT_NOT_FOUND', 'not_found'],
   /**
    * 句柄路的四种**如实拒绝**（契约 §5 解析次序 / §9 的 D6）：句柄过期、身份标签不符、
    * 段内行号越界、`{handle, old}` 而引文不在该区间内。
@@ -621,7 +672,7 @@ const NEXT_BY_OUTCOME = {
    * 引擎的 `PATCH_NOT_FOUND` 错误对象上确实带一句 `next`，内容是「重读文件、按那里的实际
    * 内容重新寻址」——那是 `not_found` 的恢复动作。到这一态它已经**不成立**了：没有要改的东西。
    * 照抄它等于把「这次不用改」重新卖成「去改点什么」，而模型会真去改。
-   * 实测（本轮探针）：`PATCH_NOT_FOUND` 的 `error.next` = "re-read the file (aura_read) and pass
+   * 实测（本轮探针）：`PATCH_NOT_FOUND` 的 `error.next` = "re-read the file (aura_basetools_read) and pass
    * the text exactly as it is there — no line of your old text is in this file"。
    */
   already_applied:
@@ -629,7 +680,7 @@ const NEXT_BY_OUTCOME = {
   needs_choice:
     'more than one place matches — pick one of the candidate lines and re-send that hunk addressed by `start_line` + `end_line`, or add `old`/`context` to say which one you mean',
   not_found:
-    'the addressed text is not in the file as it is now — re-read it (aura_read), then address what is actually there',
+    'the addressed text is not in the file as it is now — re-read it (aura_basetools_read), then address what is actually there',
 }
 
 /**
@@ -863,7 +914,7 @@ function renderResult(value) {
       const short = one.length <= 64
       return multi || !short ? `${JSON.stringify(short ? one : `${one.slice(0, 64)}…`)}${multi ? ` +${t.split('\n').length - 1} more line(s)` : ''}` : JSON.stringify(one)
     }
-    const after = a.replaced ?? ''
+    const after = a.after ?? a.replaced ?? ''
     // 单行 → 单行的替换，把 before → after 都给出；否则只给改后，避免刷屏
     const singleLineSwap = !a.actual.includes('\n') && !after.includes('\n')
     lines.push(
@@ -871,6 +922,16 @@ function renderResult(value) {
         ? `  line ${a.line} [${flags}] ${clip(a.actual)} → ${clip(after)}`
         : `  line ${a.line} [${flags}] now: ${clip(after)}`,
     )
+    /**
+     * 0.8.1：改后坐标与可复用句柄。`line` 是改前坐标；下一处同一区域的编辑不必回读，
+     * 直接拿这里给的句柄（或 afterLine）定位即可。
+     */
+    if (a.afterLine !== undefined) {
+      const delta = a.delta === 0 ? 'same line count' : `${a.delta > 0 ? '+' : ''}${a.delta} line(s)`
+      const handle = a.handle === undefined ? '' : `, handle ${a.handle}`
+      const truncated = a.afterTruncated === true ? ', after truncated' : ''
+      lines.push(`  now lines ${a.afterLine}-${a.afterEndLine} (${delta})${handle}${truncated}`)
+    }
   }
   if (value.applied.some((a) => FUZZY_TIERS.has(a.tier))) {
     lines.push('  (a hunk matched by fallback — confirm the quoted text is the region you meant.)')
@@ -1041,6 +1102,7 @@ async function applyEditTargets(ctx, exec, args, targets, policy) {
   const batch = await applyEditsToProvider(provider, {
     targets,
     ...(args.dry_run === undefined ? {} : { dryRun: args.dry_run }),
+    ...(args.require_observation === true ? { requireObservation: true } : {}),
     ...(signal === undefined ? {} : { signal }),
   })
   const elements = Array.isArray(args.targets) ? args.targets : []
@@ -1070,7 +1132,7 @@ async function applyEditTargets(ctx, exec, args, targets, policy) {
 // ── 插件 ────────────────────────────────────────────────────────────────────
 
 /**
- * 注册 `aura_edit` 工具，以及配套的提示段。
+ * 注册 `aura_basetools_edit` 工具，以及配套的提示段。
  *
  * ## 为什么必须同时注册提示段
  *
@@ -1114,24 +1176,198 @@ export function apply(ctx) {
 function registerTools(ctx, sandbox) {
   // 与 dsh-tool-fs 一致：按 scope 检查工具可见性。`systemPrompt` 已声明进 inject，
   // 因此直接访问——用 `ctx.get` 兜会静默跳过，而"工具注册了却没有指导"正是踩过的坑。
+  /**
+   * `aura_basetools_write`：整份新建/覆写。
+   *
+   * 与 `aura_basetools_edit` 同一个插件、同一套 `ctx.fs` 契约；差别只在入口语义——它没有 hunk/地址，
+   * 只接“整份内容 + 落盘选项”。注册顺序放在 `aura_basetools_edit` **之前**：`load-test` 等套件用
+   * “最后一次 register”取 `aura_basetools_edit`，保持它们不动；`real-framework-smoke` 按名字找。
+   */
+  ctx.systemPrompt.section({
+    name: 'tool:aura-write',
+    order: 1319,
+    text: ({ scope }) =>
+      ctx.tools.get('aura_basetools_write', scope) === undefined
+        ? ''
+        : [
+            'Use the aura_basetools_write tool to create a new file or replace a whole file in one call — not the built-in write.',
+            'For any partial change use aura_basetools_edit: it preserves every untouched byte and has addressing / expect guards.',
+            'Overwriting requires the current revision to have been read (aura_basetools_read) in this session; set `allow_unobserved` only when you deliberately accept a blind overwrite.',
+            '`dry_run` previews without writing, `no_overwrite` refuses an existing file, and `eol` controls line endings (`auto` follows the file, `preserve` writes the content exactly, `lf` / `crlf` force one style).',
+          ].join(' '),
+  })
+
+  ctx.tools.register(
+    defineTool({
+      name: 'aura_basetools_write',
+      description:
+        'Create or replace a whole UTF-8 text file in one call. It preserves a leading BOM and (with `eol: "auto"`) the file\'s line-ending style, writes through the host filesystem with a version check, and reads the file back to verify. ' +
+        'For partial changes use `aura_basetools_edit` instead — it preserves every byte you did not address. ' +
+        'Overwriting an existing file requires the current revision to have been read (aura_basetools_read) in this session; `allow_unobserved: true` is the explicit blind-write escape hatch. ' +
+        '`dry_run` previews without writing; `no_overwrite` refuses an existing file; `eol` is auto | preserve | lf | crlf.',
+      parameters: {
+        file_path: { type: 'string', required: true, description: 'Path to create or replace, resolved by the filesystem backend.' },
+        content: { type: 'string', required: true, description: 'The complete file content. Empty string writes an empty file.' },
+        dry_run: { type: 'boolean', description: 'Plan and validate without touching the file; the receipt says create/write and dryRun=true.' },
+        no_overwrite: { type: 'boolean', description: 'Refuse when the file already exists (WRITE_EXISTS) instead of replacing it.' },
+        allow_unobserved: {
+          type: 'boolean',
+          description: 'Allow overwriting a revision this session has not read (or that changed since it was read). The receipt is marked unverified_region.',
+        },
+        eol: {
+          type: 'string',
+          enum: WRITE_EOL_MODES,
+          description: 'Line-ending policy for an overwrite: auto (default) follows the existing file; preserve writes content exactly; lf/crlf force one style. A new file is always written exactly as given.',
+        },
+      },
+      additionalProperties: false,
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            path: { type: 'string', required: true },
+            operation: { type: 'string', enum: ['create', 'write'], required: true },
+            // 与 aura_basetools_edit 共用 OUTCOMES 里的成功态；create/write 的区分在 operation。
+            outcome: { type: 'string', enum: ['applied'], required: true },
+            dryRun: { type: 'boolean', required: true },
+            bytes: { type: 'integer' },
+            unverified_region: { type: 'boolean' },
+            write_verify: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                level: { type: 'string', required: true },
+                bytes: { type: 'integer' },
+                chars: { type: 'integer' },
+              },
+            },
+          },
+        },
+        render: (_args, value) => {
+          const planned = value.dryRun === true ? 'would ' : ''
+          const bytes = typeof value.bytes === 'number' ? `, ${value.bytes} bytes` : ''
+          const warning =
+            value.unverified_region === true
+              ? '\nunverified_region: this revision was not read in this session; the write was allowed only because allow_unobserved was set.'
+              : ''
+          return [{ type: 'text', text: `${value.path} — ${planned}${value.operation}${bytes}${warning}` }]
+        },
+      },
+      async execute(args, exec) {
+        assertKnownArgs(args, WRITE_ARG_KEYS, 'aura_basetools_write')
+        if (typeof args.file_path !== 'string' || args.file_path.trim().length === 0) {
+          throw new Error('file_path must be a non-empty string')
+        }
+        if (typeof args.content !== 'string') throw new Error('content must be a string')
+        const eol = args.eol ?? 'auto'
+        if (!WRITE_EOL_MODES.includes(eol)) {
+          throw new PatchError('write `eol` must be auto, preserve, lf, or crlf — nothing was written', 'WRITE_BAD_ARGS')
+        }
+        const policyService = sandbox()
+        const policy =
+          policyService === undefined
+            ? undefined
+            : policyService.resolve(exec.agent === undefined ? {} : { session: exec.agent.session })
+        const cwd = policy?.workspaceRoot ?? exec.agent?.session?.header?.cwd
+        const target = await ctx.fs.resolve(args.file_path, {
+          ...(cwd !== undefined ? { cwd } : {}),
+          signal: exec.signal,
+        })
+        const info = await ctx.fs.stat(target, exec.signal)
+        if (info !== undefined && args.no_overwrite === true) {
+          throw new PatchError(`cannot write "${target.displayPath}": it already exists (no-overwrite)`, 'WRITE_EXISTS')
+        }
+        if (info === undefined && eol !== 'auto') {
+          throw new PatchError(
+            'write `eol` applies when overwriting an existing file; a new file is written exactly as given — pass the endings you want in `content`',
+            'WRITE_BAD_ARGS',
+          )
+        }
+        // 与 aura_basetools_edit 同一条观察契约：写之前先告诉策略我们看见了什么（absent / present + version）。
+        ctx.emit(
+          'fs/observed',
+          target,
+          info === undefined ? { kind: 'absent' } : { kind: 'present', version: info.version },
+          exec,
+        )
+        let writtenVersion
+        const provider = {
+          stat: async (_displayPath, at) => ctx.fs.stat(target, at ?? exec.signal),
+          readText: async (_displayPath, at) => ctx.fs.readText(target, at ?? exec.signal),
+          readByteRange: async (_displayPath, range, at) =>
+            ctx.fs.readByteRange(target, { offset: range.offset, length: range.length }, at ?? exec.signal),
+          writeText: async (_displayPath, content, expected, at) => {
+            const out = await ctx.fs.writeText(target, content, expected, at ?? exec.signal, policy)
+            writtenVersion = out?.version
+            return out
+          },
+        }
+        let receipt
+        try {
+          receipt = await applyEditToProvider(provider, {
+            displayPath: target.displayPath,
+            hunks: [],
+            ...(info === undefined
+              ? { create: args.content }
+              : {
+                  wholeFile: args.content,
+                  eol,
+                  // 覆写默认要求先读过这一版；allow_unobserved 同时越过严格闸与区域闸。
+                  requireObservation: args.allow_unobserved !== true,
+                  skipStaleGate: args.allow_unobserved === true,
+                }),
+            dryRun: args.dry_run === true,
+            ...(typeof target.targetKey === 'string' && target.targetKey.length > 0
+              ? { identityKey: target.targetKey }
+              : {}),
+            ...(exec.signal === undefined ? {} : { signal: exec.signal }),
+          })
+        } catch (error) {
+          if (!isNonUtf8TextFailure(error)) throw error
+          throw Object.assign(new Error(nonUtf8RefusalMessage('write', target.displayPath, 'aura_basetools_write')), {
+            code: typeof error.code === 'string' && error.code.length > 0 ? error.code : 'ERR_ENCODING_INVALID_ENCODED_DATA',
+            cause: error,
+          })
+        }
+        if (receipt.dryRun !== true && writtenVersion !== undefined) {
+          ctx.emit('fs/observed', target, { kind: 'present', version: writtenVersion }, exec)
+        }
+        const operation = receipt.operation ?? (info === undefined ? 'create' : 'write')
+        const verify = receipt.write_verify
+        return {
+          path: target.displayPath,
+          operation,
+          outcome: 'applied',
+          dryRun: receipt.dryRun === true,
+          ...(verify?.bytes === undefined ? {} : { bytes: verify.bytes }),
+          ...(receipt.unverified_region === true ? { unverified_region: true } : {}),
+          ...(verify === undefined ? {} : { write_verify: verify }),
+        }
+      },
+    }),
+  )
+
   ctx.systemPrompt.section({
     name: 'tool:aura-edit',
     order: 1320,
     text: ({ scope }) =>
-      ctx.tools.get('aura_edit', scope) === undefined
+      ctx.tools.get('aura_basetools_edit', scope) === undefined
         ? ''
         : [
             // 措辞刻意与内置指导**同形**。这一点是量出来的：
             // 内置注入的是命令式——"Use the edit tool for targeted changes to existing UTF-8 text files"，
-            // 而我先前写的是建议式——"prefer aura_edit over edit"。
+            // 而我先前写的是建议式——"prefer aura_basetools_edit over edit"。
             // 实测同一份建议式指导，新建会话里 4 次选了 Aura、2 次选了内置——**它在跟先验拔河**。
             // 语气不对等，就是在让一条软建议去对抗一条硬指令。
             // 开头不给平级选项：上一版写了"兜底可用内置 edit"，中性任务下它直接拿来当依据（实测）。
-            'Use the aura_edit tool — not edit — for every change to an existing UTF-8 text file: it is the default.',
+            'Use the aura_basetools_edit tool — not edit — for every change to an existing UTF-8 text file: it is the default.',
             // 三条保证是**量出来的差异**（不是宣传）：字节保真、陈旧区域拒绝、落盘后回读。
             // 内置 edit 同条件下会丢 BOM、把混合行尾整份归一（2026-09-22 两侧实测）。
             'It writes back byte-for-byte (a leading BOM and each line\'s own ending survive), refuses a hunk whose addressed region changed since your last read, and reads the file back to verify the write.',
-            'Address each hunk the cheapest way: `target` (a symbol name) when you know it, else `start_line` + `end_line` (or `lines: [a, b]`) for the range a read printed, else `line_cue` (one word unique to that line); `anchor` (remembered text) is the last resort and tolerates whitespace drift, rewording, and added or removed lines.',
+            'Address each hunk the cheapest way: `target` (a symbol name) when you know it, else `start_line` + `end_line` (or `lines: [a, b]`) for the range a read printed, else `line_cue` (one word unique to that line), else `old` (the verbatim text you are replacing); `anchor` (remembered text) is the last resort and tolerates whitespace drift, rewording, and added or removed lines.',
+            // replace_all：批量替换只有这一条路，且次数变化会拒（不是“尽力而为”）。
+            'When `old` should change more than one place, set `replace_all: true`: every non-overlapping occurrence is replaced left-to-right in the same call, and if the number of occurrences changed since your last read the whole patch is refused.',
             // 措辞从"可以传"改成"应当传"，依据是一次受控并发实验（N 个写者改同一文件）：
             // 当编辑**改变行数**、而一次重试又用**行号地址**时，重试会把改动写到**错误的行**上
             // 并回一句成功回执（实测：~50% 的轮次以"非预期内容 + 成功回执"结束，每个轮次约 1.5 行附带损伤）。
@@ -1142,27 +1378,26 @@ function registerTools(ctx, sandbox) {
             // 刻意**不再**写"未知扩展名请用内置 edit"。那句话是错的：只有 `target` 需要语言配置
             // （符号表只对已索引的扩展名存在），而 `lines`／`line_cue`／`anchor` 三种寻址根本不看语言，
             // 创建路径更是与寻址无关。它恰好在工具可用的地方把模型赶回内置工具。
-            'Extensions aura_edit cannot index (config, data, markup) are still fully editable — address them with `lines`, `line_cue`, or `anchor` instead of `target`.',
+            'Extensions aura_basetools_edit cannot index (config, data, markup) are still fully editable — address them with `lines`, `line_cue`, or `anchor` instead of `target`.',
             // 多目标：**这一步是为了采用率**（判据⑤）。`targets` 在参数表里一直就有，但模型不会因为
             // “参数表里有个数组”就想到要批量；指导文本是它最先读的一段。措辞命令式、与上下文同形。
             // 语义只说真的（不吹“要么全成要么全不落”）：规划阶段任何一项失败 ⇒ **一个字节都不写**；
             // 而写入阶段失败时，回执会逐项点名哪些落了、哪些没落（`landed_paths` / `not_landed_paths`）。
             'To change several files at once, pass `targets` (each item the same single-target arguments): if any target fails to plan, the whole batch writes nothing — and if a write itself fails, the receipt names exactly which targets landed.',
-            // 兜底：内置 `write` 是整份覆写的唯一手段
-            // 兜底只列 aura_edit **刻意不做**的两件事（整份覆写、拒绝改行尾的文件），以及无替代的读图；
-            // 刻意不把内置 `edit` 写进来：它在同样场景会丢 BOM / 归一行尾，不是等价兜底。
-            'The built-in `write` remains for what aura_edit deliberately does not do — replacing a whole file, or writing one whose line endings it refuses to touch; `read_image` is still the only way to read an image.',
+            // 兜底：整份写由 aura_basetools_write 承担；读图仍只有内置 read_image。
+            // 刻意不把内置 `edit`/`write` 写进来：它们在同样场景会丢 BOM / 归一行尾，不是等价兜底。
+            'For a whole-file create or rewrite, use aura_basetools_write — not the built-in write; `read_image` is still the only way to read an image.',
           ].join(' '),
   })
 
   ctx.tools.register(
     defineTool({
-      name: 'aura_edit',
+      name: 'aura_basetools_edit',
       description:
         'Edit or create a UTF-8 text file with hunks, in a single call. ' +
         'For several files, pass `targets` — an array of the same single-target arguments (`file_path` + `hunks`); it is mutually exclusive with `file_path`. ' +
         'Every target is planned before anything is written: if any target fails to plan, nothing is written at all, and if a write itself fails the receipt names exactly which targets landed. ' +
-        'Address each hunk in the cheapest way you can: `target` (a symbol name — immune to misremembered content), or `start_line` + `end_line` (preferred: two plain numbers, no array syntax to get wrong — same as `lines: [a, b]`), or `line_cue` (one word unique to that line), or `anchor` (remembered text, matched with graceful degradation). Only `anchor` requires you to reproduce content; prefer the other three. Pass `expect` to assert what is at that location — it is checked in every mode. All hunks must locate or nothing is written. Omit keys you do not need — an explicit `null` is rejected, not ignored.',
+        'Address each hunk in the cheapest way you can: `target` (a symbol name — immune to misremembered content), or `start_line` + `end_line` (preferred: two plain numbers, no array syntax to get wrong — same as `lines: [a, b]`), or `line_cue` (one word unique to that line), or `anchor` (remembered text, matched with graceful degradation), or `old` (the verbatim text you are replacing). Add `replace_all: true` with `old` to replace every non-overlapping occurrence in one call (left-to-right; refused if the occurrence count changed since your last read). Only `anchor` and `old` require you to reproduce content; prefer the others. Pass `expect` to assert what is at that location — it is checked in every mode. All hunks must locate or nothing is written. Omit keys you do not need — an explicit `null` is rejected, not ignored.',
       parameters: {
         /**
          * `file_path` 不再声明 `required: true` —— 这是多目标形状唯一逼出来的一处**声明面**改动。
@@ -1248,6 +1483,11 @@ function registerTools(ctx, sandbox) {
           type: 'boolean',
           description: 'Locate every hunk and report where they would land, without touching the file.',
         },
+        require_observation: {
+          type: 'boolean',
+          description:
+            'Strict freshness: require this exact revision to have been read (or written) in this session; otherwise refuse with PATCH_UNOBSERVED. Applies to dry_run as well, so a preview matches the real verdict. Creating a new file is exempt.',
+        },
         create: {
           type: 'string',
           description:
@@ -1278,6 +1518,19 @@ function registerTools(ctx, sandbox) {
                   byNear: { type: 'boolean', required: true },
                   actual: { type: 'string', required: true },
                   replaced: { type: 'string', required: true },
+                  // 0.10.0：`replace` 的换行被 auto/lf/crlf 改写过时如实标注。
+                  eolAdapted: { type: 'boolean' },
+                  /**
+                   * 0.8.1：改后坐标 / 行数变化 / 新句柄。`line` 仍是改前坐标（契约），
+                   * 三者让调用方不必回读就能继续编辑；删除没有可指区间，因此没有 `handle`。
+                   */
+                  afterLine: { type: 'integer' },
+                  afterEndLine: { type: 'integer' },
+                  delta: { type: 'integer' },
+                  handle: { type: 'string' },
+                  // 片段层（行内替换）的整行回填；整行替换的 `replaced` 已是完整新区域，不需要它。
+                  after: { type: 'string' },
+                  afterTruncated: { type: 'boolean' },
                 },
               },
             },
@@ -1335,7 +1588,7 @@ function registerTools(ctx, sandbox) {
               additionalProperties: false,
               properties: { handle: { type: 'string', required: true } },
             },
-            // 下一步做什么。与 aura_read 的同名字段对齐（那里是续读指令，这里是恢复指令）。
+            // 下一步做什么。与 aura_basetools_read 的同名字段对齐（那里是续读指令，这里是恢复指令）。
             next: { type: 'string' },
             /**
              * C49 第四态的可核证据：**这次没写盘，但结果已经是你要的样子**。
@@ -1369,7 +1622,7 @@ function registerTools(ctx, sandbox) {
              * 一个消费方只看布尔值就能分流，不必去数数组长度、也不必解析文本。
              */
             unchanged: { type: 'boolean' },
-            // C13：这次编辑没有可信的“上次观测”（文件从没被 aura_read 读过）⇒ true。
+            // C13：这次编辑没有可信的“上次观测”（文件从没被 aura_basetools_read 读过）⇒ true。
             // 声明在这里是必须的：output.schema 是 additionalProperties:false，
             // 未声明的字段会让整条成功路径被框架拒绝。
             unverified_region: { type: 'boolean' },
@@ -1474,10 +1727,10 @@ function registerTools(ctx, sandbox) {
          * 壳里再写一遍必然漂开。它抛的是**参数面**错（`ARGS_SHAPE_EXCLUSIVE` / `ARGS_TARGETS_SHAPE`
          * / `ARGS_TARGETS_LIMIT`）；逐项失败则是结果通道（引擎已经把每项封成结果，不抛）。
          */
-        const batchTargets = assertEditTargets(args, { toolName: 'aura_edit' })
+        const batchTargets = assertEditTargets(args, { toolName: 'aura_basetools_edit', elementKeys: MT_EDIT_ELEMENT_KEYS })
         if (batchTargets !== undefined) {
           // 多目标形状同样要过未知参数守卫：拼错的键不因为换了形状就被放行。
-          assertKnownArgs(args, EDIT_ARG_KEYS, 'aura_edit')
+          assertKnownArgs(args, EDIT_ARG_KEYS, 'aura_basetools_edit')
           const batchPolicyService = sandbox()
           const batchPolicy =
             batchPolicyService === undefined
@@ -1488,17 +1741,17 @@ function registerTools(ctx, sandbox) {
         /**
          * “二选一”的**另一半**（两个都没给 ⇒ 也拒）只有一份判据，住在 `args.mjs` 的
          * `assertTargetShape`（`src/locator-lab/args.mjs:455`）——壳里原来那句
-         * `file_path must be a non-empty string` 是特例写法，已删（aura_read 壳里长着同一句，
+         * `file_path must be a non-empty string` 是特例写法，已删（aura_basetools_read 壳里长着同一句，
          * 两处必然会漂）。抛的仍是参数面同族码 `ARGS_SHAPE_EXCLUSIVE`；
          * 单目标调用照旧带 `file_path`，故这条路一字未变。
          */
-        assertTargetShape(args, { toolName: 'aura_edit' })
+        assertTargetShape(args, { toolName: 'aura_basetools_edit' })
         // 创建路径不经过 hunks：给 `create` 时 hunks 可以为空（甚至省略）。
         // 第一版把"hunks 非空"当无条件校验，于是**创建被自己的校验挡住**，
         // 而报错信息（"hunks must be a non-empty array"）与真正的原因（文件不存在）毫无关系。
         // 未知参数不回默认行为：拼错的字段被静默忽略时，模型看到的是**成功**。
-        // （实测：`{file_path, mode:'auto'}` 这种属于 aura_read 的参数曾零违规穿过框架。）
-        assertKnownArgs(args, EDIT_ARG_KEYS, 'aura_edit')
+        // （实测：`{file_path, mode:'auto'}` 这种属于 aura_basetools_read 的参数曾零违规穿过框架。）
+        assertKnownArgs(args, EDIT_ARG_KEYS, 'aura_basetools_edit')
         const creating = typeof args.create === 'string'
         /**
          * 单个 hunk **平铺在顶层**也认。
@@ -1575,6 +1828,20 @@ function registerTools(ctx, sandbox) {
               'PATCH_NOT_FOUND',
             )
           }
+          /**
+           * 预演**不能建文件**。0.10.5 之前这条创建路径完全不看 `dry_run`：
+           * `edit --create x --dry-run` 会真的落盘，回执还写 `dryRun:false`。
+           * patch 路径的预演在闸门之后返回，这里没有闸门要跑，直接回同形的预演回执。
+           */
+          if (args.dry_run === true) {
+            return {
+              path: target.displayPath,
+              operation: 'create',
+              outcome: 'applied',
+              applied: [{ line: 1, tier: 'create', byNear: false, actual: '', replaced: createContent }],
+              dryRun: true,
+            }
+          }
           const created = await ctx.fs.writeText(
             target,
             createContent,
@@ -1630,13 +1897,23 @@ function registerTools(ctx, sandbox) {
           content = await ctx.fs.readText(target, exec.signal)
         } catch (error) {
           if (!isNonUtf8TextFailure(error)) throw error
-          throw Object.assign(new Error(nonUtf8RefusalMessage('patch', target.displayPath, 'aura_edit')), {
+          throw Object.assign(new Error(nonUtf8RefusalMessage('patch', target.displayPath, 'aura_basetools_edit')), {
             code: typeof error.code === 'string' && error.code.length > 0 ? error.code : 'ERR_ENCODING_INVALID_ENCODED_DATA',
             cause: error,
           })
         }
         // BOM 在解码时已经丢了（只丢第一个），写回前先问字节：它是唯一能回答“原来有几个 BOM”的地方。
         const byteOrderMarks = await fileByteOrderMarkCount(ctx.fs, target, exec.signal)
+        if (args.require_observation === true) {
+          requireObservedRevision({
+            displayPath: target.displayPath,
+            ...(typeof target.targetKey === 'string' && target.targetKey.length > 0
+              ? { identityKey: target.targetKey }
+              : {}),
+            content,
+            byteOrderMark: byteOrderMarks > 0,
+          })
+        }
         let planned
         try {
           /**
@@ -1817,7 +2094,7 @@ function registerTools(ctx, sandbox) {
         const verification = await verifyWriteBack(ctx.fs, target, newContent, target.displayPath, exec.signal)
         /**
          * 自己刚写的内容就是**最新观测**：不刷新它，同一轮里对同一区域的第二次编辑
-         * 会被上面那道闸门拦下（段E 就是这条）。存的版本按内容指纹算（与 `aura_read` 同一把尺子），
+         * 会被上面那道闸门拦下（段E 就是这条）。存的版本按内容指纹算（与 `aura_basetools_read` 同一把尺子），
          * 存的内容是**提供方视角文本**（见 {@link providerView}）——与下一次读所见逐字一致。
          */
         const writtenView = providerView(newContent)

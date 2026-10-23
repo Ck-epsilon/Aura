@@ -59,8 +59,8 @@ const USAGE = `aura-basetools 一键安装器 / 升级器
   --prefix <目录>               安装位置；默认 <home>/.aura/pkg
   --home <目录>                 把"用户主目录"指到别处（默认 $HOME；测试与自定义布局用）
   --agent <名字,名字>           只注册这些 agent；默认自动检测 codex,claude,cursor
-  --dsh-profile <名字>          额外把两个工具行写进 ~/.dsh/profiles/<名字>/cordis.patch.yml
-                                （该 patch 已有别的内容时会拒绝并打印该加的几行，不猜）
+  --dsh-profile <名字>          额外把两个插件模块行写进 ~/.dsh/profiles/<名字>/cordis.patch.yml
+                                （进入后是 aura_basetools_read / aura_basetools_edit / aura_basetools_write 三个工具；该 patch 已有别的内容时会拒绝并打印该加的几行，不猜）
   --dry-run                     只打印将要做的事，不写任何文件
   --uninstall                   撤销本安装器做过的事（注册项 + 安装目录 + previous/staging）
   --version                     打印已装版本、构建戳（树哈希）与三面各自的生效时机
@@ -631,7 +631,7 @@ function registerDsh(home, profile, prefix, write, log) {
     }
   }
   write(file, `${rows}\n`, before)
-  log(`注册      : dsh(${profile}) → ${file}（两个工具行，绝对路径）`)
+  log(`注册      : dsh(${profile}) → ${file}（两个模块行 = 三个工具，绝对路径）`)
   return { agent: 'dsh', file, action: 'added', targets: entries.map(([, target]) => target) }
 }
 
@@ -800,7 +800,7 @@ function selftest(installDir, log, cacheDir) {
   // 自检也把观测缓存指进安装目录：装的过程中不该往真实的 ~/.aura 落东西
   const env = { ...process.env, AURA_CACHE_DIR: cacheDir }
   const result = { cli: 'fail', mcp: 'fail', serverInfo: { name: null, version: null } }
-  const read = spawnSync(process.execPath, [cli, 'read', '--file', sample, '--mode', 'map', '--pretty'], {
+  const read = spawnSync(process.execPath, [cli, 'basetools', 'read', '--file', sample, '--mode', 'map', '--pretty'], {
     encoding: 'utf8',
     timeout: 30000,
     env,
@@ -831,7 +831,7 @@ function selftest(installDir, log, cacheDir) {
   // 握手回的 serverInfo.version 是"正在应答的那个进程"自报的版本 —— doctor 靠它回答"三面是不是同一个版本"
   const info = replies.find((msg) => msg.result?.serverInfo !== undefined)?.result.serverInfo ?? null
   result.serverInfo = { name: info?.name ?? null, version: info?.version ?? null }
-  if (names.includes('aura_read') && names.includes('aura_edit')) result.mcp = `ok: ${names.join(', ')}`
+  if (names.includes('aura_basetools_read') && names.includes('aura_basetools_edit')) result.mcp = `ok: ${names.join(', ')}`
   else result.mcp = `fail: exit=${handshake.status} 工具=${names.join(',') || '(无)'}`
   fs.rmSync(scratch, { recursive: true, force: true })
   log(`自检      : CLI ${result.cli}；MCP ${result.mcp}`)
@@ -998,7 +998,7 @@ async function main() {
     process.stdout.write(`aura-basetools 安装${opts.dryRun ? '预演' : ''}（${version}）\n`)
     for (const line of lines) process.stdout.write(`  ${line}\n`)
     for (const item of manual) process.stdout.write(`  ⚠️  ${item.hint}\n`)
-    process.stdout.write(`\n${ok || opts.dryRun ? '完成' : '装是装上了，但自检没过——把上面那行原样贴给我'}：${opts.dryRun ? '去掉 --dry-run 即真装' : '重开 agent 会话后即可用 aura_read / aura_edit'}\n`)
+    process.stdout.write(`\n${ok || opts.dryRun ? '完成' : '装是装上了，但自检没过——把上面那行原样贴给我'}：${opts.dryRun ? '去掉 --dry-run 即真装' : '重开 agent 会话后即可用 aura_basetools_read / aura_basetools_edit / aura_basetools_write'}\n`)
   }
   if (!ok && !opts.dryRun) return 2
   return 0
@@ -1018,7 +1018,7 @@ function hashTree(dir, base = dir, out = {}) {
 const SURFACES = [
   ['CLI（aura / aura-mcp）', '立即生效：每次调用读磁盘'],
   ['MCP（Codex / Claude Code / Cursor）', '新会话生效：服务由客户端按会话启动，正在跑的会话仍是旧代码'],
-  ['DSH 工具（aura_read / aura_edit）', '需重启 dsh：宿主启动时导入模块，改文件不热更新'],
+  ['DSH 工具（aura_basetools_read / aura_basetools_edit / aura_basetools_write）', '需重启 dsh：宿主启动时导入模块，改文件不热更新'],
 ]
 
 /** `--version`：报的还是**磁盘上那一份**（不是状态文件里的旧记录），并把内容哈希与构建戳摆出来。 */
@@ -1358,7 +1358,7 @@ function describePayload(label, localFile) {
  *
  * 这不是假想的病。本机 `~/.dsh/profiles/auratest` 就这么活了 **8 天**：9/21 建的实验 profile，
  * 依赖 `dist/aura-tools/aura-tools-0.2.1.tgz`（那个 dist 目录后来整个没了），而
- * `dsh --profile auratest` **真的会**加载那份 0.2.1 的 `aura_read` / `aura_edit`。
+ * `dsh --profile auratest` **真的会**加载那份 0.2.1 的 `aura_basetools_read` / `aura_basetools_edit`。
  * 与此同时三面版本、完整性、注册项、CLI/MCP 自检、全部测试**都是绿的**——
  * 因为那些判据都只看得见**本安装目录**，没有任何一条会往 profile 那一侧看一眼。
  *

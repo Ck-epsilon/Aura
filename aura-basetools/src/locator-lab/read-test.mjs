@@ -46,11 +46,19 @@ for (const o of outputs) {
   say(`  ${o.label.padEnd(8)} text=${String(textSize).padStart(6)} 信封=${String(size).padStart(6)} ${size > PRUNE_BUDGET ? '⚠ 信封超预算' : ''}`)
 }
 check(over === 0, `四模式内容均未超出内容预算 ${CONTENT_BUDGET}`, `超出 ${over} 个`)
+check(
+  outputs.every((o) => o.r.metrics?.mode === o.r.mode && o.r.metrics.lines === o.r.totalLines && o.r.metrics.chars === (o.r.text ?? '').length && typeof o.r.metrics.truncated === 'boolean'),
+  '所有模式都带确定性 metrics（mode/lines/chars/truncated）',
+  JSON.stringify(outputs.map((o) => [o.label, o.r.metrics])),
+)
+const failure = readWith('a\n', { filePath: 'm.txt', mode: 'lines' })
+check(failure.ok === false && failure.metrics === undefined, '失败回执不带 metrics（metrics 只对成功信封作承诺）', JSON.stringify(failure.metrics))
 
 say('')
 say('=== 2. map 模式：先给地图，且足够小 ===')
 check(map.ok && map.mode === 'map', `mode=${map.mode}`)
 check(typeof map.symbols === 'number' && map.symbols > 0, `索引到 ${map.symbols} 个符号`)
+check(map.metrics?.symbols === map.symbols, `metrics.symbols 与顶层 symbols 同值（${map.metrics?.symbols}）`)
 // 地图的大小不再是"越小越好"——它应当**用满预算**给出最多的可寻址名字。
 // 断言因此改成验真正要紧的性质：不超预算，且相对全文仍有大幅节省。
 check(map.text.length <= CONTENT_BUDGET, `地图 ${map.text.length} 字符，未超内容预算`)

@@ -168,6 +168,12 @@ const A_CASES = [
   { rel: SMALL, req: { lines: '12,18' } },
   { rel: SMALL, req: { lines: 7 } },
   { rel: SMALL, req: { mode: 'auto', lines: [4, 6] } },
+  // P1.4：这些字段以前只在单目标生效（多目标手写转发时被静默丢掉）。
+  { rel: SMALL, req: { offset: 5, limit: 2 } },
+  { rel: SMALL, req: { mode: 'around', around: 'splitRow', context: 2 } },
+  { rel: SMALL, req: { mode: 'map', kind: 'function' } },
+  { rel: SMALL, req: { mode: 'map', budget: 1200 } },
+  { rel: SMALL, req: { mode: 'lines', lines: [2, 4], max_chars: 600 } },
 ]
 const aTargets = A_CASES.map((c) => ({ file_path: REL(c.rel), ...c.req }))
 const aBatch = await readManyWith(provider, aTargets)
@@ -560,7 +566,7 @@ say('')
 say('=== H. 句柄身份两条路同源：同一文件同一区间 ⇒ 句柄逐字相同，且批内句柄能直接拿去改 ===')
 {
   /**
-   * 这一段跑的是**两个真壳**（aura_read / aura_edit）+ 一个与 `dsh-fs-local` 同形的宿主 fs：
+   * 这一段跑的是**两个真壳**（aura_basetools_read / aura_basetools_edit）+ 一个与 `dsh-fs-local` 同形的宿主 fs：
    * `resolve` 给 `{displayPath, targetKey}`，而**调用方给的是相对写法**（模型真的这么干）。
    *
    * 身份不一致只在“壳把宿主事实丢掉”时出现：单目标那条路递的是 `targetKey`，多目标那条路若只
@@ -606,7 +612,7 @@ say('=== H. 句柄身份两条路同源：同一文件同一区间 ⇒ 句柄逐
   }
   let readTool = null
   let editTool = null
-  const tools = { register: (t) => (t.name === 'aura_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
+  const tools = { register: (t) => (t.name === 'aura_basetools_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
   const mkCtx = () => ({
     fs: fsService,
     ...contextServices(),
@@ -654,7 +660,7 @@ say('=== H. 句柄身份两条路同源：同一文件同一区间 ⇒ 句柄逐
   const applied = await run(editTool, { file_path: A, hunks: [{ handle: entry.handle, replace: WRONG }] })
   check(
     applied.ok === true && applied.out?.outcome === 'applied',
-    '② 批内句柄直接拿去 aura_edit ⇒ **成功**（不是身份不符）',
+    '② 批内句柄直接拿去 aura_basetools_edit ⇒ **成功**（不是身份不符）',
     `${applied.code ?? ''} ${applied.message ?? applied.out?.outcome ?? ''}`,
   )
   check(decode(fs.readFileSync(path.join(tmp, A))).includes('const three = 33'), '② 确实落盘')

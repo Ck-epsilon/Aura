@@ -6,9 +6,9 @@
  * `aura-read/load-test.mjs` 与 `aura-edit/load-test.mjs` 用 mock，测的是**逻辑**（判据、落盘、闸门）。
  * mock 不校验 schema。于是本仓被同一形态咬过三次，每次都是**每一条成功路径被框架拒**而套件全绿：
  *
- *   1. `aura_read` 输出漏声明 `text`  ⇒ 每次成功读取都被拒；
- *   2. `aura_edit` 输出带 `dry_run`   ⇒ 每次预演都被拒；
- *   3. `hunks[1].replace_all is not a declared property` ⇒ 参数进不来。
+ *   1. `aura_basetools_read` 输出漏声明 `text`  ⇒ 每次成功读取都被拒；
+ *   2. `aura_basetools_edit` 输出带 `dry_run`   ⇒ 每次预演都被拒；
+ *   3. `hunks[1].replace_all is not a declared property` ⇒ 参数进不来（0.10.2 起它已是正式声明）。
  *
  * 本套件用 `@deepseek-ai/dsh-tools` 的**真** `assertObjectJsonSchema` / `validateJsonSchemaValue`
  * 与**真** `schemastery`，验三件事：
@@ -96,6 +96,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'real-smoke-'))
 const file = path.join(tmp, 'demo.mjs')
 fs.writeFileSync(file, 'export function alpha() {\n  const n = 1\n  return n\n}\n\nexport function beta() {\n  return 2\n}\n')
 fs.writeFileSync(path.join(tmp, 'note.zzz'), 'plain text\n')
+fs.writeFileSync(path.join(tmp, 'external.txt'), 'original\n')
 
 let version = 1
 const fsService = {
@@ -147,10 +148,11 @@ for (const dir of ['aura-read', 'aura-edit']) {
   const mod = await import(asUrl(path.join(pkgRoot, 'src', dir, 'index.js')))
   mod.apply(mkCtx())
 }
-const readTool = registered.find((t) => t.name === 'aura_read')
-const editTool = registered.find((t) => t.name === 'aura_edit')
-check(readTool !== undefined && editTool !== undefined, '两个工具都注册成功')
-for (const tool of [readTool, editTool]) {
+const readTool = registered.find((t) => t.name === 'aura_basetools_read')
+const editTool = registered.find((t) => t.name === 'aura_basetools_edit')
+const writeTool = registered.find((t) => t.name === 'aura_basetools_write')
+check(readTool !== undefined && editTool !== undefined && writeTool !== undefined, '三个工具都注册成功（aura_basetools_read / aura_basetools_edit / aura_basetools_write）')
+for (const tool of [readTool, editTool, writeTool]) {
   if (tool === undefined) continue
   let why = ''
   let ok = true
@@ -176,15 +178,20 @@ for (const tool of [readTool, editTool]) {
 say('')
 say('=== B. execute() 的真实返回值必须通过真输出校验 ===')
 const cases = [
-  ['aura_read 读文件（full）', readTool, { file_path: file }],
-  ['aura_read 读目录（仓库地图）', readTool, { file_path: tmp }],
-  ['aura_read 行区间', readTool, { file_path: file, start_line: 2, end_line: 3 }],
-  ['aura_read 按符号', readTool, { file_path: file, around: 'beta' }],
-  ['aura_read 未索引扩展名', readTool, { file_path: path.join(tmp, 'note.zzz') }],
-  ['aura_edit 写入', editTool, { file_path: file, hunks: [{ lines: [3, 3], replace: '  return 111' }] }],
-  ['aura_edit 预演（dry_run）', editTool, { file_path: file, hunks: [{ lines: [3, 3], replace: '  return 222' }], dry_run: true }],
-  ['aura_edit 建文件（create）', editTool, { file_path: path.join(tmp, 'made.txt'), create: 'hello\n' }],
-  ['aura_edit 平铺形状', editTool, { file_path: file, start_line: 3, end_line: 3, replace: '  return 333' }],
+  ['aura_basetools_read 读文件（full）', readTool, { file_path: file }],
+  ['aura_basetools_read 读目录（仓库地图）', readTool, { file_path: tmp }],
+  ['aura_basetools_read 行区间', readTool, { file_path: file, start_line: 2, end_line: 3 }],
+  ['aura_basetools_read 按符号', readTool, { file_path: file, around: 'beta' }],
+  ['aura_basetools_read 未索引扩展名', readTool, { file_path: path.join(tmp, 'note.zzz') }],
+  ['aura_basetools_edit 写入', editTool, { file_path: file, hunks: [{ lines: [3, 3], replace: '  return 111' }] }],
+  ['aura_basetools_edit 预演（dry_run）', editTool, { file_path: file, hunks: [{ lines: [3, 3], replace: '  return 222' }], dry_run: true }],
+  ['aura_basetools_edit 建文件（create）', editTool, { file_path: path.join(tmp, 'made.txt'), create: 'hello\n' }],
+  ['aura_basetools_edit 平铺形状', editTool, { file_path: file, start_line: 3, end_line: 3, replace: '  return 333' }],
+  ['aura_basetools_write 新建', writeTool, { file_path: path.join(tmp, 'written.txt'), content: 'written\n' }],
+  ['aura_basetools_write 预演', writeTool, { file_path: path.join(tmp, 'written-dry.txt'), content: 'x\n', dry_run: true }],
+  ['aura_basetools_write 覆写（已观测）', writeTool, { file_path: path.join(tmp, 'written.txt'), content: 'rewritten\n' }],
+  ['aura_basetools_write 盲写（allow_unobserved）', writeTool, { file_path: path.join(tmp, 'external.txt'), content: 'external-new\n', allow_unobserved: true }],
+  ['aura_basetools_write eol preserve', writeTool, { file_path: path.join(tmp, 'written.txt'), content: 'exact\n', eol: 'preserve' }],
 ]
 for (const [label, tool, args] of cases) {
   let value = null
@@ -236,9 +243,16 @@ const EDIT_SHAPES = [
   { file_path: 'x.js', lines: 3, replace: 'y' },
   { file_path: 'x.js', line_cue: 'uniq', replace: 'y' },
 ]
+const WRITE_SHAPES = [
+  { file_path: 'x.js', content: 'y' },
+  { file_path: 'x.js', content: '', dry_run: true },
+  { file_path: 'x.js', content: 'y', eol: 'preserve', no_overwrite: true },
+  { file_path: 'x.js', content: 'y', allow_unobserved: true },
+]
 for (const [tool, shapes] of [
   [readTool, READ_SHAPES],
   [editTool, EDIT_SHAPES],
+  [writeTool, WRITE_SHAPES],
 ]) {
   const bad = shapes.filter((s) => !validateShape(tool.parameters, s).ok)
   check(bad.length === 0, `${tool.name}：真 schema 接受全部 ${shapes.length} 种合法调用形状`, bad.map((s) => JSON.stringify(s)).join(' | '))
@@ -254,11 +268,11 @@ say('=== D. 二选一闸门：参数面放行的那两种非法形状，工具�
  * 断言的是“抛没抛 + 抛的是不是那一类”，不是某个错字。
  */
 const TWO_WAY_CASES = [
-  ['aura_read', readTool, {}, undefined],
-  ['aura_read', readTool, { file_path: file, targets: [{ file_path: file, mode: 'full' }] }, 'ARGS_SHAPE_EXCLUSIVE'],
-  ['aura_edit', editTool, {}, undefined],
+  ['aura_basetools_read', readTool, {}, undefined],
+  ['aura_basetools_read', readTool, { file_path: file, targets: [{ file_path: file, mode: 'full' }] }, 'ARGS_SHAPE_EXCLUSIVE'],
+  ['aura_basetools_edit', editTool, {}, undefined],
   [
-    'aura_edit',
+    'aura_basetools_edit',
     editTool,
     { file_path: file, targets: [{ file_path: file, hunks: [{ lines: [3, 3], replace: 'x' }] }] },
     'ARGS_SHAPE_EXCLUSIVE',

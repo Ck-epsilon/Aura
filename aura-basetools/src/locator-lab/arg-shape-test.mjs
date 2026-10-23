@@ -1,5 +1,5 @@
 /**
- * arg-shape-test —— `aura_edit` 的**入参形状**容错面（取自 403 会话日志的失败构成）。
+ * arg-shape-test —— `aura_basetools_edit` 的**入参形状**容错面（取自 403 会话日志的失败构成）。
  *
  * ## 为什么单开一个套件
  *
@@ -65,7 +65,7 @@ const readPlugin = await import('../aura-read/index.js')
 const editPlugin = await import('../aura-edit/index.js')
 let readTool = null
 let editTool = null
-const tools = { register: (t) => (t.name === 'aura_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
+const tools = { register: (t) => (t.name === 'aura_basetools_read' ? (readTool = t) : (editTool = t)), get: () => readTool }
 const mkCtx = () => ({
   fs: fsService,
   ...contextServices(),
@@ -278,15 +278,17 @@ say('=== C. 未声明字段仍由 schema 拒绝（宽松限于形状，不限于
     `${neitherShape.code}: ${String(neitherShape.message).slice(0, 90)}`,
   )
   check(decode(readBytes(file)) === SRC, 'C 被拒时磁盘未变（' + JSON.stringify(decode(readBytes(file))) + '）')
-  // 走真框架时这是 schema 层拒绝（`... is not a declared property`）；mock 不校验入参，
-  // 所以这里断言的是**声明面**：`replace_all` 不在 properties 里。
+  // 走真框架时未声明键是 schema 层拒绝（`... is not a declared property`）；mock 不校验入参，
+  // 所以这里断言的是**声明面**：历史上 12 次调用塞过 `replace_all`，0.10.2 起它成了正式字段，
+  // 另外三个仍刻意不声明（它们不是这个工具的能力）。
   //
   // 形状注意：`defineTool` 的 `parameters` 是 **JSON Schema**（`{type,properties,required}`），
   // 不是 `{字段名: 声明}` 的扁平映射——我第一版按扁平读，拿到空对象，而断言当时写的是
   // “能读到 …”这种**看起来在测、实际最容易被写成恒真**的句子。现在把形状也钉住。
   const declared = Object.keys(editTool?.parameters?.properties?.hunks?.items?.properties ?? {})
   check(declared.length > 0, 'C 能读到 hunks.items.properties（声明面可见）', declared.join(','))
-  for (const stray of ['replace_all', 'replace_note', 'replace_first', 'note']) {
+  check(declared.includes('replace_all'), 'C replace_all 已是正式声明（0.10.2）', `declared=${declared.join(',')}`)
+  for (const stray of ['replace_note', 'replace_first', 'note']) {
     check(!declared.includes(stray), `C "${stray}" 刻意不在声明里`, `declared=${declared.join(',')}`)
   }
 }

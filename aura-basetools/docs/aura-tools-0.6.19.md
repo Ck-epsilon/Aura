@@ -16,7 +16,7 @@
 - 新增写事务：原始字节 journal、`aura undo`、`--id`/`--force`、多目标部分失败回滚。
 - 新增 workspace 锁：`~/.aura/locks`；`AURA_NO_LOCK=1` 可关闭。
 - MCP 新增 `aura_undo` / `aura_transactions`；CLI 新增 `aura undo` / `aura transactions`。
-- 新增 Windows/Linux CI（Node 20/22/24）。
+- 新增 Windows/macOS CI（Node 22）。
 
 ## 验收
 

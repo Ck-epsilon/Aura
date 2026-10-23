@@ -2,6 +2,9 @@
 
 一个 DSH 工具插件：**用锚点补丁改文件，而不是重新输出字节**。
 
+> 0.10.7 起同一插件还注册 **`aura_basetools_write`**：新建或整份覆写，保留 BOM/行尾、覆写默认要求先读过
+> 这一版、落盘后回读校验。局部改动仍走 `aura_basetools_edit`；读图仍只有内置 `read_image`。
+
 模型声明"改哪里 + 改成什么"，宿主负责匹配、消歧、落盘、回滚。相对内置 `edit` 的五点变化：
 
 1. **五级降级匹配** —— `exact` → 空白折叠 → 行 strip → 字符 bigram 相似度 → **行级序列对齐**。
@@ -110,7 +113,7 @@ patch(
 ## 装载
 
 **本机当前状态：已装进 `auravesta` 预设**（`%USERPROFILE%\.dsh\.agent-presets\auravesta\agent.cordis.yml`
-第 72–73 行），**重启 dsh 后本会话与以后所有会话都会带上 `aura_edit` 工具**。
+第 72–73 行），**重启 dsh 后本会话与以后所有会话都会带上 `aura_basetools_edit` 工具**。
 
 想撤掉：删除那两行即可。原文件备份在
 `agent.cordis.yml.bak-before-patch-tool`（同目录）。

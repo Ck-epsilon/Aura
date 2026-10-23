@@ -12,7 +12,7 @@
  * 唯一的内部状态是 `indexFile` 手里那层**内容派生的记忆化缓存**（见该函数上方注释）：
  * 同一份内容不再被重复建索引，返回值不变。
  * 文件读写、沙箱、观察策略、审批都归调用方——那是各框架自己的事，引擎不该知道。
- * DSH 的 `aura_edit` 工具是本引擎的一个适配器，见 `../aura-edit/index.js`。
+ * DSH 的 `aura_basetools_edit` 工具是本引擎的一个适配器，见 `../aura-edit/index.js`。
  *
  * @module anchor-core
  */

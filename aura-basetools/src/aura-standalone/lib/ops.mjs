@@ -76,6 +76,54 @@ const readCore = await import(engineUrl('read-core.mjs'))
 const repoMap = await import(engineUrl('repo-map.mjs'))
 const engineArgs = await import(engineUrl('args.mjs'))
 const writePath = await import(engineUrl('write-path.mjs'))
+const structCore = await import(engineUrl('struct-core.mjs'))
+const handleCore = await import(engineUrl('handle-core.mjs'))
+
+/**
+ * 0.9.9：运行时可查询的能力清单（与 build/capabilities.mjs 同一份源码常量）。
+ * 不发货额外 JSON：包内已有的引擎模块就是唯一来源。
+ */
+export function capabilitiesEnvelope() {
+  const langs = Object.keys(structCore.LANGS).sort()
+  return {
+    tools: [
+      { name: 'aura_basetools_read', modes: ['auto', ...readCore.MODES] },
+      {
+        name: 'aura_basetools_edit',
+        addressKinds: [...new Set([...engineArgs.FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
+        options: ['replace_all', 'require_observation'],
+        writeSafety: {
+          cli: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'byte-verify'],
+          mcp: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'byte-verify'],
+          dsh: ['stale-region-gate', 'byte-verify'],
+        },
+      },
+      {
+        name: 'aura_basetools_write',
+        operations: ['create', 'overwrite'],
+        options: ['eol'],
+        writeSafety: {
+          cli: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
+          mcp: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
+          // DSH 壳没有事务/undo/工作区锁；它经过引擎的区域闸、严格新鲜度与回读校验。
+          dsh: ['stale-region-gate', 'observation-gate', 'byte-verify'],
+        },
+      },
+    ],
+    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools undo', 'basetools transactions', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
+    langs,
+    langsCount: langs.length,
+    limits: {
+      multiTargetsMax: engineArgs.MT_MAX_TARGETS,
+      multiTargetPool: engineArgs.MT_POOL,
+      defaultPruneBudget: readCore.DEFAULT_PRUNE_BUDGET,
+      envelopeAllowance: readCore.DEFAULT_ENVELOPE_ALLOWANCE,
+      contentBudget: readCore.CONTENT_BUDGET,
+      handlesPerReceipt: handleCore.HANDLE_MAX_PER_RECEIPT,
+    },
+    packaging: { corePackage: 'aura-basetools', adapterPackage: 'aura-basetools-dsh' },
+  }
+}
 
 /**
  * 引擎公开面的转发：绑定转发，不是「把命名空间塞给调用方」——
@@ -94,6 +142,7 @@ export const asLinePair = engineArgs.asLinePair
 export const gaveLineAddress = engineArgs.gaveLineAddress
 export const inferReadMode = engineArgs.inferReadMode
 export const lineRangeOf = engineArgs.lineRangeOf
+export const normalizeReadRequest = engineArgs.normalizeReadRequest
 export const flatHunk = engineArgs.flatHunk
 export const applyEditToProvider = writePath.applyEditToProvider
 
@@ -117,6 +166,8 @@ export const assertReadTargets = engineArgs.assertReadTargets
 export const assertEditTargets = engineArgs.assertEditTargets
 export const assertTargetShape = engineArgs.assertTargetShape
 export const assertKnownArgs = engineArgs.assertKnownArgs
+export const MT_READ_ELEMENT_KEYS = engineArgs.MT_READ_ELEMENT_KEYS
+export const MT_EDIT_ELEMENT_KEYS = engineArgs.MT_EDIT_ELEMENT_KEYS
 
 // ── C55：非 UTF-8 文件 ⇒ 可执行的拒绝 ──────────────────────────────────────
 
@@ -262,7 +313,7 @@ export function readFileBytes(displayPath) {
     return {
       error: {
         ok: false,
-        error: nonUtf8RefusalMessage('read', displayPath, 'aura_read'),
+        error: nonUtf8RefusalMessage('read', displayPath, 'aura_basetools_read'),
         code: typeof error?.code === 'string' && error.code.length > 0 ? error.code : 'FS_NOT_TEXT',
       },
     }
@@ -277,18 +328,22 @@ export function readFileBytes(displayPath) {
  * 两个调用方（CLI `bin/aura.mjs`、MCP `bin/aura-mcp.mjs`）本来就 `await` 它，写法不变。
  */
 export async function readEnvelope(provider, args) {
-  const { file, around, search, since, maxChars } = args
+  const { file, around, search, since, context, kind, budget } = args
+  // 宿主面用 `max_chars`，引擎面用 `maxChars`；单目标与 targets 元素都必须认两种写法。
+  const maxChars = args.maxChars ?? args.max_chars
   try {
-    // 行区间先收敛：`[412,500]`、`"412,500"`、`412`、`start_line/end_line` 都接受；
-    // 给了但解不出来就明说接受哪些形状（静默退回 auto 会让人以为是别的问题）。
-    const lines = lineRangeOf(args)
-    if (lines === undefined && gaveLineAddress(args)) {
-      return { ok: false, error: LINE_ADDRESS_HINT, code: 'READ_BAD_ARGS' }
-    }
-    const mode = inferReadMode(args, lines)
+    /**
+     * 行区间 / 分页 / 模式推断收成一份（`normalizeReadRequest`）：单目标与 `targets` 元素
+     * 走同一个判定器。第一遍只判形状（文件还没读），第二遍拿到总行数后做 offset 越界与截断。
+     */
+    const requestShape = normalizeReadRequest(args)
+    if (requestShape.ok !== true) return requestShape
     const displayPath = provider.resolve(file)
     const info = provider.stat(displayPath)
     if (info === undefined) return { ok: false, error: `cannot read "${file}": not found`, code: 'FS_NOT_FOUND' }
+    if (info.type === 'directory' && requestShape.paginate) {
+      return { ok: false, error: 'offset/limit applies to files; a directory is returned as a repo map — drop pagination', code: 'READ_BAD_ARGS' }
+    }
     /**
      * 目录：给一张仓库地图（T26）。判据只有“它是目录”这一条，不需要调用方多填参数。
      *
@@ -311,15 +366,20 @@ export async function readEnvelope(provider, args) {
     }
     const got = readFileBytes(displayPath)
     if (got.error !== undefined) return got.error
+    const request = normalizeReadRequest(args, got.source.split(/\r?\n/).length)
+    if (request.ok !== true) return request
     const env = readWith(got.source, {
-      mode,
+      mode: request.mode,
       around,
       // 读侧只认数组：这里从收敛层的 {start,end} 转一次（之前 CLI/MCP 直接传 {start,end}，
       // 于是 `aura read --lines 1,2` 会报 READ_NO_RANGE —— 顺手修掉的既有 bug）。
-      lines: asLinePair(lines),
+      lines: asLinePair(request.lines),
       search,
       since,
       maxChars,
+      ...(context === undefined ? {} : { context }),
+      ...(kind === undefined ? {} : { kind }),
+      ...(budget === undefined ? {} : { budget }),
       byteOrderMark: got.byteOrderMark,
       filePath: displayPath,
     })
@@ -332,7 +392,7 @@ export async function readEnvelope(provider, args) {
     if (isNonUtf8TextFailure(error)) {
       return {
         ok: false,
-        error: nonUtf8RefusalMessage('read', resolvedOrRaw(provider, file), 'aura_read'),
+        error: nonUtf8RefusalMessage('read', resolvedOrRaw(provider, file), 'aura_basetools_read'),
         code: typeof error?.code === 'string' && error.code.length > 0 ? error.code : 'FS_NOT_TEXT',
         ...errorEvidence(error),
       }
@@ -347,12 +407,16 @@ export async function readEnvelope(provider, args) {
 }
 
 /** 改一次（规划 → 陈旧闸门 → 逐字节写 + CAS → 回读校验 → 刷新观测）。 */
-async function editEnvelopeInner(provider, { file, hunks, dryRun, create }) {
+async function editEnvelopeInner(provider, { file, hunks, dryRun, create, requireObservation, wholeFile, eol, skipStaleGate, toolName = 'aura_basetools_edit' }) {
   try {
     const result = await applyEditToProvider(provider, {
       displayPath: provider.resolve(file),
-      hunks,
+      hunks: hunks ?? [],
       dryRun: dryRun === true,
+      ...(requireObservation === true ? { requireObservation: true } : {}),
+      ...(typeof wholeFile === 'string' ? { wholeFile } : {}),
+      ...(typeof eol === 'string' ? { eol } : {}),
+      ...(skipStaleGate === true ? { skipStaleGate: true } : {}),
       ...(typeof create === 'string' ? { create } : {}),
     })
     return { ok: true, result }
@@ -365,7 +429,7 @@ async function editEnvelopeInner(provider, { file, hunks, dryRun, create }) {
     if (isNonUtf8TextFailure(error)) {
       return {
         ok: false,
-        error: nonUtf8RefusalMessage('patch', resolvedOrRaw(provider, file), 'aura_edit'),
+        error: nonUtf8RefusalMessage('patch', resolvedOrRaw(provider, file), toolName),
         code: typeof error?.code === 'string' && error.code.length > 0 ? error.code : 'FS_NOT_TEXT',
         ...errorEvidence(error),
       }
@@ -424,10 +488,16 @@ function transactionError(error) {
 export async function editEnvelope(provider, request) {
   // 事务需要工作区根与真实文件系统；测试/嵌入式 provider 没有 root 时保持原来的引擎行为。
   if (provider.root === undefined) return editEnvelopeInner(provider, request)
+  /**
+   * 预演不建事务：否则 `--dry-run --transaction` 会提交一条 0 文件的 committed 事务，
+   * 把 `aura undo`（最近一次 committed）顶掉——用户以为撤销了真实编辑，实际 restored:0。
+   * 预演也不写盘，不需要工作区锁。
+   */
+  if (request.dryRun === true) return editEnvelopeInner(provider, request)
   const includeTransaction = request.includeTransaction === true
   try {
     return await withWorkspaceLock(provider.root, async () => {
-      const tx = createTransaction(provider.root, 'aura_edit')
+      const tx = createTransaction(provider.root, 'aura_basetools_edit')
       const env = await editEnvelopeInner(tx.proxy(provider), request)
       if (env.ok) {
         try {
@@ -451,10 +521,12 @@ export async function editEnvelope(provider, request) {
 /** 多目标写事务：与单目标共用锁/日志/回滚；批次返回 ok=false 时也回滚。 */
 export async function editManyEnvelope(provider, request) {
   if (provider.root === undefined) return editManyEnvelopeInner(provider, request)
+  // 与单目标同一条：预演不建事务、不写盘，不能顶掉真正的最近 committed 事务。
+  if (request.dryRun === true) return editManyEnvelopeInner(provider, request)
   const includeTransaction = request.includeTransaction === true
   try {
     return await withWorkspaceLock(provider.root, async () => {
-      const tx = createTransaction(provider.root, 'aura_edit')
+      const tx = createTransaction(provider.root, 'aura_basetools_edit')
       try {
         const batch = await editManyEnvelopeInner(tx.proxy(provider), request)
         if (batch.ok) {
@@ -469,7 +541,12 @@ export async function editManyEnvelope(provider, request) {
           return includeTransaction ? { ...batch, transaction: tx.summary() } : batch
         }
         const rollback = await tx.rollback(provider)
-        return includeTransaction ? { ...batch, transaction: tx.summary(), rollback } : batch
+        const finalBatch = writePath.rebuildAfterRollback(batch, rollback)
+        return {
+          ...finalBatch,
+          ok: false,
+          ...(includeTransaction ? { transaction: tx.summary() } : {}),
+        }
       } catch (error) {
         const rollback = await tx.rollback(provider)
         error.transaction = tx.summary()
@@ -482,8 +559,95 @@ export async function editManyEnvelope(provider, request) {
   }
 }
 
-export async function undoEnvelope(provider, { id, force } = {}) {
+/** 整文件写的紧凑回执：不把整份 old/new 文本塞进 applied（那是 edit 的形状，不是 write 的）。 */
+function compactWriteReceipt(env, content) {
+  if (env === null || typeof env !== 'object' || env.ok !== true) return env
+  const result = env.result ?? {}
+  const dryRun = result.dryRun === true
+  /**
+   * 覆写预演没有落盘，也没有回读字节数；此时 `content` 的长度可能不等于最终字节数
+   * （整份写会把 content 的换行适配成文件已有风格，CRLF 每行多一个字节）。
+   * 宁可**不报** bytes，也不报一个预演后必然对不上的数。新建预演不需要适配，照报。
+   */
+  const bytes = result.write_verify?.bytes ?? (dryRun && result.operation === 'create' ? Buffer.byteLength(content, 'utf8') : undefined)
+  return {
+    ok: true,
+    result: {
+      path: result.path,
+      operation: result.operation ?? 'write',
+      ...(bytes === undefined ? {} : { bytes }),
+      dryRun,
+      ...(result.write_verify === undefined ? {} : { write_verify: result.write_verify }),
+      ...(result.unverified_region === true ? { unverified_region: true } : {}),
+      ...(result.transaction === undefined ? {} : { transaction: result.transaction }),
+    },
+  }
+}
+
+/**
+ * 0.10.1：整文件写（内置 `Write` 的替代）。
+ *
+ * 新建与覆写都走 `editEnvelope`：同一把工作区锁、同一份事务日志、同一套回读校验。
+ * 覆写用“整文件行区间（含末尾那个空行）+ `eol: auto`”表达：行区间覆盖到文件末尾，
+ * 于是 content 自己的**有无尾换行**被精确保留，而 content 内的换行统一成文件已有的风格
+ * （与内置 Edit 对多行替换的处理一致）。已有的 BOM 也照旧保留。
+ *
+ * **覆写默认要求先读过这版内容**（`PATCH_UNOBSERVED`），与内置 `Write` 的 read-before-write
+ * 同一条；`allowUnobserved` 是显式逃生口（回执照实标 `unverified_region`）。
+ * 新建不受这条约束。
+ *
+ * `eol` 只对覆写有意义：`auto`（默认）把 content 的新行适配成文件已有风格，
+ * `preserve` 按 content 原样写（与内置 Write 的“给什么写什么”对齐），`lf` / `crlf` 强制统一。
+ * 新建文件永远按 content 原样写；显式传非 `auto` 的 eol 会被拒绝（不做静默忽略）。
+ */
+export async function writeEnvelope(provider, { file, content, dryRun = false, noOverwrite = false, includeTransaction = false, allowUnobserved = false, eol = 'auto' } = {}) {
+  if (typeof file !== 'string' || file.length === 0) {
+    return { ok: false, error: 'write needs a file path', code: 'WRITE_BAD_ARGS' }
+  }
+  if (typeof content !== 'string') {
+    return { ok: false, error: 'write needs `content` as a string', code: 'WRITE_BAD_ARGS' }
+  }
+  if (!['auto', 'preserve', 'lf', 'crlf'].includes(eol)) {
+    return { ok: false, error: 'write `eol` must be auto, preserve, lf, or crlf', code: 'WRITE_BAD_ARGS' }
+  }
   try {
+    const displayPath = provider.resolve(file)
+    const info = provider.stat(displayPath)
+    if (info !== undefined && noOverwrite) {
+      return { ok: false, error: `cannot write "${displayPath}": it already exists (no-overwrite)`, code: 'WRITE_EXISTS' }
+    }
+    if (info === undefined) {
+      if (eol !== 'auto') {
+        return {
+          ok: false,
+          error: 'write `eol` applies when overwriting an existing file; a new file is written exactly as given — pass the endings you want in `content`',
+          code: 'WRITE_BAD_ARGS',
+        }
+      }
+      if (dryRun) {
+        return { ok: true, result: { path: displayPath, operation: 'create', bytes: Buffer.byteLength(content, 'utf8'), dryRun: true } }
+      }
+      return compactWriteReceipt(await editEnvelope(provider, { file, create: content, includeTransaction }), content)
+    }
+    return compactWriteReceipt(
+      await editEnvelope(provider, {
+        file,
+        wholeFile: content,
+        eol,
+        dryRun,
+        includeTransaction,
+        requireObservation: allowUnobserved !== true,
+        skipStaleGate: allowUnobserved === true,
+        toolName: 'aura_basetools_write',
+      }),
+      content,
+    )
+  } catch (error) {
+    return transactionError(error)
+  }
+}
+
+export async function undoEnvelope(provider, { id, force } = {}) {  try {
     return {
       ok: true,
       ...(await withWorkspaceLock(provider.root, () => undoTransaction(provider.root, provider, { id, force: force === true }))),

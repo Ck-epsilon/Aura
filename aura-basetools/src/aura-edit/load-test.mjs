@@ -34,6 +34,7 @@ check(Array.isArray(plugin.inject) && plugin.inject.includes('fs'), `inject = ${
 console.log('')
 console.log('=== 2. 注册：用 mock ctx 跑 apply ===')
 let registered = null
+let writeTool = null
 const events = []
 /** 收集提示段。systemPrompt 必须提供，否则注册指导那段代码根本不会执行。 */
 const sections = []
@@ -41,15 +42,14 @@ const mockCtx = {
   // 与真实 Cordis 上下文同形（inject / get 都必须在场）——理由见 mock-ctx.mjs 的注释。
   ...contextServices(),  tools: { register: (t) => (registered = t) },
   systemPrompt: { section: () => () => {} },
-  emit: (...a) => events.push(a[0]),
-  waterfall: async (name) => {
+  emit: (...a) => events.push(a[0]),  waterfall: async (name) => {
     events.push(name)
     throw Object.assign(new Error('edit requires reading first'), { code: 'FS_NOT_OBSERVED' })
   },
 }
 plugin.apply(mockCtx)
 check(registered !== null, 'apply 调用了 ctx.tools.register')
-check(registered?.name === 'aura_edit', `注册的工具名 = ${JSON.stringify(registered?.name)}`)
+check(registered?.name === 'aura_basetools_edit', `注册的工具名 = ${JSON.stringify(registered?.name)}`)
 // defineTool 会把参数 DSL 编译成 JSON Schema：顶层是 {type, properties, required}
 const compiled = registered?.parameters ?? {}
 const paramKeys = Object.keys(compiled.properties ?? {})
@@ -69,7 +69,7 @@ check(compiled.type === 'object', `编译后的参数是 object schema`)
  */
 check(
   paramKeys.join(',') ===
-    'file_path,targets,hunks,target,lines,start_line,end_line,line_cue,anchor,old,context,replace,expect,near,handle,line,position,dry_run,create',
+    'file_path,targets,hunks,target,intent,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,line,position,dry_run,require_observation,create',
   `参数 = ${paramKeys.join(',')}`,
 )
 // `hunks` 不再无条件必填：创建路径用 `create`，此时 hunks 可有可无。
@@ -87,8 +87,12 @@ check(
 )
 const hunkKeys = Object.keys(compiled.properties?.hunks?.items?.properties ?? {})
 // start_line/end_line 是后加的：hunk 里也能用两个整数表达区间，不必写 `lines: [a, b]`。
+/**
+ * `intent`（T16）是 0.8.0 加的第五种地址：模糊意图串由引擎确定性地落成精确区间。
+ * 它落在 `target` 之后、`lines` 之前——顺序就是 `HUNK_PROPERTIES` 的顺序（声明面与守卫同源）。
+ */
 check(
-  hunkKeys.join(',') === 'target,lines,start_line,end_line,line_cue,anchor,old,context,replace,expect,near,handle,line,position',
+  hunkKeys.join(',') === 'target,intent,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,line,position',
   `hunk 字段 = ${hunkKeys.join(',')}`,
 )
 check(
@@ -127,6 +131,8 @@ const fsService = {
   },
   // 必须按 targetKey 读：早先这里硬编码成第一个样本文件，导致后续用例全在读别人的内容
   readText: async (t) => fs.readFileSync(t.targetKey, 'utf8'),
+  // 字节回读（aura_basetools_write 的 verifyWriteBack 会走它）：与真提供方同形，按区间返回 Buffer。
+  readByteRange: async (t, r) => fs.readFileSync(t.targetKey).subarray(r.offset ?? 0, (r.offset ?? 0) + (r.length ?? 0)),
   editText: async (t, req) => {
     const p = t.targetKey
     const current = fs.readFileSync(p, 'utf8')
@@ -160,7 +166,13 @@ const fsService = {
 const liveCtx = {
   fs: fsService,
   // 与真实 Cordis 上下文同形（inject / get 都必须在场）——理由见 mock-ctx.mjs 的注释。
-  ...contextServices(),  tools: { register: (t) => (registered = t) },
+  ...contextServices(),  tools: {
+    register: (t) => {
+      if (t?.name === 'aura_basetools_write') writeTool = t
+      // 保持 `registered` = 最后一个注册的工具（aura_basetools_edit）：既有断言与执行入口都读它。
+      registered = t
+    },
+  },
   emit: () => {},
   systemPrompt: { section: (x) => { sections.push(x); return () => {} } },
   // 策略在场但拒绝：验证"策略失败不阻断、由锚点自己把关"的设计
@@ -172,6 +184,7 @@ const liveCtx = {
 // （真实运行时每进程只 apply 一次；这里重跑只为在同一进程里测两个 ctx。）
 plugin.apply(liveCtx)
 check(registered !== null, '第二次 apply 重新注册（闭包指向带 fs 的 ctx）')
+check(registered?.name === 'aura_basetools_edit' && writeTool?.name === 'aura_basetools_write', `同一插件注册 aura_basetools_edit + aura_basetools_write（${registered?.name} / ${writeTool?.name}）`)
 
 const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
 // 故意注入漂移：缩进少 2 格 + 行尾空格 + 改了一个词（真实模型最常见的三种手误）
@@ -234,6 +247,79 @@ const dry = await registered.execute(
 )
 check(dry.dryRun === true, 'dryRun 标记为 true')
 check(fs.readFileSync(target, 'utf8') === beforeDry, '磁盘未变')
+
+// 0.10.5：create + dry_run 也不能建文件；require_observation 在 DSH 面同样生效
+const createDryPath = path.join(tmp, 'create-dry.mjs')
+const createDry = await registered.execute(
+  { file_path: createDryPath, create: 'export const x = 1\n', dry_run: true },
+  exec,
+)
+check(createDry.dryRun === true && !fs.existsSync(createDryPath), 'create + dry_run：回执是预演，文件不存在', JSON.stringify(createDry).slice(0, 160))
+
+const strictPath = path.join(tmp, 'strict.mjs')
+fs.writeFileSync(strictPath, 'export const x = 1\n', 'utf8')
+let strictErr = null
+try {
+  await registered.execute(
+    { file_path: strictPath, hunks: [{ lines: [1, 1], replace: 'export const x = 2' }], require_observation: true },
+    exec,
+  )
+} catch (error) {
+  strictErr = error
+}
+check(strictErr?.code === 'PATCH_UNOBSERVED', `未读 + require_observation ⇒ PATCH_UNOBSERVED（${strictErr?.code}）`)
+check(fs.readFileSync(strictPath, 'utf8') === 'export const x = 1\n', '严格新鲜度拒绝时磁盘未变')
+
+console.log('')
+console.log('=== 5b. aura_basetools_write：整份新建/覆写 ===')
+{
+  check(writeTool !== null, 'aura_basetools_write 已注册')
+  const writeTarget = path.join(tmp, 'write-load.txt')
+  const created = await writeTool.execute({ file_path: writeTarget, content: 'one\ntwo\n' }, exec)
+  check(created.operation === 'create' && created.dryRun === false, `新建回执 operation=create（${created.operation}）`)
+  check(fs.readFileSync(writeTarget, 'utf8') === 'one\ntwo\n', '新建内容逐字落盘')
+
+  const dryTarget = path.join(tmp, 'write-dry.txt')
+  const dryNew = await writeTool.execute({ file_path: dryTarget, content: 'x\n', dry_run: true }, exec)
+  check(dryNew.operation === 'create' && dryNew.dryRun === true, '新建预演回执 dryRun=true')
+  check(!fs.existsSync(dryTarget), '新建预演没有建文件')
+
+  const external = path.join(tmp, 'write-external.txt')
+  fs.writeFileSync(external, 'external\n', 'utf8')
+  let strictErr = null
+  try {
+    await writeTool.execute({ file_path: external, content: 'blind\n' }, exec)
+  } catch (error) {
+    strictErr = error
+  }
+  check(strictErr?.code === 'PATCH_UNOBSERVED', `未读覆写默认拒绝（${strictErr?.code}）`)
+  check(fs.readFileSync(external, 'utf8') === 'external\n', '严格拒绝时磁盘未变')
+
+  const blind = await writeTool.execute({ file_path: external, content: 'blind\n', allow_unobserved: true }, exec)
+  check(blind.operation === 'write' && blind.unverified_region === true, 'allow_unobserved 覆写并标 unverified_region')
+  check(fs.readFileSync(external, 'utf8') === 'blind\n', '盲写内容落盘')
+
+  // writeTarget 由 aura_basetools_write 自己创建 ⇒ 引擎已记观测，随后严格覆写可直接过。
+  const preserved = await writeTool.execute({ file_path: writeTarget, content: 'a\nb\n', eol: 'preserve' }, exec)
+  check(preserved.operation === 'write' && fs.readFileSync(writeTarget, 'utf8') === 'a\nb\n', 'eol=preserve 按 content 原样写')
+
+  let existsErr = null
+  try {
+    await writeTool.execute({ file_path: writeTarget, content: 'nope\n', no_overwrite: true }, exec)
+  } catch (error) {
+    existsErr = error
+  }
+  check(existsErr?.code === 'WRITE_EXISTS', `no_overwrite 对已存在文件拒绝（${existsErr?.code}）`)
+  check(fs.readFileSync(writeTarget, 'utf8') === 'a\nb\n', 'no_overwrite 拒绝时磁盘未变')
+
+  let unknownErr = null
+  try {
+    await writeTool.execute({ file_path: writeTarget, content: 'x', dryrun: true }, exec)
+  } catch (error) {
+    unknownErr = error
+  }
+  check(unknownErr?.code === 'ARGS_UNKNOWN_KEY', `拼错的 dryrun 被未知参数守卫拒绝（${unknownErr?.code}）`)
+}
 
 console.log('')
 console.log('=== 6. 歧义必须被拒绝，而不是猜 ===')

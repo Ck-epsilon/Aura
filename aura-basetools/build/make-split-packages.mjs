@@ -10,6 +10,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { BIN_ENTRIES, SHELLS, rewriteShellImports } from './bundle-layout.mjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const combined = path.join(root, 'dist', 'aura-basetools')
@@ -19,8 +20,26 @@ const dshOut = path.join(npmRoot, 'aura-basetools-dsh')
 
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'))
 const version = readJson(path.join(combined, 'package.json')).version
+// 发布元数据只在环境变量**真的设了**时才写：不编一个假仓库地址（与 make-bundle 同一政策）。
 const repoUrl = process.env.AURA_REPO_URL?.trim() || 'https://github.com/Ck-epsilon/Aura'
 const author = process.env.AURA_AUTHOR?.trim() || 'Ck-epsilon'
+
+const addPublishMeta = (pkg) => {
+  if (repoUrl) {
+    pkg.repository = { type: 'git', url: repoUrl, directory: 'aura-basetools' }
+    pkg.homepage = `${repoUrl.replace(/\/+$/, '')}/tree/main/aura-basetools`
+    pkg.bugs = { url: `${repoUrl.replace(/\/+$/, '')}/issues` }
+  }
+  if (author) pkg.author = author
+  return pkg
+}
+
+// 低于这一行就删产物太危险：先确认组合产物与两个壳是**同一个版本**，
+// 否则拆出来的 dsh 包会依赖一个不存在的核心版本（或一个同号不同字节的核心）。
+const shellVersions = new Set(SHELLS.map(([dir]) => readJson(path.join(root, 'src', dir, 'package.json')).version))
+if (shellVersions.size !== 1 || [...shellVersions][0] !== version) {
+  throw new Error(`拆包版本不一致：组合产物 ${version}，壳 ${[...shellVersions].join(' / ')} —— 先跑 node build/make-bundle.mjs --pack`)
+}
 
 const write = (file, text) => {
   fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -41,11 +60,11 @@ const corePkg = {
   name: 'aura-basetools',
   version,
   description:
-    'Byte-fidelity read/edit engine for coding agents. Standalone CLI and MCP server; no harness or DSH required.',
+    'Byte-exact read, edit and write tools for coding agents. Standalone CLI and MCP server; no DSH required. 面向 coding agent 的逐字节读写工具；独立 CLI / MCP，可选 DSH 适配器。',
   license: 'MIT',
   type: 'module',
   engines: { node: '>=18' },
-  bin: { aura: './bin/aura.mjs', 'aura-mcp': './bin/aura-mcp.mjs' },
+  bin: BIN_ENTRIES,
   exports: {
     './package.json': './package.json',
     './locator-lab/*': './locator-lab/*',
@@ -53,90 +72,58 @@ const corePkg = {
   },
   keywords: ['mcp', 'cli', 'read', 'edit', 'agent', 'codex', 'claude-code', 'cursor'],
   files: ['bin/', 'lib/', 'locator-lab/', 'test/', 'README.md', 'LICENSE', 'THIRD-PARTY-NOTICES.md'],
-  repository: { type: 'git', url: repoUrl, directory: 'aura-basetools' },
-  homepage: `${repoUrl.replace(/\/+$/, '')}/tree/main/aura-basetools#readme`,
-  bugs: { url: `${repoUrl.replace(/\/+$/, '')}/issues` },
-  author,
   publishConfig: { access: 'public', registry: 'https://registry.npmjs.org' },
 }
+addPublishMeta(corePkg)
 write(path.join(coreOut, 'package.json'), `${JSON.stringify(corePkg, null, 2)}\n`)
-write(path.join(coreOut, 'README.md'), `# aura-basetools ${version}
+write(path.join(coreOut, 'README.md'), fs.readFileSync(path.join(root, 'docs', 'README.npm-core.md'), 'utf8').replaceAll('{{VERSION}}', version))
 
-给 coding agent 用的文件读写工具。**不依赖 DSH**：纯 Node（>=18），CLI + MCP 两条入口。
-
-## CLI
-
-\`\`\`bash
-aura read --file src/app.ts --mode map
-aura edit --file src/app.ts --hunks '[{"target":"main","replace":"…"}]'
-aura --help
-\`\`\`
-
-## MCP
-
-\`\`\`json
-{ "mcpServers": { "aura": { "command": "aura", "args": ["mcp"] } } }
-\`\`\`
-
-或 \`npx -y aura-basetools mcp\`。
-
-## DSH
-
-DSH 用户安装适配器包：\`aura-basetools-dsh\`。
-
-## 写事务
-
-\`aura edit ... --transaction\` 返回事务 id；\`aura undo [--id id]\` 回滚；\`aura transactions\` 列出。
-`)
-
-// ── DSH 适配器：只装两个壳 + patch，依赖核心 ─────────────────────────────
-for (const name of ['aura-read', 'aura-edit']) {
+// ── DSH 适配器：两个壳 + patch + 钩子执行器，依赖核心 ─────────────────────
+for (const [name] of SHELLS) {
   const from = path.join(root, 'src', name, 'index.js')
-  const text = fs
-    .readFileSync(from, 'utf8')
-    .replaceAll("from '../locator-lab/", "from 'aura-basetools/locator-lab/")
-    .replaceAll("from '../lib/", "from 'aura-basetools/lib/")
+  const text = rewriteShellImports(fs.readFileSync(from, 'utf8'))
   write(path.join(dshOut, name, 'index.js'), text)
 }
+// 钩子执行器是 DSH 面的产品入口（profile 里的 `ctx.shell` 指到它），不是可选附件。
+// 拆包第一版漏了 `dsh/` 与 `@deepseek-ai/dsh-shell` peer —— 症状会是"钩子全不触发"，
+// 与 T30 记的那次安装事故同形（文件看起来都在，宿主组合时才报 ERR_MODULE_NOT_FOUND）。
+copy(path.join(combined, 'dsh'), path.join(dshOut, 'dsh'))
 copy(path.join(combined, 'LICENSE'), path.join(dshOut, 'LICENSE'))
 copy(path.join(combined, 'cordis.patch.yml'), path.join(dshOut, 'cordis.patch.yml'))
-write(path.join(dshOut, 'README.md'), `# aura-basetools-dsh ${version}
-
-Aura read/edit tools as a DeepSeek Harness bundle. It depends on \`aura-basetools\`; the core package has no DSH dependency.
-
-\`\`\`bash
-npm i aura-basetools-dsh
-# or: dsh plugin --profile web add aura-basetools-dsh@${version}
-\`\`\`
-
-The installed bundle exposes \`aura_read\` and \`aura_edit\`; built-in DSH read/write/edit/read_image stay enabled.
-`)
+write(path.join(dshOut, 'README.md'), fs.readFileSync(path.join(root, 'docs', 'README.npm-dsh.md'), 'utf8').replaceAll('{{VERSION}}', version))
 
 const dshPkg = {
   name: 'aura-basetools-dsh',
   version,
-  description: 'DeepSeek Harness adapter for aura-basetools (aura_read / aura_edit). Depends on the DSH-free core package.',
+  description: 'DeepSeek Harness adapter for aura-basetools: aura_basetools_* tools and hook executor. Depends on the DSH-free core package. / aura-basetools 的 DSH 适配器。',
   license: 'MIT',
   type: 'module',
   dependencies: { 'aura-basetools': version },
   peerDependencies: {
     '@deepseek-ai/dsh-tools': '*',
+    '@deepseek-ai/dsh-shell': '*',
     '@deepseek-ai/schemastery': '*',
+  },
+  // 宿主提供这三个 peer；标 optional 是为了不在安装期去 registry 解析私有包。
+  // 缺失时由真实 import 显形（本仓的 installed-package / split-package 都做真 import），
+  // 而不是让 npm 死在一次看起来像"包坏了"的 404 上。
+  peerDependenciesMeta: {
+    '@deepseek-ai/dsh-tools': { optional: true },
+    '@deepseek-ai/dsh-shell': { optional: true },
+    '@deepseek-ai/schemastery': { optional: true },
   },
   dsh: { bundle: { patch: './cordis.patch.yml' } },
   exports: {
     './package.json': './package.json',
     './aura-read/index.js': './aura-read/index.js',
     './aura-edit/index.js': './aura-edit/index.js',
+    './dsh/*': './dsh/*',
     './cordis.patch.yml': './cordis.patch.yml',
   },
-  files: ['aura-read/', 'aura-edit/', 'cordis.patch.yml', 'README.md', 'LICENSE'],
-  repository: { type: 'git', url: repoUrl, directory: 'aura-basetools' },
-  homepage: `${repoUrl.replace(/\/+$/, '')}/tree/main/aura-basetools#readme`,
-  bugs: { url: `${repoUrl.replace(/\/+$/, '')}/issues` },
-  author,
+  files: ['aura-read/', 'aura-edit/', 'dsh/', 'cordis.patch.yml', 'README.md', 'LICENSE'],
   publishConfig: { access: 'public', registry: 'https://registry.npmjs.org' },
 }
+addPublishMeta(dshPkg)
 write(path.join(dshOut, 'package.json'), `${JSON.stringify(dshPkg, null, 2)}\n`)
 
 console.log(`核心包 → ${path.relative(root, coreOut)}  (${version})`)

@@ -118,7 +118,7 @@ function fileSummary(entry) {
  * @param root - 工作区根
  * @param tool - 产生它的工具名（仅记录）
  */
-export function createTransaction(root, tool = 'aura_edit') {
+export function createTransaction(root, tool = 'aura_basetools_edit') {
   const id = transactionId()
   const dir = path.join(transactionsRoot(root), id)
   ensureDir(dir)
