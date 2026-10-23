@@ -8,6 +8,13 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.13.1：`target` 行区间不再越过声明边界
+
+- `target` 的行区间判据从“同作用域兄弟符号”收紧到**声明字节边界**：行内 `import`、尾随调用、嵌套声明、C 家族多行声明头不再被整行替换静默吃掉。
+- 共享行拒绝时回执带 `LOCATOR_LINE_SHARED` 与 `shared:{line,side,text}` 证据。
+- 多行声明从声明起点替换；Lisp 的 `(ns alpha.core)` 不再把下一 form 的 `(` 当体。
+- `single-line-target` 28/28、`lang-coverage` 235/235；全量闸 exit 0。
+
 ## 0.13.0：CLI 子命令也进入 `basetools` 命名空间
 
 - CLI 调用统一为 **`aura basetools <verb>`**：`read` / `edit` / `write` / `undo` /

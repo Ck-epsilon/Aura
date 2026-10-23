@@ -248,8 +248,15 @@ for (const [ext, src] of CORPUS) {
   if (ext === '.erl') for (const row of rows.slice(1)) if (row.split('|')[1] === 'function') erlFunctions += 1
 }
 const digest = crypto.createHash('sha256').update(canonical.join('\n'), 'utf8').digest('hex')
-/** 黄金摘要（`sha256(canonical.join('\n'))`）与同批三个计数。改口径就要连它们一起改，这是有意的。 */
-const GOLDEN_DIGEST = '2529b62ebf122702f7b920864224a51424607165c09082d0a474f6bb0ee58d27'
+/**
+ * 黄金摘要（`sha256(canonical.join('\n'))`）与同批三个计数。改口径就要连它们一起改，这是有意的。
+ *
+ * 2026-10-24 口径变更：`startLine` 从**名字 token 所在行**改为**声明起点**（matchStart）所在行。
+ * 整表 diff 只有 10 行、全部是 Vim 固定种子语料里 `function` 与名字被换行分开的形状，
+ * `startLine` 前移一行；② 的手写意图 pin 一条未变。依据：`single-line-target` 新增的
+ * “多行声明头”回归（`export function\nalpha()` 不能把 `export function` 留成悬空前缀）。
+ */
+const GOLDEN_DIGEST = '4e180e98f089ece587be294f51db6d396fb8edde6d4ceca4a735a7fb22092911'
 const GOLDEN_SYMBOLS = 1410
 const GOLDEN_CASES = 443
 

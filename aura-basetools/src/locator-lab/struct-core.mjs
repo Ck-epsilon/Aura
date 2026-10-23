@@ -2279,6 +2279,13 @@ function scanBodyOpen(tokens, pairs, endTok, lang, lineAt, kind) {
     const prev = tokens[k - 1]
     if (t.type === 'punct' && (t.value === ';' || t.value === '}')) break
     /**
+     * Lisp 族：声明本身是列表的第一个元素（`(ns alpha.core)`、`(defn f [a] a)`）。
+     * 名字之后遇到收口 `)` 就是**包住这个声明的那对括号**收尾了——后面的 `(`（下一个 form）
+     * 不是块体。少了这一条，`(ns alpha)` 会把下一行 `(defn …)` 的 `(` 当体，跨度扩到整个文件，
+     * `target=alpha` 会连后面的函数一起删掉（lang-coverage 的 cljs 夹具就是这个形状）。
+     */
+    if (open === '(' && t.type === 'punct' && t.value === ')') break
+    /**
      * 块开符判定：`bodyOpen` 本身，加上**配置声明的**其它块开符（`[$ … ]` 字面量体），
      * 再加上 `bodyOpens` 里显式列出的字符。
      *
@@ -2390,7 +2397,7 @@ function headerContinues(tokens, k, prev, clauses) {
  * 用独立的第二条规则去做会与变量规则重复命中同一个位置，靠规则顺序决定谁赢，
  * 那是在用"顺序"掩盖语义，典型补丁。
  */
-function declarationSpan(tokens, pairs, startTok, endTok, lang, lineAt, kind, lines, termScan) {
+function declarationSpan(tokens, pairs, declStartTok, startTok, endTok, lang, lineAt, kind, lines, termScan) {
   const open = lang.bodyOpen
   let bodyOpen = null
   let binding = kind
@@ -2456,10 +2463,13 @@ function declarationSpan(tokens, pairs, startTok, endTok, lang, lineAt, kind, li
 
   return {
     kind: binding,
-    startLine: lineAt(tokens[startTok].start),
+    // 声明起点是**规则起点**（含修饰符/返回类型），不是名字 token：`export function\nalpha()`
+    // 若从名字所在行算起，整行替换会把上一行的 `export function` 留成悬空前缀。
+    startLine: lineAt(tokens[declStartTok].start),
     endLine: lineAt(tokens[last].end),
     startTok,
     endTok: last,
+    declStartTok,
     bodyOpen,
     spanComplete,
     spanNote,
@@ -2666,8 +2676,21 @@ function buildStructure(src, lang) {
       // 会捕到参数列表里的 `a:` 这种半截 token 并报出一个不存在的符号。
       // 它比“只捕标识符”的 `$name` 严——`$name` 不校验**字符串**内容，而 `$label` 会带引号进来。
       if (typeof name !== 'string' || !/^[A-Za-z_$\u0080-\uffff][A-Za-z0-9_$\u0080-\uffff-]*$/.test(name)) continue
-      const span = declarationSpan(tokens, pairs, hit.startTok, hit.end - 1, lang, lineAt, rule.kind, lines, termScan)
-      symbols.push({ name, ...span })
+      const span = declarationSpan(tokens, pairs, hit.matchStart, hit.startTok, hit.end - 1, lang, lineAt, rule.kind, lines, termScan)
+      /**
+       * 规则在名字之前只有 `$mods*` / `$ident*` 这类“可选前缀段”、没有字面量时，匹配器可能
+       * 一段都没吃到：C 的 `static int alpha`（`$ident*` 只吃非关键字，`int` 是关键字）、
+       * Dart 的 `int alpha(...)`（规则是 `$mods* $name …`，返回类型不在模式里）。此时
+       * `declStartTok` 落在名字上，类型若回到**上一行**，行区间会把上一行留成悬空前缀。
+       *
+       * 这里只做标记，判据放在定位层（{@link sharedLineContent}）：它能看到行文本与上一行
+       * 是否真的像声明头。`matchStart !== startTok` 说明前缀已经被吃进跨度，没有这个盲区。
+       */
+      const nameAt = rule.pattern.findIndex((part) => part === '$name' || part === '$nameNotKeyword')
+      const prefixParts = nameAt > 0 ? rule.pattern.slice(0, nameAt) : []
+      const declStartUnknown =
+        hit.matchStart === hit.startTok && prefixParts.length > 0 && prefixParts.every((part) => part.startsWith('$'))
+      symbols.push({ name, ...span, ...(declStartUnknown ? { declStartUnknown: true } : {}) })
       break
     }
   }

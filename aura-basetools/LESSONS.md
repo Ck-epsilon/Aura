@@ -53,3 +53,11 @@
 - **并发观测缓存必须 read-merge-write。** 两个 CLI 进程各自“启动读整份、结束写整份”，后写覆盖先写，随后对先读文件报 `never-read`。锁 + 合并 + 查询前刷新；证据：`observation-concurrency` 两进程/六进程 9/9。
 - **“0/0 通过（已跳过）”不是通过。** 闸自己的统计口径也要被审查：跳过记 `⏭`，关键套件跳过记失败；CI 的 Linux full-gate 与 Node 18/20 smoke 是这条判据的执行面。证据：`ci-contract` 16/16，`installed-package` 现显示 `⏭`。
 
+## 2026-10-24 · 0.13.0 后的推导式复查（P0.2 残余）
+
+- **“同一行还有别的符号”只是“整行区间越界”的一个特例。** 0.11.0 的 `LOCATOR_LINE_SHARED` 只比较同 enclosing 的兄弟；`import fs from 'fs'; function alpha()` / `function alpha(){} run()` / `function outer(){ function inner(){} }` 仍然被整行替换吃掉，而它们一条都不在旧测试里。判据要回到**字节**：声明起点之前只允许空白与包住声明的开括号，终点之后只允许空白、分号、注释与包住声明的闭括号。证据：`single-line-target` D1–D10、E4。
+- **符号起点是名字 token 时，多行声明头会留悬空前缀。** `export function\nalpha()` 从名字行起替换会留下 `export function`；C 家族的 `$ident*` 吃不掉关键字返回类型（`static int\nalpha`），只能拒绝。修法：跨度的 `startLine` 取规则起点 `matchStart`；C 家族用 `declStartUnknown` 标记 + 上一行判据。证据：`single-line-target` E1–E4；`terminator-scan` 摘要只有 10 行 `startLine` 前移，手写意图 pin 未动。
+- **结构化证据要在失败映射处显式转发。** `locate` 的 `shared` 被 `planHunks` 的 PatchError 字段白名单漏掉，CLI 回执只剩 message；`errorEvidence` 虽然是排除法，但上游只塞了 `candidates`。证据：D1 首轮 `shared===undefined`，补转发后绿。
+- **窄判据的假阳性要按“规则结构”排除，不能按“名字前有没有 token”。** Dart 的 `int alpha(...)` 返回类型合法地落在 `matchStart` 之前；C 的 `static int alpha` 同类。按名字前的 token 一律拒绝会误杀这两类；按规则结构（名字前只有 `$mods*`/`$ident*`、没有字面量）标记 `declStartUnknown`，才能既不误拒合法前缀、又不放过 `import`/`return`。证据：`range-formats` 的 a.dart 首轮被拒 2 条，改后 3294/3294。
+- **Lisp 的声明跨度是它自己那对括号。** `(ns alpha.core)` 后面的 `(defn …)` 的 `(` 不是它的体；`scanBodyOpen` 在 `bodyOpen === '('` 时遇到收口 `)` 必须停。旧 `lang-coverage` 的 `namespace:alpha[1-4]` 锁的正是这个 bug（`target=alpha` 会连 beta 一起删），修后 `[1-1]`。证据：`lang-coverage` 235/235。
+

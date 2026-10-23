@@ -60,6 +60,15 @@ aura basetools capabilities
 
 ## 3. 最近完成的关键变更
 
+- **2026-10-24（0.13.0 后，未发版）**：`target` 整行区间的剩余越界形状。
+  - 行内**非符号**内容（`import` / 指令 / 尾随调用 / 嵌套声明）以前仍会被整行替换吃掉；
+    现在 `LOCATOR_LINE_SHARED` 拒绝并给出 `shared:{line,side,text}` 证据。
+  - 多行声明头（`export function\nalpha()`）改为从声明起点替换，不再留下悬空前缀；
+    C 家族把返回类型留在上一行时（`static int\nalpha`）明确拒绝。
+  - Lisp 的 `(ns alpha.core)` 不再把下一行 `(defn …)` 的 `(` 当体：namespace 跨度从 1-4
+    修为 1-1，`target=alpha` 不会再连函数一起删。
+  - `single-line-target` 扩到 28 条；`terminator-scan` 的黄金摘要因 `startLine` 口径变更重钉
+    （整表 diff 只有 10 行 `startLine` 前移，手写意图 pin 未动）；`lang-coverage` 235/235。
 - **0.11.0**：参数面静默语义修复。
   - CLI/MCP/`targets` 元素未知参数拒绝，不再把 `--dryrun` 当合法调用真写盘。
   - 压缩 JS 共享行 `target` → `LOCATOR_LINE_SHARED`；lone CR 文件 `target`/`lines` →

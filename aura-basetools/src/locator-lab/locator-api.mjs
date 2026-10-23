@@ -745,6 +745,22 @@ export function locate(source, request = {}) {
     }
   }
 
+  /**
+   * 符号地址落在“整行区间比声明更宽”的行上 ⇒ 拒绝，不能把行内别的代码一起删掉。
+   *
+   * 这是 `LOCATOR_LINE_SHARED` 的另一半：同族判据（同一行还有别人），但“别人”
+   * 不一定是符号表里的兄弟——`import` / 指令 / 调用语句根本不是符号。
+   */
+  const sharedLineRefusal = (hit, shared, byWhat) => {
+    const label = clipReceiptLabel(filePath === null ? 'this file' : filePath, RECEIPT_LABEL_CHARS)
+    const advice = 'use old= with a unique fragment, handle=, or rewrite the whole file explicitly — nothing was written'
+    const message =
+      shared.side === 'header'
+        ? `cannot address "${hit.name}" by ${byWhat} in ${label}: the declaration starts on line ${shared.line} (${JSON.stringify(shared.text)}), so the addressed span would begin after its header and leave it behind; use lines= covering line ${shared.line}, or ${advice}`
+        : `cannot address "${hit.name}" by ${byWhat} in ${label}: line ${shared.line} also holds ${JSON.stringify(shared.text)} ${shared.side === 'before' ? 'before' : 'after'} the declaration, so replacing the symbol's whole-line span would delete it; ${advice}`
+    return { ok: false, code: 'LOCATOR_LINE_SHARED', message, shared }
+  }
+
   // ── 第 0 层：意图地址（T16）。调用方给一段模糊的意图串，引擎确定性地落成精确区间。
   //
   // 解析次序（每一档都不猜，落不下来就报歧义并给候选）：
@@ -792,9 +808,12 @@ export function locate(source, request = {}) {
       }
       if (exact !== null) {
         if (exact.spanComplete === false) return spanIncomplete(exact)
+        const shared = sharedLineContent(source, index, exact, lang)
+        if (shared !== null) return sharedLineRefusal(exact, shared, 'intent')
         return done(exact.startLine, exact.endLine, 'intent~symbol')
       }
-      const symbols = listSymbols(index)
+      // 用原始符号表而不是 `listSymbols` 投影：整行区间是否越界要看 token，投影里没有。
+      const symbols = index.symbols
       let matches = symbols.filter((s) => s.name.includes(intent))
       if (matches.length === 0) {
         const lower = intent.toLowerCase()
@@ -803,6 +822,8 @@ export function locate(source, request = {}) {
       if (matches.length === 1) {
         const only = matches[0]
         if (only.spanComplete === false) return spanIncomplete(only)
+        const shared = sharedLineContent(source, index, only, lang)
+        if (shared !== null) return sharedLineRefusal(only, shared, 'intent')
         return done(only.startLine, only.endLine, 'intent~symbol')
       }
       if (matches.length > 1) {
@@ -810,6 +831,8 @@ export function locate(source, request = {}) {
           const chosen = nearestSymbolBySpan(matches, near)
           if (chosen !== null) {
             if (chosen.spanComplete === false) return spanIncomplete(chosen)
+            const shared = sharedLineContent(source, index, chosen, lang)
+            if (shared !== null) return sharedLineRefusal(chosen, shared, 'intent')
             return done(chosen.startLine, chosen.endLine, 'intent~symbol', true)
           }
         }
@@ -908,6 +931,9 @@ export function locate(source, request = {}) {
           hint: directoryHint(source, lang),
         }
       }
+      /** 兄弟符号之外，行内还可能有 `import` / 指令 / 调用语句：同一个判据，看字节。 */
+      const shared = sharedLineContent(source, index, hit, lang)
+      if (shared !== null) return sharedLineRefusal(hit, shared, 'target')
       return done(hit.startLine, hit.endLine, 'symbol')
     } catch (error) {
       return {
@@ -1020,6 +1046,121 @@ export function locate(source, request = {}) {
 function loneCarriageReturnNote(source) {
   if (!hasLoneCarriageReturn(source)) return ''
   return ' — this file uses lone CR (\\r) line endings, which are not treated as line breaks here (the symbol index counts lines by \\n, so a second line model would point at different bytes); address it with line_cue/anchor, or replace the whole file with lines=[1,1]'
+}
+
+/** 声明前缀里本来就属于声明的标点（指针/引用/泛型/命名空间/可空修饰）。 */
+const DECL_PREFIX_PUNCT = new Set(['*', '&', '<', '>', ',', '::', '?', ':', '~', '.'])
+
+/** 允许“包住声明”的开括号：Lisp 族的 `(defn …)`。`{` 不算（JS/C 的块不是声明本身）。 */
+const FORM_OPENERS = new Map([['(', ')'], ['[', ']']])
+
+/**
+ * 整行替换会把声明之外的内容一起删掉的那些行。
+ *
+ * `siblingSymbolsOnSameSpan` 只看得见符号表里的兄弟；`import` / 指令 / 调用语句
+ * 根本不是符号，却同样会被整行替换删掉（实测：`import fs from 'fs'; function alpha()`
+ * 上 `target=alpha` 会把 import 一起删掉）。判据回到字节：
+ *   · 声明起点之前：只允许空白与**包住这个声明**的开括号（Lisp 族的 `(defn …)`）；
+ *   · 声明终点之后：只允许空白、分号、注释与包住这个声明的闭括号。
+ * 其余任何 token（`import` / `return` / 另一条语句）都说明这一个行区间不止这个声明。
+ *
+ * @returns `{line, side:'before'|'after'|'header', text}`，或 null（这一行只属于这个声明）
+ */
+function sharedLineContent(source, index, hit, lang) {
+  const declStartTok = hit.declStartTok ?? hit.startTok
+  const startToken = index.tokens[declStartTok]
+  const endToken = index.tokens[hit.endTok]
+  if (startToken === undefined || endToken === undefined) return null
+  const startLine = index.lineAt(startToken.start)
+  /**
+   * C 家族：`$ident*` 吃不掉关键字返回类型，声明起点可能落在名字上（见 struct-core 的
+   * `declStartUnknown`）。类型回到上一行时，行区间会把上一行留成悬空前缀——拒绝，不静默改。
+   * 指令行（`#include`）与注解行（`@Override`）本来就不是声明头，不参与这条判据。
+   */
+  if (hit.declStartUnknown === true) {
+    const prev = index.tokens[(hit.declStartTok ?? hit.startTok) - 1]
+    if (prev !== undefined) {
+      const prevLine = index.lineAt(prev.end)
+      if (prevLine === startLine - 1 && ![';', '{', '}'].includes(prev.value)) {
+        const prevLineStart = source.lastIndexOf('\n', prev.start - 1) + 1
+        const prevLineEnd = source.indexOf('\n', prev.end)
+        const prevLineText = source.slice(prevLineStart, prevLineEnd === -1 ? source.length : prevLineEnd)
+        if (!/^\s*[#@]/.test(prevLineText)) {
+          return { line: prevLine, side: 'header', text: prevLineText.trim().slice(0, 80) }
+        }
+      }
+    }
+  }
+  /**
+   * 声明起点之前、同一行里的 token。只有两类可以留：
+   *   · **类型前缀**——仅当 `declStartUnknown`（C 家族把返回类型漏在声明起点之前）；
+   *   · **包住声明的开括号**（Lisp 族）：它的闭括号会在后缀里出现。
+   * 其余任何 token（`;` / `{` / `=` / 字符串 / `@` / 别的语句）都说明这一行不止这个声明。
+   */
+  const allowTypePrefix = hit.declStartUnknown === true
+  const enclosing = new Map()
+  for (let k = declStartTok - 1; k >= 0; k -= 1) {
+    const token = index.tokens[k]
+    if (index.lineAt(token.start) !== startLine) break
+    if (allowTypePrefix && token.type === 'ident') continue
+    if (allowTypePrefix && token.type === 'punct' && DECL_PREFIX_PUNCT.has(token.value)) continue
+    if (token.type === 'punct' && FORM_OPENERS.has(token.value)) {
+      // `close > endTok` 或 `close === endTok`：Lisp 的收尾 `)` 本身常是跨度的最后一个 token
+      // （`(defn alpha [] 1)` 的 endTok 就是那个 `)`），开括号却仍在跨度之前。
+      const close = index.pairs.get(k)
+      if (close !== undefined && close >= hit.endTok) {
+        const closer = FORM_OPENERS.get(token.value)
+        enclosing.set(closer, (enclosing.get(closer) ?? 0) + 1)
+        continue
+      }
+    }
+    const lineStart = source.lastIndexOf('\n', startToken.start - 1) + 1
+    return { line: startLine, side: 'before', text: source.slice(lineStart, startToken.start).trim().slice(0, 80) }
+  }
+  const endLine = index.lineAt(endToken.end)
+  const lineEnd = source.indexOf('\n', endToken.end)
+  const after = source.slice(endToken.end, lineEnd === -1 ? source.length : lineEnd)
+  const rest = trailingForeign(after, lang, enclosing)
+  if (rest !== '') return { line: endLine, side: 'after', text: rest.trim().slice(0, 80) }
+  return null
+}
+
+/**
+ * 声明终点之后同一行里还剩什么：空白、分号、注释、以及**包住声明的**闭括号不算别的代码。
+ * 闭括号只在 `enclosing` 计数里出现（由前缀里那些开括号登记），所以 `function inner(){} }`
+ * 这种“外层块的 `}` 落在同一行”不会被当成收尾。
+ *
+ * @returns 剩下的非平凡文本（空串 = 这一行到此为止只属于这个声明）
+ */
+function trailingForeign(text, lang, enclosing) {
+  let rest = text
+  const lineComments = lang?.lineComments ?? []
+  const blockComments = lang?.blockComments ?? []
+  for (;;) {
+    rest = rest.replace(/^\s+/, '')
+    if (rest === '') return ''
+    if (lineComments.some((marker) => rest.startsWith(marker))) return ''
+    const block = blockComments.find(([open]) => rest.startsWith(open))
+    if (block !== undefined) {
+      const close = rest.indexOf(block[1], block[0].length)
+      if (close === -1) return rest
+      rest = rest.slice(close + block[1].length)
+      continue
+    }
+    // 分号单独处理：JS 家族是语句分隔符，Lisp 族已经在 lineComments 里提前返回。
+    if (rest.startsWith(';')) {
+      rest = rest.slice(1)
+      continue
+    }
+    const closer = rest[0]
+    const count = enclosing.get(closer) ?? 0
+    if (count > 0) {
+      enclosing.set(closer, count - 1)
+      rest = rest.slice(1)
+      continue
+    }
+    return rest
+  }
 }
 
 /** 文件是否含**不跟 LF** 的 CR（老式 Mac 行尾）。只扫一次、不建第二套行模型。 */

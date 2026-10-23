@@ -2803,6 +2803,8 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
       if (!found.ok) {
         throw new PatchError(found.message, found.code, {
           ...(found.candidates === undefined ? {} : { candidates: found.candidates }),
+          /** `LOCATOR_LINE_SHARED` 的“被谁占了”证据（符号兄弟之外的 import/尾随语句）。 */
+          ...(found.shared === undefined ? {} : { shared: found.shared }),
         })
       }
       hits = [{

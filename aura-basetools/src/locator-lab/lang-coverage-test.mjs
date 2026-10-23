@@ -133,7 +133,9 @@ const FIXTURES = [
   {
     ext: 'clj',
     lines: ['(ns alpha.core)', '', '(defn beta [a]', '  (+ a 1))'],
-    want: 'namespace:alpha[1-4] function:beta[3-4]',
+    // 2026-10-24：namespace 的跨度是它自己那对括号（`(...)`），不能把下一行 `(defn …)` 的 `(`
+    // 当成块体——旧期望 [1-4] 锁住的正是那个 bug，`target=alpha` 会连 beta 一起删掉。
+    want: 'namespace:alpha[1-1] function:beta[3-4]',
     target: 'beta',
     span: [3, 4],
     absent: ['a'],
@@ -141,9 +143,10 @@ const FIXTURES = [
   {
     ext: 'cljs',
     lines: ['(ns alpha.core)', '', '(defn beta [a]', '  (+ a 1))'],
-    want: 'namespace:alpha[1-4] function:beta[3-4]',
+    // 同上：只换 namespace 自己那一行，后面的 `(defn …)` 逐字节保留。
+    want: 'namespace:alpha[1-1] function:beta[3-4]',
     target: 'alpha',
-    span: [1, 4],
+    span: [1, 1],
     absent: ['a'],
   },
   {
