@@ -1,16 +1,16 @@
 {
-  "at": "2026-10-23T20:14:20.434Z",
+  "at": "2026-10-23T20:30:10.236Z",
   "tasks": 77,
-  "success": 62,
-  "successRate": 0.805,
+  "success": 75,
+  "successRate": 0.974,
   "citationRate": 1,
   "factLinkRate": 1,
   "latency": {
-    "p50": 53,
-    "p95": 1330,
-    "p99": 2718
+    "p50": 67,
+    "p95": 2006,
+    "p99": 3992
   },
-  "score": 0.903,
+  "score": 0.987,
   "failures": [
     {
       "id": "deepseek-price",
@@ -19,94 +19,16 @@
       ]
     },
     {
-      "id": "tavily-price",
-      "failed": [
-        "price"
-      ]
-    },
-    {
-      "id": "bing-retire",
-      "failed": [
-        "replacement"
-      ]
-    },
-    {
-      "id": "github-actions",
-      "failed": [
-        "path"
-      ]
-    },
-    {
-      "id": "rust-ownership",
-      "failed": [
-        "rules"
-      ]
-    },
-    {
       "id": "alias-deepseek",
       "failed": [
         "price"
-      ]
-    },
-    {
-      "id": "alias-bing",
-      "failed": [
-        "date"
-      ]
-    },
-    {
-      "id": "mistral-price",
-      "failed": [
-        "price"
-      ]
-    },
-    {
-      "id": "mongodb-index",
-      "failed": [
-        "collection"
-      ]
-    },
-    {
-      "id": "sqlite-wal",
-      "failed": [
-        "pragma"
-      ]
-    },
-    {
-      "id": "grafana-datasource",
-      "failed": [
-        "add"
-      ]
-    },
-    {
-      "id": "istio-route",
-      "failed": [
-        "traffic"
-      ]
-    },
-    {
-      "id": "argocd-sync",
-      "failed": [
-        "sync"
-      ]
-    },
-    {
-      "id": "cypress-wait",
-      "failed": [
-        "element"
-      ]
-    },
-    {
-      "id": "pytest-param",
-      "failed": [
-        "param"
       ]
     }
   ],
   "rows": [
     {
       "id": "deepseek-price",
-      "ms": 370,
+      "ms": 380,
       "mode": "registry",
       "sources": 4,
       "chars": 2172,
@@ -127,7 +49,7 @@
     },
     {
       "id": "decompose-price-qps",
-      "ms": 293,
+      "ms": 305,
       "mode": "registry",
       "sources": 5,
       "chars": 1961,
@@ -146,7 +68,7 @@
     },
     {
       "id": "deepseek-price-en",
-      "ms": 20,
+      "ms": 19,
       "mode": "registry",
       "sources": 5,
       "chars": 1902,
@@ -165,7 +87,7 @@
     },
     {
       "id": "searxng-429",
-      "ms": 574,
+      "ms": 588,
       "mode": "registry",
       "sources": 1,
       "chars": 725,
@@ -203,28 +125,26 @@
     },
     {
       "id": "tavily-price",
-      "ms": 995,
+      "ms": 1024,
       "mode": "registry",
-      "sources": 5,
-      "chars": 1516,
+      "sources": 6,
+      "chars": 3199,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "price"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
-        "total": 6,
-        "valid": 6
+        "total": 12,
+        "valid": 12
       },
       "facts": {
-        "total": 1,
-        "linked": 1
+        "total": 17,
+        "linked": 17
       },
       "error": null
     },
     {
       "id": "google-cse",
-      "ms": 1047,
+      "ms": 1023,
       "mode": "registry",
       "sources": 3,
       "chars": 708,
@@ -243,22 +163,20 @@
     },
     {
       "id": "bing-retire",
-      "ms": 1265,
+      "ms": 1618,
       "mode": "registry",
-      "sources": 1,
-      "chars": 329,
+      "sources": 2,
+      "chars": 4937,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "replacement"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
-        "total": 3,
-        "valid": 3
+        "total": 9,
+        "valid": 9
       },
       "facts": {
-        "total": 2,
-        "linked": 2
+        "total": 3,
+        "linked": 3
       },
       "error": null
     },
@@ -283,7 +201,7 @@
     },
     {
       "id": "python-asyncio",
-      "ms": 24,
+      "ms": 23,
       "mode": "registry",
       "sources": 2,
       "chars": 2691,
@@ -302,7 +220,7 @@
     },
     {
       "id": "python-314",
-      "ms": 899,
+      "ms": 1145,
       "mode": "registry",
       "sources": 2,
       "chars": 776,
@@ -321,7 +239,7 @@
     },
     {
       "id": "node-http",
-      "ms": 50,
+      "ms": 45,
       "mode": "registry",
       "sources": 4,
       "chars": 2878,
@@ -340,7 +258,7 @@
     },
     {
       "id": "node-fs",
-      "ms": 70,
+      "ms": 40,
       "mode": "registry",
       "sources": 5,
       "chars": 2029,
@@ -359,10 +277,10 @@
     },
     {
       "id": "github-rest",
-      "ms": 36,
+      "ms": 21,
       "mode": "registry",
       "sources": 3,
-      "chars": 1367,
+      "chars": 1103,
       "checks": 5,
       "passed": 5,
       "failed": [],
@@ -371,25 +289,23 @@
         "valid": 6
       },
       "facts": {
-        "total": 0,
-        "linked": 0
+        "total": 1,
+        "linked": 1
       },
       "error": null
     },
     {
       "id": "github-actions",
-      "ms": 29,
+      "ms": 773,
       "mode": "registry",
-      "sources": 2,
-      "chars": 999,
+      "sources": 6,
+      "chars": 5513,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "path"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
-        "total": 6,
-        "valid": 6
+        "total": 16,
+        "valid": 16
       },
       "facts": {
         "total": 0,
@@ -399,7 +315,7 @@
     },
     {
       "id": "mdn-promise",
-      "ms": 33,
+      "ms": 25,
       "mode": "registry",
       "sources": 3,
       "chars": 2632,
@@ -437,7 +353,7 @@
     },
     {
       "id": "vue-reactivity",
-      "ms": 34,
+      "ms": 37,
       "mode": "registry",
       "sources": 5,
       "chars": 1808,
@@ -456,15 +372,13 @@
     },
     {
       "id": "rust-ownership",
-      "ms": 23,
+      "ms": 22,
       "mode": "registry",
       "sources": 3,
-      "chars": 2705,
+      "chars": 528,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "rules"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
         "total": 6,
         "valid": 6
@@ -477,7 +391,7 @@
     },
     {
       "id": "go-module",
-      "ms": 7,
+      "ms": 8,
       "mode": "registry",
       "sources": 4,
       "chars": 732,
@@ -496,7 +410,7 @@
     },
     {
       "id": "docker-install",
-      "ms": 53,
+      "ms": 59,
       "mode": "registry",
       "sources": 5,
       "chars": 574,
@@ -515,7 +429,7 @@
     },
     {
       "id": "postgres-table",
-      "ms": 42,
+      "ms": 40,
       "mode": "registry",
       "sources": 5,
       "chars": 1642,
@@ -534,7 +448,7 @@
     },
     {
       "id": "nginx-config",
-      "ms": 72,
+      "ms": 74,
       "mode": "registry",
       "sources": 2,
       "chars": 2549,
@@ -553,7 +467,7 @@
     },
     {
       "id": "k8s-pod",
-      "ms": 68,
+      "ms": 67,
       "mode": "registry",
       "sources": 6,
       "chars": 1146,
@@ -572,7 +486,7 @@
     },
     {
       "id": "redis-commands",
-      "ms": 1100,
+      "ms": 1057,
       "mode": "registry",
       "sources": 2,
       "chars": 5428,
@@ -612,7 +526,7 @@
     },
     {
       "id": "alias-node",
-      "ms": 41,
+      "ms": 39,
       "mode": "registry",
       "sources": 4,
       "chars": 2565,
@@ -631,7 +545,7 @@
     },
     {
       "id": "alias-go",
-      "ms": 8,
+      "ms": 7,
       "mode": "registry",
       "sources": 3,
       "chars": 1613,
@@ -650,7 +564,7 @@
     },
     {
       "id": "alias-k8s",
-      "ms": 967,
+      "ms": 1003,
       "mode": "registry",
       "sources": 2,
       "chars": 1991,
@@ -669,28 +583,26 @@
     },
     {
       "id": "alias-bing",
-      "ms": 686,
+      "ms": 2186,
       "mode": "registry",
-      "sources": 4,
-      "chars": 1118,
+      "sources": 5,
+      "chars": 8592,
       "checks": 4,
-      "passed": 3,
-      "failed": [
-        "date"
-      ],
+      "passed": 4,
+      "failed": [],
       "citations": {
-        "total": 6,
-        "valid": 6
+        "total": 17,
+        "valid": 17
       },
       "facts": {
-        "total": 0,
-        "linked": 0
+        "total": 14,
+        "linked": 14
       },
       "error": null
     },
     {
       "id": "aliyun-ecs",
-      "ms": 766,
+      "ms": 695,
       "mode": "registry",
       "sources": 6,
       "chars": 2215,
@@ -709,7 +621,7 @@
     },
     {
       "id": "wechat-phone",
-      "ms": 323,
+      "ms": 306,
       "mode": "registry",
       "sources": 4,
       "chars": 2560,
@@ -728,7 +640,7 @@
     },
     {
       "id": "qwen-price",
-      "ms": 870,
+      "ms": 957,
       "mode": "registry",
       "sources": 3,
       "chars": 5919,
@@ -747,7 +659,7 @@
     },
     {
       "id": "kimi-price",
-      "ms": 983,
+      "ms": 959,
       "mode": "registry",
       "sources": 4,
       "chars": 1435,
@@ -766,7 +678,7 @@
     },
     {
       "id": "hunyuan-price",
-      "ms": 380,
+      "ms": 435,
       "mode": "registry",
       "sources": 3,
       "chars": 1083,
@@ -785,7 +697,7 @@
     },
     {
       "id": "antd-table",
-      "ms": 1330,
+      "ms": 1138,
       "mode": "registry",
       "sources": 8,
       "chars": 8535,
@@ -804,7 +716,7 @@
     },
     {
       "id": "spring-datasource",
-      "ms": 14,
+      "ms": 17,
       "mode": "registry",
       "sources": 3,
       "chars": 2710,
@@ -823,7 +735,7 @@
     },
     {
       "id": "mysql-innodb",
-      "ms": 809,
+      "ms": 841,
       "mode": "registry",
       "sources": 6,
       "chars": 2376,
@@ -842,7 +754,7 @@
     },
     {
       "id": "multi-isolation",
-      "ms": 1229,
+      "ms": 911,
       "mode": "registry",
       "sources": 4,
       "chars": 3116,
@@ -861,7 +773,7 @@
     },
     {
       "id": "multi-react-vue",
-      "ms": 2261,
+      "ms": 2383,
       "mode": "registry",
       "sources": 5,
       "chars": 2684,
@@ -880,7 +792,7 @@
     },
     {
       "id": "contract-confidence",
-      "ms": 1022,
+      "ms": 1030,
       "mode": "registry",
       "sources": 3,
       "chars": 7078,
@@ -918,7 +830,7 @@
     },
     {
       "id": "gcp-compute",
-      "ms": 2718,
+      "ms": 3992,
       "mode": "registry",
       "sources": 4,
       "chars": 1475,
@@ -937,28 +849,26 @@
     },
     {
       "id": "mistral-price",
-      "ms": 1094,
+      "ms": 2006,
       "mode": "registry",
-      "sources": 4,
-      "chars": 1931,
+      "sources": 5,
+      "chars": 3851,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "price"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
-        "total": 6,
-        "valid": 6
+        "total": 12,
+        "valid": 12
       },
       "facts": {
-        "total": 1,
-        "linked": 1
+        "total": 10,
+        "linked": 10
       },
       "error": null
     },
     {
       "id": "hf-transformers",
-      "ms": 43,
+      "ms": 38,
       "mode": "registry",
       "sources": 6,
       "chars": 2917,
@@ -977,7 +887,7 @@
     },
     {
       "id": "langchain-agent",
-      "ms": 31,
+      "ms": 27,
       "mode": "registry",
       "sources": 3,
       "chars": 2481,
@@ -996,7 +906,7 @@
     },
     {
       "id": "ollama-pull",
-      "ms": 12,
+      "ms": 14,
       "mode": "registry",
       "sources": 6,
       "chars": 1802,
@@ -1015,18 +925,16 @@
     },
     {
       "id": "mongodb-index",
-      "ms": 24,
+      "ms": 1631,
       "mode": "registry",
-      "sources": 5,
-      "chars": 1699,
+      "sources": 6,
+      "chars": 5091,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "collection"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
-        "total": 6,
-        "valid": 6
+        "total": 11,
+        "valid": 11
       },
       "facts": {
         "total": 0,
@@ -1036,37 +944,35 @@
     },
     {
       "id": "sqlite-wal",
-      "ms": 11,
+      "ms": 1085,
       "mode": "registry",
-      "sources": 5,
-      "chars": 1819,
+      "sources": 4,
+      "chars": 1815,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "pragma"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
-        "total": 6,
-        "valid": 6
+        "total": 12,
+        "valid": 12
       },
       "facts": {
-        "total": 6,
-        "linked": 6
+        "total": 0,
+        "linked": 0
       },
       "error": null
     },
     {
       "id": "elasticsearch-index",
-      "ms": 22,
+      "ms": 954,
       "mode": "registry",
       "sources": 5,
-      "chars": 656,
+      "chars": 3534,
       "checks": 5,
       "passed": 5,
       "failed": [],
       "citations": {
-        "total": 6,
-        "valid": 6
+        "total": 11,
+        "valid": 11
       },
       "facts": {
         "total": 0,
@@ -1076,7 +982,7 @@
     },
     {
       "id": "prometheus-promql",
-      "ms": 823,
+      "ms": 783,
       "mode": "registry",
       "sources": 6,
       "chars": 5850,
@@ -1095,28 +1001,26 @@
     },
     {
       "id": "grafana-datasource",
-      "ms": 70,
+      "ms": 84,
       "mode": "registry",
-      "sources": 5,
-      "chars": 2654,
+      "sources": 6,
+      "chars": 1934,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "add"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
         "total": 6,
         "valid": 6
       },
       "facts": {
-        "total": 1,
-        "linked": 1
+        "total": 0,
+        "linked": 0
       },
       "error": null
     },
     {
       "id": "angular-signal",
-      "ms": 24,
+      "ms": 28,
       "mode": "registry",
       "sources": 3,
       "chars": 1616,
@@ -1154,7 +1058,7 @@
     },
     {
       "id": "pypi-publish",
-      "ms": 46,
+      "ms": 51,
       "mode": "registry",
       "sources": 4,
       "chars": 2194,
@@ -1173,7 +1077,7 @@
     },
     {
       "id": "ghsa-advisory",
-      "ms": 1510,
+      "ms": 1351,
       "mode": "registry",
       "sources": 5,
       "chars": 2581,
@@ -1192,7 +1096,7 @@
     },
     {
       "id": "flutter-page",
-      "ms": 114,
+      "ms": 125,
       "mode": "registry",
       "sources": 4,
       "chars": 1646,
@@ -1211,7 +1115,7 @@
     },
     {
       "id": "node20-fs",
-      "ms": 1016,
+      "ms": 1044,
       "mode": "registry",
       "sources": 6,
       "chars": 7978,
@@ -1230,7 +1134,7 @@
     },
     {
       "id": "ruby-block",
-      "ms": 21,
+      "ms": 24,
       "mode": "registry",
       "sources": 3,
       "chars": 1543,
@@ -1249,7 +1153,7 @@
     },
     {
       "id": "scala-case",
-      "ms": 5,
+      "ms": 6,
       "mode": "registry",
       "sources": 2,
       "chars": 1783,
@@ -1268,7 +1172,7 @@
     },
     {
       "id": "cassandra-table",
-      "ms": 790,
+      "ms": 807,
       "mode": "registry",
       "sources": 4,
       "chars": 4175,
@@ -1287,7 +1191,7 @@
     },
     {
       "id": "ansible-playbook",
-      "ms": 44,
+      "ms": 48,
       "mode": "registry",
       "sources": 3,
       "chars": 1041,
@@ -1306,15 +1210,13 @@
     },
     {
       "id": "istio-route",
-      "ms": 54,
+      "ms": 69,
       "mode": "registry",
       "sources": 5,
-      "chars": 545,
+      "chars": 1097,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "traffic"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
         "total": 6,
         "valid": 6
@@ -1327,28 +1229,26 @@
     },
     {
       "id": "argocd-sync",
-      "ms": 24,
+      "ms": 38,
       "mode": "registry",
-      "sources": 5,
-      "chars": 2556,
+      "sources": 4,
+      "chars": 2280,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "sync"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
         "total": 6,
         "valid": 6
       },
       "facts": {
-        "total": 3,
-        "linked": 3
+        "total": 0,
+        "linked": 0
       },
       "error": null
     },
     {
       "id": "jest-mock",
-      "ms": 58,
+      "ms": 66,
       "mode": "registry",
       "sources": 6,
       "chars": 785,
@@ -1367,39 +1267,35 @@
     },
     {
       "id": "cypress-wait",
-      "ms": 33,
+      "ms": 45,
       "mode": "registry",
       "sources": 6,
-      "chars": 2396,
+      "chars": 2272,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "element"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
         "total": 6,
         "valid": 6
       },
       "facts": {
-        "total": 3,
-        "linked": 3
+        "total": 0,
+        "linked": 0
       },
       "error": null
     },
     {
       "id": "pytest-param",
-      "ms": 12,
+      "ms": 801,
       "mode": "registry",
-      "sources": 2,
-      "chars": 1850,
+      "sources": 3,
+      "chars": 4133,
       "checks": 5,
-      "passed": 4,
-      "failed": [
-        "param"
-      ],
+      "passed": 5,
+      "failed": [],
       "citations": {
-        "total": 6,
-        "valid": 6
+        "total": 12,
+        "valid": 12
       },
       "facts": {
         "total": 2,
@@ -1409,7 +1305,7 @@
     },
     {
       "id": "flask-route",
-      "ms": 24,
+      "ms": 28,
       "mode": "registry",
       "sources": 4,
       "chars": 1700,
@@ -1428,7 +1324,7 @@
     },
     {
       "id": "express-middleware",
-      "ms": 56,
+      "ms": 65,
       "mode": "registry",
       "sources": 4,
       "chars": 2223,
@@ -1447,7 +1343,7 @@
     },
     {
       "id": "helm-chart",
-      "ms": 33,
+      "ms": 39,
       "mode": "registry",
       "sources": 6,
       "chars": 3452,
@@ -1466,7 +1362,7 @@
     },
     {
       "id": "otel-span",
-      "ms": 1212,
+      "ms": 951,
       "mode": "registry",
       "sources": 6,
       "chars": 5133,
@@ -1504,7 +1400,7 @@
     },
     {
       "id": "no-entity",
-      "ms": 0,
+      "ms": 1,
       "mode": "none",
       "sources": 0,
       "chars": 0,
@@ -1523,7 +1419,7 @@
     },
     {
       "id": "heldout-docker-healthcheck",
-      "ms": 47,
+      "ms": 62,
       "mode": "registry",
       "sources": 6,
       "chars": 526,
@@ -1542,7 +1438,7 @@
     },
     {
       "id": "heldout-ts-satisfies",
-      "ms": 105,
+      "ms": 120,
       "mode": "registry",
       "sources": 3,
       "chars": 1673,
@@ -1580,7 +1476,7 @@
     },
     {
       "id": "heldout-nginx-proxy",
-      "ms": 60,
+      "ms": 61,
       "mode": "registry",
       "sources": 6,
       "chars": 2767,

@@ -7,6 +7,9 @@ import {
   aura_argus_search,
   aura_argus_search_batch,
   aura_argus_sources,
+  fetchDocument,
+  search,
+  searchBatch,
 } from '../src/core.mjs';
 import { API_NAMES } from '../src/lib/api-names.mjs';
 import { createClient } from '../src/client.mjs';
@@ -38,4 +41,10 @@ test('client exposes canonical aura_argus methods', () => {
   }
   assert.equal(client.aura_argus_search, client.search);
   assert.equal(client.aura_argus_fetch, client.fetch);
+});
+
+test('legacy library names remain aliases, not a second implementation', () => {
+  assert.equal(search, aura_argus_search);
+  assert.equal(searchBatch, aura_argus_search_batch);
+  assert.equal(fetchDocument, aura_argus_fetch_document);
 });

@@ -111,6 +111,20 @@ test('expandTerms adds intent phrases for Chinese questions', () => {
   assert.ok(mysql.has('isolation'));
   const node = expandTerms('Node.js fs 模块怎么读文件？');
   assert.ok([...node].some((term) => term.toLowerCase() === 'readfile'));
+  const cypress = expandTerms('Cypress 怎么等待元素出现？');
+  assert.ok(cypress.has('wait'));
+  assert.ok(cypress.has('element'));
+  const pytest = expandTerms('pytest 怎么参数化测试？');
+  const istio = expandTerms('Istio 怎么配置流量路由？');
+  assert.ok(istio.has('traffic'));
+  const actions = expandTerms('GitHub Actions 的 workflow 文件放在哪里？');
+  assert.ok(actions.has('path'));
+  const mongo = expandTerms('MongoDB 怎么创建索引？');
+  assert.ok(mongo.has('collection'));
+  const sqlite = expandTerms('SQLite 的 WAL 模式怎么开启？');
+  assert.ok(sqlite.has('pragma'));
+  const retirement = expandTerms('必应搜索 API 退役时间');
+  assert.ok(retirement.has('2025'));
 });
 
 test('selectPassages keeps specific API terms in evidence', () => {
@@ -177,6 +191,16 @@ test('rankSources puts better cover matches first', () => {
   const entity = matchEntity('SearXNG 429 冷却') ;
   const ranked = rankSources(entity, expandTerms('SearXNG 429 冷却'));
   assert.ok(ranked[0].score >= ranked[ranked.length - 1].score);
+});
+
+test('rankSources rewards an authored URL for a specific facet', () => {
+  const entity = matchEntity('Ollama 怎么拉取模型？');
+  const ranked = rankSources(entity, expandTerms('Ollama 怎么拉取模型？'));
+  assert.match(ranked[0].url, /\/api\/pull/);
+  const mistral = matchEntity('Mistral API 怎么计费？');
+  const pricing = rankSources(mistral, expandTerms('Mistral API 怎么计费？'))
+    .find((source) => source.url.includes('pricing'));
+  if (pricing) assert.ok(pricing.score >= 2);
 });
 
 test('cache respects ttl and disk round-trip', async () => {

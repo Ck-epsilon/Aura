@@ -1,5 +1,72 @@
 # Changelog
 
+## 2.4.5 — 2026-10-24
+
+### Changed
+
+- 2.4.x 稳定收口：文档、README、RESULTS 与 POSITIONING 统一到当前读数，避免发布页继续显示旧的 125/134 测试数或 217 源。
+- 不新增功能；保留 2.4.3 的 220/220 源健康、2.4.4 的 API 别名契约和 2.4.0 的 `aura_argus_*` 规范名。
+
+### Gates
+
+- `npm test`: **136/136**
+- `npm run verify`: **220/220 可达**
+- `npm run bench:agent`: **75/77（0.974）**，score 0.987，gate pass
+
+## 2.4.4 — 2026-10-24
+
+### Changed
+
+- 补强 2.4.0 的 API 兼容契约：新增断言，确认 `search` / `searchBatch` / `fetchDocument` 仍是 `aura_argus_*` 的同一函数别名，而不是第二套实现。
+- 这是纯兼容性硬化，不新增 API、不改调用语义。
+
+### Gates
+
+- `npm test`: **136/136**
+- `npm run bench:agent`: 保持 75/77（0.974），gate pass
+
+## 2.4.3 — 2026-10-24
+
+### Fixed
+
+- `退役` 的中文扩展补入 `date / end of life / 2025`，修复别名问题只选到 Grounding 通用页、没有选中退役公告日期的回归。
+- 注册表健康检查：**103 实体 / 220 源，220/220 可达**（此前 217/217；新增 Tavily credits、Mistral pricing、Bing grounding）。
+- `bench:agent` 达到 **75/77（0.974）**，score 0.987，p95 2006 ms，gate pass；仅剩 DeepSeek Search 的 QPS/别名价格两项。
+
+### Gates
+
+- `npm test`: **135/135**
+- `npm run verify`: **220/220 可达**
+- `npm run bench:agent`: **75/77**，success 0.974，score 0.987，gate pass
+
+## 2.4.2 — 2026-10-24
+
+### Fixed
+
+- 来源排序补强：URL/title 中的具体 facet（如 `/api/pull`、`/pricing`）现在参与已有来源评分，并在同分时优先具体页而不是文档根页。
+- 补回 2.4.1 漏掉的 `模型/本地/拉取/开启/模式/漏洞/域名/自定义域/页面` 中文映射，避免把已有 facet 扩展误删。
+- 补充 Tavily credits、Mistral pricing、Bing grounding 三个官方来源；覆盖从 **103 实体 / 217 源** 增到 **103 / 220**。
+- `bench:agent` 从 2.4.1 的 71/77 提升到 **74/77（0.961）**，score 0.980，gate pass。
+
+### Gates
+
+- `npm test`: **135/135**
+- `npm run bench:agent`: **74/77**，success 0.961，score 0.980，gate pass
+- `npm run verify`: 103 实体 / 220 源，217/217 → 220/220（待本次 verify 记录）
+
+## 2.4.1 — 2026-10-24
+
+### Fixed
+
+- 中文 facet 短语补强：`等待/元素`、`参数化`、`规则/所有权`、`路径`、`集合`、`添加`、`流量`、`同步`、`应用`、`哪一天`、`放在哪里`、`创建索引`、`WAL` 等现在会扩展为英文检索词，修复 how-to 与配置类问题只选到泛化来源的回归。
+- `agent bench` 从 2.4.0 的 **62/77（0.805）** 提升到 **71/77（0.922）**，citation 与 fact link 保持 100%，p95 1423 ms，score 0.961；回归门重新通过。
+
+### Gates
+
+- `npm test`: **134/134**
+- `npm run bench:agent`: **71/77**，success 0.922，score 0.961，gate pass
+- `npm run eval` / `answerability` / `gate`: 保持 2.4.0 的 74 题 / 361 项、73/73、pass
+
 ## 2.4.0 — 2026-10-24
 
 ### Changed

@@ -23,7 +23,7 @@ AuraArgus 是一个本地运行的检索工具，给 agent、脚本或你自己�
 ## 它不是什么
 
 - 不是通用搜索引擎，也不是问答机器人；它返回**证据**，答案由调用方的模型写
-- 不追求“全网覆盖”：默认覆盖 = 注册表 + 内置站点包（**78 实体 / 145 源** + **42 站点 / 72 源**，合并 **103 实体 / 217 源**）；`--no-sites` 回到严格注册表，`--site <domain>` 把边界限定到指定站点
+- 不追求“全网覆盖”：默认覆盖 = 注册表 + 内置站点包（**78 实体 / 145 源** + **42 站点 / 72 源**，合并 **103 实体 / 220 源**）；`--no-sites` 回到严格注册表，`--site <domain>` 把边界限定到指定站点
 - 不做 JS 渲染、不登登录墙、不绕验证码、不做代理池
 - 未命中覆盖时返回 `mode: "none"`，不会硬编一个答案；`--no-sites` 可关闭默认站点包
 - `--no-fallback` 可关闭默认网页兜底；CLI/MCP/HTTP 默认 `fallback=auto`，库调用需显式传入；360/搜狗可能被反爬，站内 `--site` 还会尝试官方 sitemap 发现并抓正文
@@ -35,8 +35,8 @@ AuraArgus 是一个本地运行的检索工具，给 agent、脚本或你自己�
 ### 从 zip 直接运行（不需要 npm install）
 
 ```bash
-unzip aura-argus-2.4.0.zip
-cd aura-argus-2.4.0
+unzip aura-argus-2.4.5.zip
+cd aura-argus-2.4.5
 
 node src/cli.mjs aura_argus_search "SearXNG 对 429 的冷却时间是多少秒？" --json
 ```
@@ -426,7 +426,7 @@ Node 内置 fetch 默认不读 `HTTP_PROXY` / `HTTPS_PROXY`。需要的话设置
 ## zip 里有什么
 
 ```
-aura-argus-2.4.0/
+aura-argus-2.4.5/
   README.md              ← 你正在看的这份
   LICENSE                MIT
   src/                   运行时代码 + registry.json
@@ -444,8 +444,8 @@ aura-argus-2.4.0/
 不需要 `node_modules`。验证：
 
 ```bash
-npm test          # 134 个离线测试
-npm run verify    # 联网检查 103 实体 / 217 源（可选）
+npm test          # 136 个离线测试
+npm run verify    # 联网检查 103 实体 / 220 源（可选）
 npm run eval      # 联网跑 74 题 / 361 项硬检查（可选，需要网络）
 npm run answerability # answerable / confidence / facet / p95 报告
 npm run gate      # answerability + p95 发布门
@@ -466,3 +466,6 @@ npm run bench:pk215 # 215 题五类覆盖评估（只跑 Aura，不调用 Tavily
 ## License
 
 MIT
+
+
+

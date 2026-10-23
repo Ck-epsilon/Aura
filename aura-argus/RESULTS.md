@@ -1,6 +1,31 @@
 # 结果
 
-## 2.4.0（2026-10-24，当前）
+## 2.4.5（2026-10-24，当前）
+
+- 2.4.x 稳定收口：`npm test` **136/136**；`verify` **220/220**；`bench:agent` **75/77（0.974）**，score 0.987，gate pass。
+- 不新增功能；文档与读数已统一。
+
+## 2.4.4（2026-10-24）
+
+- 新增 API 兼容契约断言：`search` / `searchBatch` / `fetchDocument` 与 `aura_argus_*` 指向同一函数；`npm test` **136/136**。
+- `bench:agent` 维持 75/77（0.974），gate pass。
+
+## 2.4.3（2026-10-24）
+
+- `退役` 日期扩展修复 Bing 别名选段；`bench:agent` **75/77（0.974）**，score 0.987，p95 2006 ms。
+- 源健康：**103 实体 / 220 源，220/220 可达**；`npm test` 135/135。
+
+## 2.4.2（2026-10-24）
+
+- 来源 URL/title 参与已有排序，并补 Tavily credits、Mistral pricing、Bing grounding 三个官方源；`bench:agent` 从 71/77 提升到 **74/77（0.961）**，score 0.980，p95 1857 ms。
+- 覆盖 **103 实体 / 220 源**；`npm test` **135/135**。
+
+## 2.4.1（2026-10-24）
+
+- 中文 facet 短语补强后，`bench:agent` 从 62/77（0.805）提升到 **71/77（0.922）**，score **0.961**，citation 100% / fact link 100%，p95 1423 ms。
+- `npm test`: **134/134**；2.4.0 的 eval 74 题 / 361 项、answerability 73/73、gate pass 保持。
+
+## 2.4.0（2026-10-24）
 
 - `npm test`: **134/134**。
 - `npm run eval`: **74 题 / 361 项硬检查全过**（soft 2/2）；p50 1035 ms / p95 2408 ms。

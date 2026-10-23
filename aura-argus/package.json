@@ -1,6 +1,6 @@
 {
   "name": "aura-argus",
-  "version": "2.4.0",
+  "version": "2.4.5",
   "description": "Agent-native retrieval layer: route questions to primary sources, return citable passages. No API key, no per-call billing.",
   "type": "module",
   "license": "MIT",

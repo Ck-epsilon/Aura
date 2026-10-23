@@ -91,6 +91,17 @@
           ]
         },
         {
+          "url": "https://docs.tavily.com/documentation/api-credits",
+          "title": "Tavily API credits and pricing",
+          "covers": [
+            "credit",
+            "credits",
+            "pricing",
+            "price",
+            "billing"
+          ]
+        },
+        {
           "url": "https://docs.tavily.com/",
           "title": "Tavily docs",
           "covers": [
@@ -144,6 +155,16 @@
             "bing",
             "api",
             "lifecycle"
+          ]
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/azure/ai-services/agents/how-to/tools/bing-grounding",
+          "title": "Grounding with Bing Search in Azure AI Agent Service",
+          "covers": [
+            "grounding",
+            "bing",
+            "replacement",
+            "migration"
           ]
         }
       ]
@@ -1571,7 +1592,8 @@
     "mistral": {
       "aliases": ["mistral", "mistral ai", "mistral api"],
       "sources": [
-        { "url": "https://docs.mistral.ai/", "title": "Mistral AI documentation", "covers": ["mistral", "api", "model", "pricing", "token", "chat"] }
+        { "url": "https://docs.mistral.ai/", "title": "Mistral AI documentation", "covers": ["mistral", "api", "model", "pricing", "token", "chat"] },
+        { "url": "https://mistral.ai/pricing", "title": "Mistral AI pricing", "covers": ["pricing", "price", "billing", "token", "model", "api"] }
       ]
     },
     "huggingface": {

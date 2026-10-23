@@ -19,24 +19,28 @@ const STOP = new Set([
 
 const CN_EN = {
   价格: 'pricing price', 多少钱: 'pricing price', 费用: 'pricing', 计费: 'billing pricing',
-  退役: 'retirement', 停服: 'shutdown retirement', 下线: 'shutdown', 关闭: 'shutdown closed',
-  免费额度: 'free quota', 免费: 'free', 默认: 'default', 配置: 'settings configure configuration',
-  设置: 'settings', 冷却: 'suspended timeout', 时间: 'time', 秒: 'seconds', 迁移: 'migration',
-  替代: 'migration', 新客户: 'new customers', 客户: 'customers', 额度: 'quota',
+  退役: 'retirement date end of life 2025', 停服: 'shutdown retirement', 下线: 'shutdown', 关闭: 'shutdown closed',
+免费额度: 'free quota', 免费: 'free', 默认: 'default', 配置: 'settings configure configuration',
+设置: 'settings', 冷却: 'suspended timeout', 时间: 'time', 秒: 'seconds', 迁移: 'migration replacement',
+替代: 'replacement migration', 替代产品: 'replacement', 新客户: 'new customers', 客户: 'customers', 额度: 'quota',
   请求: 'requests', 上限: 'limit', 成功: 'successful', 每次: 'per', 格式: 'formats',
   输出: 'output', 安装: 'install', 创建服务器: 'createServer server', 创建: 'create',
   新建: 'create', 读文件: 'readFile file', 读取文件: 'readFile', 写文件: 'writeFile',
-  写入文件: 'writeFile', 服务器: 'server', 文件: 'file', 模块: 'module',
-  命令: 'command commands', 响应式: 'reactivity reactive', 怎么用: 'usage', 用法: 'usage',
-  报错: 'error', 错误: 'error', 版本: 'version', 下载: 'download', 事务: 'transaction',
-  隔离: 'isolation', 级别: 'level', 数据源: 'datasource', 分页: 'pagination',
-  限流: 'rate limit', 配额: 'quota', 超时: 'timeout', 重试: 'retry', 缓存: 'cache',
-  部署: 'deploy deployment', 依赖: 'dependency dependencies', 索引: 'index',
-  权限: 'permission', 认证: 'authentication', 回调: 'callback', 异步: 'async asynchronous',
+写入文件: 'writeFile', 服务器: 'server', 文件: 'file', 模块: 'module',
+命令: 'command commands', 响应式: 'reactivity reactive', 怎么用: 'usage', 用法: 'usage',
+报错: 'error', 错误: 'error', 版本: 'version', 下载: 'download', 事务: 'transaction',
+隔离: 'isolation', 级别: 'level', 数据源: 'data source datasource', 分页: 'pagination',
+限流: 'rate limit', 配额: 'quota', 超时: 'timeout', 重试: 'retry', 缓存: 'cache',
+部署: 'deploy deployment', 依赖: 'dependency dependencies', 索引: 'index',
+等待: 'wait', 元素: 'element selector', 参数化: 'parametrize parameterized', 规则: 'rules rule',
+所有权: 'ownership', 路径: 'path', 集合: 'collection', 添加: 'add', 流量: 'traffic',
+同步: 'sync', 应用: 'application app', 哪一天: 'date',
   并发: 'concurrency', 生命周期: 'lifecycle', 上传: 'upload', 数据库: 'database',
   容器: 'container', 镜像: 'image', 集群: 'cluster', 日志: 'log logging',
   测试: 'test testing', 构建: 'build', 删除: 'delete', 更新: 'update', 查询: 'query',
   插入: 'insert', 连接: 'connect connection', 端口: 'port',
+  放在哪里: 'path workflows .github', 创建索引: 'createIndex create index collection',
+  WAL模式: 'pragma journal_mode', WAL: 'pragma journal_mode',
   模型: 'model', 本地: 'local', 拉取: 'pull', 开启: 'enable', 模式: 'mode',
   漏洞: 'vulnerability', 域名: 'domain', 自定义域: 'custom domain', 页面: 'page widget scaffold',
   实例: 'instance', 规格: 'specification', 选型: 'selection choose',
@@ -239,13 +243,23 @@ export function scoreSource(source, terms) {
       if (term.length >= 2 && (term.includes(cover) || cover.includes(term))) { score += 1; break; }
     }
   }
-  return score;
+  // URL/title are stable, authored signals. A source explicitly named `/api/pull` or
+  // `/pricing` should outrank a generic documentation root for the same facet. Cap
+  // this at 2 so a path cannot override a real covers match.
+  const address = `${source.url} ${source.title || ''}`.toLowerCase();
+  let addressHits = 0;
+  for (const term of terms) {
+    if (term.length < 4 || addressHits >= 2) continue;
+    const stem = term.slice(0, Math.min(5, term.length));
+    if (address.includes(term) || address.includes(stem)) addressHits += 1;
+  }
+  return score + addressHits;
 }
 
 export function rankSources(entity, terms) {
   return (entity.sources || [])
     .map((source) => ({ ...source, score: scoreSource(source, terms) }))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score || b.url.length - a.url.length);
 }
 
 export function listEntities(options = {}) {
