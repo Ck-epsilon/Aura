@@ -1,11 +1,10 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 更新时间：2026-10-23
-> 当前版本：**0.13.0**
-> 本次 npm/GitHub 发布提交：`ad7df70`（双语文档）；GitHub 源码快照 `e19e002`
+> 当前版本：**0.13.1**
+> 本次发布提交：`7e9f482`；GitHub 源码快照：`9ce490d`
 > 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
-> npm：`aura-basetools@0.13.0`、`aura-basetools-dsh@0.13.0` 已发布
-> GitHub Release：`aura-basetools-v0.13.0`
+> npm：`aura-basetools@0.13.1`、`aura-basetools-dsh@0.13.1` 已发布
+> GitHub Release：`aura-basetools-v0.13.1`
 
 ---
 
@@ -124,12 +123,19 @@ node build/release-check.mjs    # exit 0
 - **图片读取不在范围内**：`read_image` 仍只能用内置工具。
 - **DSH 需要重启宿主**：工具模块在宿主启动时导入，改名后必须重启才会加载新名字。
 - **MCP 客户端需要重新拉取 `tools/list`**：旧工具名不再存在。
-- **已发布**：npm `aura-basetools@0.13.0` / `aura-basetools-dsh@0.13.0` 与 GitHub Release `aura-basetools-v0.13.0` 已发布；全局 `aura` 与 DSH profile 已安装 0.13.0。
+- **已发布**：npm `aura-basetools@0.13.1` / `aura-basetools-dsh@0.13.1` 与 GitHub Release `aura-basetools-v0.13.1` 已发布；全局 `aura`、DSH profile、Codex、ZCode、Hermes 均指向官方 npm 0.13.1。
 - **DSH / MCP 客户端需要重启或重新拉取 `tools/list`**：旧工具名不再存在。
+- **本地旧安装已移除**：`~/.aura/pkg/node_modules/aura-tools` 已备份后删除；旧 hook 路径已改到 `aura-basetools-dsh/dsh/argv-shell.mjs`。
 - **历史分析件**：`probes/`、`failure-corpus.json`、旧版本 CHANGELOG 与
   `docs/aura-tools-0.*.md` 中的旧工具名是历史数据，不应批量改写；需要读取历史日志的分析件
   应同时识别旧名与新名。
 - **平台覆盖**：本机 Windows 全量闸通过；macOS/Linux 仍以 CI 配置为主，尚未留下本机实跑记录。
+
+## 5.1 绝对路径检查
+
+- **npm 发布产物**：`dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 严格扫描为 **0 个绝对路径**。
+- **仓库源码中的历史证据**：仍有 34 处 / 14 个文件包含 `C:\Users\...`、`E:\workspaces\...`、`/Users/...` 或 `file:///...`，集中在 `docs/待办.md`、`probes/`、`failure-corpus.json`、`fixtures/README.md`、旧版 README 与旧分析记录。
+- 这些是冻结的历史证据/旧安装说明，不进入 npm 包；按“不改历史语料”的规则保留。若要求整个仓库零绝对路径，需要单独清理并重钉历史夹具，不能把它当成 0.13.1 的发布产物检查。
 
 ---
 
