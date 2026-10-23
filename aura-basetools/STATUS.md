@@ -2,8 +2,10 @@
 
 > 更新时间：2026-10-23
 > 当前版本：**0.13.0**
-> 当前发布提交：`db1b81f`（Release 0.13.0: namespace CLI verbs under aura basetools）
+> 本次 npm/GitHub 发布提交：`ad7df70`（双语文档）；GitHub 源码快照 `e19e002`
 > 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
+> npm：`aura-basetools@0.13.0`、`aura-basetools-dsh@0.13.0` 已发布
+> GitHub Release：`aura-basetools-v0.13.0`
 
 ---
 
@@ -113,7 +115,8 @@ node build/release-check.mjs    # exit 0
 - **图片读取不在范围内**：`read_image` 仍只能用内置工具。
 - **DSH 需要重启宿主**：工具模块在宿主启动时导入，改名后必须重启才会加载新名字。
 - **MCP 客户端需要重新拉取 `tools/list`**：旧工具名不再存在。
-- **未发布**：截至本文件写入时没有 push、没有 npm publish；全局安装可能仍是旧版本。
+- **已发布**：npm `aura-basetools@0.13.0` / `aura-basetools-dsh@0.13.0` 与 GitHub Release `aura-basetools-v0.13.0` 已发布；全局 `aura` 与 DSH profile 已安装 0.13.0。
+- **DSH / MCP 客户端需要重启或重新拉取 `tools/list`**：旧工具名不再存在。
 - **历史分析件**：`probes/`、`failure-corpus.json`、旧版本 CHANGELOG 与
   `docs/aura-tools-0.*.md` 中的旧工具名是历史数据，不应批量改写；需要读取历史日志的分析件
   应同时识别旧名与新名。
