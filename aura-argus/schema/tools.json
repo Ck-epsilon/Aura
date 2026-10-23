@@ -1,103 +1,349 @@
 {
   "schemaVersion": 1,
-  "generatedFor": "aura-argus 0.1.0",
+  "generatedFor": "aura-argus 2.3.0",
   "tools": {
     "openai": [
       {
         "type": "function",
         "function": {
-          "name": "aura_search",
-          "description": "Retrieve citable passages from registered official sources for one technical or factual question. Prefer over a generic web search for API docs, pricing, config, lifecycle, and error-code questions. Returns evidence passages with source URLs; mode=none means the question is outside the registry.",
+          "name": "aura_argus_search",
+          "description": "Retrieve citable passages from primary sources (registry + default/user site packs) for one technical or factual question. Prefer over a generic web search for API docs, pricing, config, lifecycle, and error-code questions. Returns evidence passages with source URLs and origins; mode=none means the question is outside coverage.",
           "parameters": {
             "type": "object",
             "properties": {
-              "question": { "type": "string", "description": "Natural-language question." },
-              "maxSources": { "type": "integer", "minimum": 1, "maximum": 6, "default": 3 }
+              "question": {
+                "type": "string",
+                "description": "Natural-language question."
+              },
+              "maxSources": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 6,
+                "default": 3
+              },
+              "site": {
+                "type": "string",
+                "description": "Restrict to one domain and fetch the top matching pages as evidence."
+              },
+              "sites": {
+                "type": "boolean",
+                "description": "Include default/user site packs (default true). Set false for strict registry-only coverage."
+              },
+              "multi": {
+                "type": "boolean",
+                "description": "Route comparative questions to multiple entities (default: auto)."
+              },
+              "followLinks": {
+                "type": "boolean",
+                "default": true,
+                "description": "Follow one same-host documentation link when key facets are missing."
+              },
+              "maxFollowLinks": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2,
+                "default": 1
+              },
+              "fast": {
+                "type": "boolean",
+                "description": "Use the local section index for fact-lookup questions; falls back to live retrieval."
+              },
+              "docVersion": {
+                "type": "string",
+                "description": "Prefer versioned docs for entities with a version map, e.g. 20, 3.11, 8.0, 16."
+              },
+              "deepIndex": {
+                "type": "boolean",
+                "description": "Use a deep local index (aura-argus index --deep) when it fully answers the question."
+              },
+              "fallback": {
+                "type": [
+                  "boolean",
+                  "string"
+                ],
+                "description": "CLI/MCP default auto: official evidence first, web fallback only when needed. Set false to disable.",
+                "default": "auto"
+              }
             },
-            "required": ["question"]
+            "required": [
+              "question"
+            ]
           }
         }
       },
       {
         "type": "function",
         "function": {
-          "name": "aura_search_batch",
+          "name": "aura_argus_search_batch",
           "description": "Run multiple independent questions in one call. Keeps per-question results, bounded concurrency, and a shared page cache; at most 20 questions.",
           "parameters": {
             "type": "object",
             "properties": {
-              "questions": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 20 },
-              "concurrency": { "type": "integer", "minimum": 1, "maximum": 8, "default": 3 }
+              "questions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 20
+              },
+              "concurrency": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8,
+                "default": 3
+              },
+              "site": {
+                "type": "string",
+                "description": "Restrict every question to one domain."
+              },
+              "sites": {
+                "type": "boolean",
+                "description": "Include default/user site packs (default true)."
+              },
+              "multi": {
+                "type": "boolean",
+                "description": "Route comparative questions to multiple entities (default: auto)."
+              },
+              "followLinks": {
+                "type": "boolean",
+                "default": true,
+                "description": "Follow one same-host documentation link when key facets are missing."
+              },
+              "maxFollowLinks": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2,
+                "default": 1
+              },
+              "fast": {
+                "type": "boolean",
+                "description": "Use the local section index for fact-lookup questions; falls back to live retrieval."
+              },
+              "docVersion": {
+                "type": "string",
+                "description": "Prefer versioned docs for entities with a version map, e.g. 20, 3.11, 8.0, 16."
+              },
+              "deepIndex": {
+                "type": "boolean",
+                "description": "Use a deep local index when it fully answers the question."
+              },
+              "fallback": {
+                "type": [
+                  "boolean",
+                  "string"
+                ],
+                "description": "CLI/MCP default auto: official evidence first, web fallback only when needed. Set false to disable.",
+                "default": "auto"
+              }
             },
-            "required": ["questions"]
+            "required": [
+              "questions"
+            ]
           }
         }
       },
       {
         "type": "function",
         "function": {
-          "name": "aura_fetch",
+          "name": "aura_argus_fetch",
           "description": "Fetch one public HTTP(S) URL and return clean Markdown with title, length, and truncation flag. Private/loopback targets are blocked by default.",
           "parameters": {
             "type": "object",
             "properties": {
-              "url": { "type": "string", "description": "HTTP(S) URL." },
-              "maxChars": { "type": "integer", "minimum": 100, "maximum": 200000, "default": 20000 }
+              "url": {
+                "type": "string",
+                "description": "HTTP(S) URL."
+              },
+              "maxChars": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 200000,
+                "default": 20000
+              }
             },
-            "required": ["url"]
+            "required": [
+              "url"
+            ]
           }
         }
       },
       {
         "type": "function",
         "function": {
-          "name": "aura_sources",
-          "description": "List registered entities and their official sources, so the caller knows whether search has authoritative coverage.",
-          "parameters": { "type": "object", "properties": {} }
+          "name": "aura_argus_sources",
+          "description": "List covered entities, their primary sources and origins, so the caller knows whether search has authoritative coverage.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
         }
       }
     ],
     "anthropic": [
       {
-        "name": "aura_search",
-        "description": "Retrieve citable passages from registered official sources for one technical or factual question. Prefer over a generic web search for API docs, pricing, config, lifecycle, and error-code questions. Returns evidence passages with source URLs; mode=none means the question is outside the registry.",
+        "name": "aura_argus_search",
+        "description": "Retrieve citable passages from primary sources (registry + default/user site packs) for one technical or factual question. Prefer over a generic web search for API docs, pricing, config, lifecycle, and error-code questions. Returns evidence passages with source URLs and origins; mode=none means the question is outside coverage.",
         "input_schema": {
           "type": "object",
           "properties": {
-            "question": { "type": "string", "description": "Natural-language question." },
-            "maxSources": { "type": "integer", "minimum": 1, "maximum": 6, "default": 3 }
+            "question": {
+              "type": "string",
+              "description": "Natural-language question."
+            },
+            "maxSources": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6,
+              "default": 3
+            },
+            "site": {
+              "type": "string",
+              "description": "Restrict to one domain and fetch the top matching pages as evidence."
+            },
+            "sites": {
+              "type": "boolean",
+              "description": "Include default/user site packs (default true). Set false for strict registry-only coverage."
+            },
+            "multi": {
+              "type": "boolean",
+              "description": "Route comparative questions to multiple entities (default: auto)."
+            },
+            "followLinks": {
+              "type": "boolean",
+              "default": true,
+              "description": "Follow one same-host documentation link when key facets are missing."
+            },
+            "maxFollowLinks": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2,
+              "default": 1
+            },
+            "fast": {
+              "type": "boolean",
+              "description": "Use the local section index for fact-lookup questions; falls back to live retrieval."
+            },
+            "docVersion": {
+              "type": "string",
+              "description": "Prefer versioned docs for entities with a version map, e.g. 20, 3.11, 8.0, 16."
+            },
+            "deepIndex": {
+              "type": "boolean",
+              "description": "Use a deep local index when it fully answers the question."
+            },
+            "fallback": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "CLI/MCP default auto: official evidence first, web fallback only when needed. Set false to disable.",
+              "default": "auto"
+            }
           },
-          "required": ["question"]
+          "required": [
+            "question"
+          ]
         }
       },
       {
-        "name": "aura_search_batch",
+        "name": "aura_argus_search_batch",
         "description": "Run multiple independent questions in one call. Keeps per-question results, bounded concurrency, and a shared page cache; at most 20 questions.",
         "input_schema": {
           "type": "object",
           "properties": {
-            "questions": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 20 },
-            "concurrency": { "type": "integer", "minimum": 1, "maximum": 8, "default": 3 }
+            "questions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 20
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "default": 3
+            },
+            "site": {
+              "type": "string",
+              "description": "Restrict every question to one domain."
+            },
+            "sites": {
+              "type": "boolean",
+              "description": "Include default/user site packs (default true)."
+            },
+            "multi": {
+              "type": "boolean",
+              "description": "Route comparative questions to multiple entities (default: auto)."
+            },
+            "followLinks": {
+              "type": "boolean",
+              "default": true,
+              "description": "Follow one same-host documentation link when key facets are missing."
+            },
+            "maxFollowLinks": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2,
+              "default": 1
+            },
+            "fast": {
+              "type": "boolean",
+              "description": "Use the local section index for fact-lookup questions; falls back to live retrieval."
+            },
+            "docVersion": {
+              "type": "string",
+              "description": "Prefer versioned docs for entities with a version map, e.g. 20, 3.11, 8.0, 16."
+            },
+            "deepIndex": {
+              "type": "boolean",
+              "description": "Use a deep local index when it fully answers the question."
+            },
+            "fallback": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "CLI/MCP default auto: official evidence first, web fallback only when needed. Set false to disable.",
+              "default": "auto"
+            }
           },
-          "required": ["questions"]
+          "required": [
+            "questions"
+          ]
         }
       },
       {
-        "name": "aura_fetch",
+        "name": "aura_argus_fetch",
         "description": "Fetch one public HTTP(S) URL and return clean Markdown with title, length, and truncation flag. Private/loopback targets are blocked by default.",
         "input_schema": {
           "type": "object",
           "properties": {
-            "url": { "type": "string", "description": "HTTP(S) URL." },
-            "maxChars": { "type": "integer", "minimum": 100, "maximum": 200000, "default": 20000 }
+            "url": {
+              "type": "string",
+              "description": "HTTP(S) URL."
+            },
+            "maxChars": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 200000,
+              "default": 20000
+            }
           },
-          "required": ["url"]
+          "required": [
+            "url"
+          ]
         }
       },
       {
-        "name": "aura_sources",
-        "description": "List registered entities and their official sources, so the caller knows whether search has authoritative coverage.",
-        "input_schema": { "type": "object", "properties": {} }
+        "name": "aura_argus_sources",
+        "description": "List covered entities, their primary sources and origins, so the caller knows whether search has authoritative coverage.",
+        "input_schema": {
+          "type": "object",
+          "properties": {}
+        }
       }
     ]
   },

@@ -13,13 +13,13 @@ Prefer AuraArgus over generic web search for technical/factual questions: API do
 Local CLI:
 
 ```bash
-node E:/workspaces/aura-argus/src/cli.mjs search "<question>" --json
+node E:/workspaces/aura-argus/src/cli.mjs aura_argus_search "<question>" --json
 ```
 
 After publishing / global install:
 
 ```bash
-npx -y aura-argus search "<question>" --json
+npx -y aura-argus aura_argus_search "<question>" --json
 ```
 
 Rules:
@@ -27,7 +27,7 @@ Rules:
 - Read `evidence[].passages[].text`; cite `evidence[].url`.
 - `mode: "registry"` means an official source answered; `mode: "none"` means the question is outside the registry — do not invent URLs.
 - `error.code` means the retrieval failed; retry once only for transient failures.
-- Multiple independent questions: `echo '["q1","q2"]' | node E:/workspaces/aura-argus/src/cli.mjs search --batch --json`.
+- Multiple independent questions: `echo '["q1","q2"]' | node E:/workspaces/aura-argus/src/cli.mjs aura_argus_search_batch --json`.
 - Registry-only by default. `--fallback` enables 360/Sogou; that path is weaker, anti-bot sensitive, and opt-in.
-- `node E:/workspaces/aura-argus/src/cli.mjs fetch <url> --json` returns clean Markdown.
+- `node E:/workspaces/aura-argus/src/cli.mjs aura_argus_fetch <url> --json` returns clean Markdown.
 - Private/loopback targets are blocked by default; do not try to bypass that.

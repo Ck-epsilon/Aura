@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "note": "按问题中的版本号把官方文档源重写到对应版本文档；只对列出的实体和版本生效。",
+  "entities": {
+    "node": {
+      "pattern": "node(?:\\.js)?\\s*(?:v|version\\s*)?(\\d+)",
+      "allowed": ["18", "20", "22", "24"],
+      "rewrites": [
+        { "from": "https://nodejs.org/api/", "to": "https://nodejs.org/docs/latest-v{version}.x/api/" }
+      ]
+    },
+    "python": {
+      "pattern": "python\\s*(?:v|version\\s*)?(\\d+\\.\\d+)",
+      "allowed": ["3.9", "3.10", "3.11", "3.12", "3.13"],
+      "rewrites": [
+        { "from": "https://docs.python.org/3/", "to": "https://docs.python.org/{version}/" }
+      ]
+    },
+    "postgres": {
+      "pattern": "postgres(?:ql)?\\s*(?:v|version\\s*)?(\\d+)",
+      "allowed": ["14", "15", "16", "17", "18"],
+      "rewrites": [
+        { "from": "https://www.postgresql.org/docs/current/", "to": "https://www.postgresql.org/docs/{version}/" }
+      ]
+    },
+    "mysql": {
+      "pattern": "mysql\\s*(?:v|version\\s*)?(\\d+\\.\\d+)",
+      "allowed": ["8.0", "8.4"],
+      "rewrites": [
+        { "from": "https://dev.mysql.com/doc/refman/8.4/en/", "to": "https://dev.mysql.com/doc/refman/{version}/en/" }
+      ]
+    }
+  }
+}

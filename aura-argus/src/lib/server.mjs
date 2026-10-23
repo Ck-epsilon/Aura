@@ -1,6 +1,6 @@
 // 本地 HTTP 服务：任何语言/agent 都能调用。默认只绑 127.0.0.1。
 import http from 'node:http';
-import { search, searchBatch, fetchDocument, listEntities, version } from '../core.mjs';
+import { search, searchBatch, fetchDocument, getCoverage, listEntities, version } from '../core.mjs';
 import { toErrorPayload, ArgusError, CODES } from './errors.mjs';
 
 const MAX_BODY = 1_000_000;
@@ -36,7 +36,8 @@ function authorized(req, token) {
   return header === `Bearer ${token}`;
 }
 
-export function createRequestHandler({ token = null, allowPrivate = false } = {}) {
+export function createRequestHandler({ token = null, allowPrivate = false, sites = true, sitesFile } = {}) {
+  const baseOptions = { allowPrivate, sites, ...(sitesFile ? { sitesFile } : {}) };
   return async (req, res) => {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
@@ -50,8 +51,22 @@ export function createRequestHandler({ token = null, allowPrivate = false } = {}
     }
 
     const url = new URL(req.url || '/', 'http://localhost');
-    if (url.pathname === '/health') {
-      send(res, 200, { ok: true, name: 'aura-argus', version, sources: listEntities().length, uptimeMs: Math.round(process.uptime() * 1000) });
+    // 规范名 /aura_argus/*；旧路径保持不变。
+    const route = url.pathname.replace(/^\/aura_argus(?=\/)/, '') || '/';
+    const abort = new AbortController();
+    res.on('close', () => { if (!res.writableEnded) abort.abort(new Error('client disconnected')); });
+    if (route === '/health') {
+      const coverage = getCoverage(baseOptions);
+      const sources = Object.values(coverage.entities).reduce((sum, entity) => sum + entity.sources.length, 0);
+      send(res, 200, {
+        ok: true,
+        name: 'aura-argus',
+        version,
+        coverageVersion: coverage.version,
+        entities: Object.keys(coverage.entities).length,
+        sources,
+        uptimeMs: Math.round(process.uptime() * 1000),
+      });
       return;
     }
 
@@ -61,16 +76,16 @@ export function createRequestHandler({ token = null, allowPrivate = false } = {}
     }
 
     try {
-      if (url.pathname === '/' || url.pathname === '/help') {
+      if (route === '/' || route === '/help') {
         send(res, 200, {
           name: 'aura-argus',
           version,
           endpoints: {
             'GET /health': 'health + version',
             'GET /sources': 'registered entities',
-            'GET /search?q=&maxSources=': 'evidence bundle',
-          'POST /search': '{ "question": "...", "maxSources": 3, "site": "docs.example.com" }',
-            'POST /search/batch': '{ "questions": ["..."], "concurrency": 3, "site": "docs.example.com" }',
+            'GET /search?q=&maxSources=': 'evidence bundle (add sites=0 for registry-only)',
+          'POST /search': '{ "question": "...", "maxSources": 3, "site": "docs.example.com", "sites": true }',
+            'POST /search/batch': '{ "questions": ["..."], "concurrency": 3, "site": "docs.example.com", "sites": true }',
             'GET /fetch?url=&maxChars=': 'clean page text',
             'POST /fetch': '{ "url": "...", "maxChars": 20000 }',
           },
@@ -78,12 +93,13 @@ export function createRequestHandler({ token = null, allowPrivate = false } = {}
         return;
       }
 
-      if (url.pathname === '/sources') {
-        send(res, 200, { ok: true, version, entities: listEntities() });
+      if (route === '/sources') {
+        const coverage = getCoverage(baseOptions);
+        send(res, 200, { ok: true, version, coverageVersion: coverage.version, sites: coverage.files, entities: listEntities(baseOptions) });
         return;
       }
 
-      if (url.pathname === '/search/batch') {
+      if (route === '/search/batch') {
         if (req.method !== 'POST') { send(res, 405, { ok: false, error: { code: 'METHOD_NOT_ALLOWED', message: 'use POST /search/batch' } }); return; }
         const body = await readBody(req);
         if (!Array.isArray(body.questions) || body.questions.length === 0) throw new ArgusError(CODES.BAD_REQUEST, 'questions[] is required');
@@ -92,33 +108,78 @@ export function createRequestHandler({ token = null, allowPrivate = false } = {}
           concurrency: Number(body.concurrency ?? 3),
           maxSources: Number(body.maxSources ?? 3),
           cache: body.cache !== false,
-          fallback: body.fallback === true,
+          fallback: body.fallback === false ? false : body.fallback === true ? true : 'auto',
           site: typeof body.site === 'string' ? body.site : undefined,
+          multi: body.multi,
+          followLinks: body.followLinks,
+          maxFollowLinks: body.maxFollowLinks,
+          fast: body.fast,
+          deepIndex: body.deepIndex,
+          docVersion: body.docVersion,
+          decompose: body.decompose,
+          mode: body.mode,
+          signal: abort.signal,
           budgetMs: Number(body.budgetMs ?? 45_000),
+          ...baseOptions,
+          ...(body.sites === false ? { sites: false } : {}),
         });
         send(res, 200, { ok: true, results });
         return;
       }
 
-      if (url.pathname === '/search') {
+      if (route === '/search') {
         const body = req.method === 'POST' ? await readBody(req) : {};
         const question = String(body.question ?? url.searchParams.get('q') ?? '').trim();
         if (!question) throw new ArgusError(CODES.BAD_REQUEST, 'question (or q) is required');
         const maxSources = Number(body.maxSources ?? url.searchParams.get('maxSources') ?? 3);
         const fallbackParam = url.searchParams.get('fallback');
-        const fallback = body.fallback === true || fallbackParam === '1' || fallbackParam === 'true';
+        const fallbackOff = body.fallback === false || ['0', 'false', 'off'].includes(String(fallbackParam || '').toLowerCase());
+        const fallback = fallbackOff
+          ? false
+          : body.fallback === 'auto' || fallbackParam === 'auto'
+            ? 'auto'
+            : body.fallback === true || fallbackParam === '1' || fallbackParam === 'true'
+              ? true
+              : 'auto';
         const site = typeof body.site === 'string' ? body.site : (url.searchParams.get('site') ?? undefined);
-        const result = await search(question, { maxSources, cache: body.cache !== false, fallback, site });
+        const sitesOff = body.sites === false || url.searchParams.get('sites') === '0';
+        const multi = body.multi === false || url.searchParams.get('multi') === '0' ? false : body.multi === true || url.searchParams.get('multi') === '1' ? true : undefined;
+        const followLinks = body.followLinks === false || url.searchParams.get('followLinks') === '0' ? false : body.followLinks === true || url.searchParams.get('followLinks') === '1' ? true : undefined;
+        const maxFollowLinks = body.maxFollowLinks ?? url.searchParams.get('maxFollowLinks') ?? undefined;
+        const fast = body.fast === true || url.searchParams.get('fast') === '1';
+        const deepIndex = body.deepIndex === true || url.searchParams.get('deepIndex') === '1';
+        const docVersion = body.docVersion ?? url.searchParams.get('docVersion') ?? undefined;
+        const decompose = body.decompose === true || url.searchParams.get('decompose') === '1';
+        const mode = body.mode ?? url.searchParams.get('mode') ?? undefined;
+        const budgetMs = body.budgetMs ?? url.searchParams.get('budgetMs') ?? undefined;
+        const result = await search(question, {
+          maxSources,
+          cache: body.cache !== false,
+          fallback,
+          site,
+          multi,
+          followLinks,
+          maxFollowLinks: maxFollowLinks === undefined ? undefined : Number(maxFollowLinks),
+          fast,
+          deepIndex,
+          docVersion,
+          decompose,
+          mode,
+          budgetMs: budgetMs === undefined ? undefined : Number(budgetMs),
+          signal: abort.signal,
+          ...baseOptions,
+          ...(sitesOff ? { sites: false } : {}),
+        });
         send(res, result.error ? 502 : 200, { ok: !result.error, ...result });
         return;
       }
 
-      if (url.pathname === '/fetch') {
+      if (route === '/fetch') {
         const body = req.method === 'POST' ? await readBody(req) : {};
         const target = String(body.url ?? url.searchParams.get('url') ?? '').trim();
         if (!target) throw new ArgusError(CODES.BAD_REQUEST, 'url is required');
         const maxChars = Number(body.maxChars ?? url.searchParams.get('maxChars') ?? 20_000);
-        const result = await fetchDocument(target, { maxChars, allowPrivate });
+        const result = await fetchDocument(target, { maxChars, allowPrivate, signal: abort.signal });
         send(res, 200, { ok: true, ...result });
         return;
       }
@@ -132,8 +193,8 @@ export function createRequestHandler({ token = null, allowPrivate = false } = {}
   };
 }
 
-export function startServer({ port = 8787, host = '127.0.0.1', token = null, allowPrivate = false } = {}) {
-    const server = http.createServer(createRequestHandler({ token, allowPrivate }));
+export function startServer({ port = 8787, host = '127.0.0.1', token = null, allowPrivate = false, sites = true, sitesFile } = {}) {
+    const server = http.createServer(createRequestHandler({ token, allowPrivate, sites, sitesFile }));
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, host, () => {

@@ -17,13 +17,13 @@ node eval/verify-dsh.mjs --live   # 9/9
 ## MCP server (full AuraArgus contract)
 
 The same patch can insert `mcp-aura-argus` (`@deepseek-ai/dsh-mcp-client`) pointing at
-`node <repo>/src/cli.mjs mcp`. Then DSH sessions get:
+`node <repo>/src/cli.mjs aura_argus_mcp`. Then DSH sessions get:
 
 ```
-mcp__aura-argus__search
-mcp__aura-argus__search_batch
-mcp__aura-argus__fetch
-mcp__aura-argus__sources
+mcp__aura-argus__aura_argus_search
+mcp__aura-argus__aura_argus_search_batch
+mcp__aura-argus__aura_argus_fetch
+mcp__aura-argus__aura_argus_sources
 ```
 
 The MCP client injects the server's `initialize.instructions` as a `mcp:aura-argus`

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "heldout-docker-healthcheck",
+    "q": "Docker Compose 的 healthcheck 怎么写？",
+    "entity": "docker",
+    "checks": [["healthcheck", "healthcheck"], ["test", "test:"]]
+  },
+  {
+    "id": "heldout-ts-satisfies",
+    "q": "TypeScript 的 satisfies 运算符怎么用？",
+    "entity": "typescript",
+    "checks": [["satisfies", "satisfies"], ["operator", "operator|运算符"]]
+  },
+  {
+    "id": "heldout-k8s-liveness",
+    "q": "Kubernetes 的 livenessProbe 怎么配置？",
+    "entity": "kubernetes",
+    "checks": [["probe", "livenessProbe|readinessProbe"], ["handler", "httpGet|exec|tcpSocket"]]
+  },
+  {
+    "id": "heldout-nginx-proxy",
+    "q": "Nginx 的 proxy_pass 怎么配置？",
+    "entity": "nginx",
+    "checks": [["proxy_pass", "proxy_pass"], ["location", "location"]]
+  }
+]

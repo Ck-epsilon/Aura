@@ -11,6 +11,7 @@ AuraArgus is one local engine with four plugs. Pick the one your agent already s
 | [Cursor](cursor.md) | MCP stdio | Standard config; client smoke pending |
 | [Generic shell agent](generic-cli.md) | CLI + JSON | Universal |
 | [Generic HTTP agent](generic-http.md) | HTTP + OpenAPI | Universal |
+| [JS client](js-client.md) | `aura-argus/client` | Node 20+ / browser |
 | [DSH](dsh.md) | provider + MCP | Tested; see README |
 
 ## After publishing
@@ -18,26 +19,26 @@ AuraArgus is one local engine with four plugs. Pick the one your agent already s
 Until the npm package is published, use the local absolute path:
 
 ```bash
-node E:/workspaces/aura-argus/src/cli.mjs mcp
+node E:/workspaces/aura-argus/src/cli.mjs aura_argus_mcp
 ```
 
 After publishing:
 
 ```bash
-npx -y aura-argus mcp
+npx -y aura-argus aura_argus_mcp
 ```
 
 Windows clients that fail to spawn `npx` directly usually need:
 
 ```json
-{ "command": "cmd", "args": ["/c", "npx", "-y", "aura-argus", "mcp"] }
+{ "command": "cmd", "args": ["/c", "npx", "-y", "aura-argus", "aura_argus_mcp"] }
 ```
 
 ## What the agent gets
 
-- `search` — one question → evidence passages + source URLs.
-- `search_batch` — up to 20 questions → per-question results.
-- `fetch` — one public URL → clean Markdown.
-- `sources` — registry coverage.
+- `aura_argus_search` — one question → evidence passages + source URLs.
+- `aura_argus_search_batch` — up to 20 questions → per-question results.
+- `aura_argus_fetch` — one public URL → clean Markdown.
+- `aura_argus_sources` — registry coverage.
 
-Registry-only by default. `fallback` (360/Sogou) is opt-in and may be anti-bot blocked.
+Official sources first; CLI/MCP/HTTP default `fallback=auto`. Legacy tool names remain aliases.

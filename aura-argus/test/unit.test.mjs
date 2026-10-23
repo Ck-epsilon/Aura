@@ -5,11 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { decodeEntities, collapse, htmlToLines, htmlToMarkdown, extractTitle, extractLinks, extractXmlLocs } from '../src/lib/text.mjs';
-import { mergeBlocks, selectPassages } from '../src/lib/extract.mjs';
+import { buildChunks, mergeBlocks, selectPassages, slugifyHeading } from '../src/lib/extract.mjs';
 import { validateUrl } from '../src/lib/fetch.mjs';
 import { ArgusError, CODES } from '../src/lib/errors.mjs';
 import { matchEntity, expandTerms, listEntities, registryVersion, rankSources } from '../src/lib/registry.mjs';
 import { normalizeSite } from '../src/lib/fallback.mjs';
+import { isHubSource } from '../src/lib/router.mjs';
 import { Cache } from '../src/lib/cache.mjs';
 
 test('entity decoding and collapse', () => {
@@ -47,7 +48,8 @@ test('expanded registry routes new official entities', () => {
   assert.equal(matchEntity('Next.js app router')?.id, 'nextjs');
   assert.equal(matchEntity('Stripe webhook')?.id, 'stripe');
   assert.equal(matchEntity('Git rebase')?.id, 'git');
-  assert.ok(listEntities().length >= 40);
+  assert.ok(listEntities({ sites: false }).length >= 40);
+  assert.ok(listEntities().length > listEntities({ sites: false }).length);
 });
 
 test('title, links and sitemap locs', () => {
@@ -73,6 +75,69 @@ test('selectPassages finds the numeric row', () => {
   assert.ok(passages.length > 0);
   assert.match(passages.map((p) => p.text).join(' '), /100/);
 });
+test('buildChunks keeps code lines addressable', () => {
+  const chunks = buildChunks(['Intro text', '```', 'fs.readFile(path, cb)', '```']);
+  assert.ok(chunks.some((chunk) => chunk.text.includes('fs.readFile')));
+});
+
+test('buildChunks tracks headings and chunk kinds', () => {
+  const chunks = buildChunks(['# Install', 'Run this command to install the package.', '```', 'npm i pkg', '```', '| a | b |', '| 1 | 2 |']);
+  assert.equal(chunks.find((chunk) => chunk.kind === 'heading').text, '# Install');
+  assert.equal(chunks.find((chunk) => chunk.kind === 'code').heading, 'Install');
+  assert.ok(chunks.some((chunk) => chunk.kind === 'table'));
+});
+
+test('buildChunks exposes heading paths, anchors and source lines', () => {
+  assert.equal(slugifyHeading('Chained Promises (then/catch)'), 'chained-promises-thencatch');
+  const chunks = buildChunks([
+    '# Using promises',
+    '## Chained Promises',
+    'Returning a value from then() lets the chain continue with the next handler.',
+    '## Chained Promises',
+    'A second section with the same heading gets a numeric anchor.',
+  ]);
+  const prose = chunks.filter((chunk) => chunk.kind === 'prose');
+  assert.equal(prose[0].headingPath, 'Using promises > Chained Promises');
+  assert.equal(prose[0].anchor, 'chained-promises');
+  assert.equal(prose[0].startLine, 3);
+  assert.equal(prose[1].anchor, 'chained-promises-2');
+});
+
+test('expandTerms adds intent phrases for Chinese questions', () => {
+  const postgres = expandTerms('PostgreSQL 怎么创建表？');
+  assert.ok(postgres.has('create table'));
+  const mysql = expandTerms('MySQL InnoDB 的事务隔离级别有哪些？');
+  assert.ok(mysql.has('transaction isolation level'));
+  assert.ok(mysql.has('isolation'));
+  const node = expandTerms('Node.js fs 模块怎么读文件？');
+  assert.ok([...node].some((term) => term.toLowerCase() === 'readfile'));
+});
+
+test('selectPassages keeps specific API terms in evidence', () => {
+  const lines = [
+    'This module section documents the general module behavior for every caller in the system.',
+    'The module supports many file related options and flags for advanced users of the library.',
+    'fs.readFile(path, options, callback) reads the entire file asynchronously and calls back.',
+    'Another module paragraph explains how the module is loaded and configured by the runtime.',
+    'The module documentation lists every exported function and option in a long table.',
+  ];
+  const passages = selectPassages(lines, new Set(['fs', 'readfile', 'module', 'file']));
+  assert.match(passages.map((passage) => passage.text).join(' '), /readFile/);
+});
+
+test('selectPassages keeps the matched sentence in a long paragraph', () => {
+  const filler = 'Filler sentence without any answer. '.repeat(30);
+  const line = `${filler}The API QPS limit is 100 requests per second.`;
+  const passages = selectPassages([line], new Set(['qps', 'limit']));
+  assert.match(passages.map((passage) => passage.text).join(' '), /100 requests per second/);
+});
+
+test('selectPassages does not repeat an overlapping window', () => {
+  const repeated = 'The deployment checklist requires two approvals before a release is promoted.';
+  const lines = [repeated, repeated, repeated, 'Unrelated notes about something else entirely. '.repeat(2)];
+  const passages = selectPassages(lines, new Set(['deployment', 'checklist']));
+  assert.equal(passages.filter((passage) => /deployment checklist/.test(passage.text)).length, 1);
+});
 
 test('validateUrl rejects non-http and credentials', () => {
   assert.equal(validateUrl('https://example.com/a').hostname, 'example.com');
@@ -93,7 +158,7 @@ test('registry matches aliases and expands terms', () => {
 });
 
 test('registry shape is valid', () => {
-  const entities = listEntities();
+  const entities = listEntities({ sites: false });
   assert.ok(entities.length >= 10, 'expected at least 10 entities');
   assert.match(registryVersion, /^[0-9a-f]{12}$/);
   const seen = new Set();
@@ -135,4 +200,26 @@ test('cache respects ttl and disk round-trip', async () => {
 test('cache key is stable and collision-free', () => {
   assert.equal(Cache.key(['a', 1]), Cache.key(['a', 1]));
   assert.notEqual(Cache.key(['a', 1]), Cache.key(['a', 2]));
+});
+
+test('selectPassages prefers currency amounts for price questions', () => {
+  const lines = [
+    'Get started for free with 1,000 API credits every month and no credit card required.',
+    '## Pay As You Go',
+    '$0.008 / credit for flexible usage and pay only for what you use.',
+  ];
+  const passages = selectPassages(lines, new Set(['pricing', 'price', 'credit']));
+  assert.match(passages.map((passage) => passage.text).join(' '), /\$0\.008/);
+});
+
+test('isHubSource detects parent-path index pages only', () => {
+  const sources = [
+    { url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference' },
+    { url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise' },
+    { url: 'https://example.test/guide' },
+  ];
+  assert.equal(isHubSource(sources[0], sources), true);
+  assert.equal(isHubSource(sources[1], sources), false);
+  assert.equal(isHubSource(sources[2], sources), false);
+  assert.equal(isHubSource({ url: 'https://example.test/' }, sources), true);
 });

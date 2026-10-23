@@ -114,6 +114,21 @@ function backoffMs(attempt, retryAfterMs, { retryBaseMs, retryMaxMs, deadline })
   const remaining = deadline - Date.now();
   return Math.max(0, Math.min(wait, Math.max(0, remaining - 100)));
 }
+function requestSignal(timeoutMs, outer) {
+  if (!outer) return { signal: AbortSignal.timeout(timeoutMs), cleanup: () => {} };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException('timeout', 'TimeoutError')), timeoutMs);
+  const onAbort = () => controller.abort(outer.reason);
+  if (outer.aborted) controller.abort(outer.reason);
+  else outer.addEventListener('abort', onAbort, { once: true });
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      outer.removeEventListener('abort', onAbort);
+    },
+  };
+}
 
 /**
  * 带重试的取回。重试条件：网络错误 / 超时 / 408、425、429、5xx；其余 4xx 不重试。
@@ -131,6 +146,8 @@ export async function fetchRaw(input, {
   retryBaseMs = 300,
   retryMaxMs = 3_000,
   allowPrivate = false,
+  validators = null,
+  signal = null,
 } = {}) {
   const url = validateUrl(input);
   const startAll = Date.now();
@@ -145,19 +162,24 @@ export async function fetchRaw(input, {
       break;
     }
     const attemptTimeout = Math.min(timeoutMs, remaining);
+    if (signal?.aborted) throw new ArgusError(CODES.ABORTED, 'request aborted', { url: url.href, tries });
 
+    let request = null;
     try {
       let current = url;
       let response;
+      request = requestSignal(attemptTimeout, signal);
       for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
         await assertPublicUrl(current, { allowPrivate });
         response = await fetch(current.href, {
           redirect: 'manual',
-          signal: AbortSignal.timeout(attemptTimeout),
+          signal: request.signal,
           headers: {
             'user-agent': UA,
             accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,application/json;q=0.7,*/*;q=0.6',
             'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            ...(validators?.etag ? { 'if-none-match': validators.etag } : {}),
+            ...(validators?.lastModified ? { 'if-modified-since': validators.lastModified } : {}),
             ...headers,
           },
         });
@@ -167,6 +189,23 @@ export async function fetchRaw(input, {
         if (!location) throw new ArgusError(CODES.HTTP_ERROR, `redirect without location: ${current.href}`, { status: response.status, url: current.href });
         if (hop === MAX_REDIRECTS) throw new ArgusError(CODES.TOO_MANY_REDIRECTS, `too many redirects: ${url.href}`, { url: url.href, max: MAX_REDIRECTS });
         current = new URL(location, current);
+      }
+
+      if (response.status === 304) {
+        await response.body?.cancel();
+        return {
+          url: url.href,
+          finalUrl: current.href,
+          status: 304,
+          notModified: true,
+          contentType: '',
+          text: '',
+          bytes: 0,
+          etag: validators?.etag || response.headers.get('etag') || null,
+          lastModified: validators?.lastModified || response.headers.get('last-modified') || null,
+          ms: Date.now() - startAll,
+          tries,
+        };
       }
 
       const length = Number(response.headers.get('content-length') || 0);
@@ -197,10 +236,15 @@ export async function fetchRaw(input, {
         contentType: response.headers.get('content-type') || '',
         text,
         bytes,
+        etag: response.headers.get('etag') || null,
+        lastModified: response.headers.get('last-modified') || null,
         ms: Date.now() - startAll,
         tries,
       };
     } catch (error) {
+      if (signal?.aborted) {
+        throw new ArgusError(CODES.ABORTED, 'request aborted', { url: url.href, tries });
+      }
       if (error instanceof ArgusError) {
         if (error.code === CODES.TIMEOUT && attempt < retries) {
           lastError = error;
@@ -218,6 +262,8 @@ export async function fetchRaw(input, {
         continue;
       }
       throw lastError;
+    } finally {
+      request?.cleanup();
     }
   }
 
@@ -229,9 +275,9 @@ const TEXTUAL = /text\/html|application\/xhtml\+xml|text\/plain|text\/markdown|a
 /**
  * 取回一页并转成可读文档。非文本类型直接拒绝。
  */
-export async function fetchDocument(input, { maxChars = 20_000, timeoutMs = 12_000, format = 'markdown', headers = {}, allowPrivate = false } = {}) {
+export async function fetchDocument(input, { maxChars = 20_000, timeoutMs = 12_000, format = 'markdown', headers = {}, allowPrivate = false, signal = null } = {}) {
   const started = Date.now();
-  const raw = await fetchRaw(input, { timeoutMs, headers, allowPrivate });
+  const raw = await fetchRaw(input, { timeoutMs, headers, allowPrivate, signal });
   if (!TEXTUAL.test(raw.contentType)) {
     throw new ArgusError(CODES.UNSUPPORTED_CONTENT_TYPE, `unsupported content-type: ${raw.contentType || 'unknown'}`, {
       contentType: raw.contentType,
@@ -253,6 +299,8 @@ export async function fetchDocument(input, { maxChars = 20_000, timeoutMs = 12_0
     chars: text.length,
     truncated,
     contentType: raw.contentType,
+    updated: raw.lastModified || null,
+    etag: raw.etag || null,
     tookMs: Date.now() - started,
   };
 }

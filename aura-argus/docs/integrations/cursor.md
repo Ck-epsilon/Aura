@@ -9,7 +9,7 @@ Project: `.cursor/mcp.json` in the workspace. Global: `~/.cursor/mcp.json`.
   "mcpServers": {
     "aura-argus": {
       "command": "npx",
-      "args": ["-y", "aura-argus", "mcp"]
+      "args": ["-y", "aura-argus", "aura_argus_mcp"]
     }
   }
 }
@@ -22,11 +22,11 @@ Windows:
   "mcpServers": {
     "aura-argus": {
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "aura-argus", "mcp"]
+      "args": ["/c", "npx", "-y", "aura-argus", "aura_argus_mcp"]
     }
   }
 }
 ```
 
 Restart Cursor or reload the MCP servers, then enable the `aura-argus` tools in the MCP panel.
-The tools are `search`, `search_batch`, `fetch`, and `sources`; the client prefixes them.
+The tools are `aura_argus_search`, `aura_argus_search_batch`, `aura_argus_fetch`, and `aura_argus_sources`; the client prefixes them. Legacy unprefixed names remain aliases.

@@ -1,0 +1,3413 @@
+[
+  {
+    "id": "deepseek-price",
+    "category": "pricing",
+    "entity": "deepseek",
+    "q": "DeepSeek 的 Search API 每次成功请求多少钱？QPS 上限是多少？",
+    "checks": [
+      [
+        "price",
+        "\\$0\\.75"
+      ],
+      [
+        "qps",
+        "\\b100\\b"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "deepseek-price-en",
+    "category": "pricing",
+    "entity": "deepseek",
+    "q": "How much does the DeepSeek search API cost per request?",
+    "checks": [
+      [
+        "price",
+        "0\\.75"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "alias-deepseek-price",
+    "category": "pricing",
+    "entity": "deepseek",
+    "q": "深度求索的搜索 API 价格",
+    "checks": [
+      [
+        "price",
+        "0\\.75|5 元"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "tavily-price",
+    "category": "pricing",
+    "entity": "tavily",
+    "q": "Tavily 一个 credit 多少钱？免费计划每月给多少 credit？",
+    "checks": [
+      [
+        "price",
+        "0\\.008"
+      ],
+      [
+        "free",
+        "1,000"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "qwen-price",
+    "category": "pricing",
+    "entity": "qwen",
+    "q": "通义千问 API 怎么计费？",
+    "checks": [
+      [
+        "price",
+        "计费|价格"
+      ],
+      [
+        "qwen",
+        "千问|qwen"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "kimi-price",
+    "category": "pricing",
+    "entity": "moonshot",
+    "q": "Kimi API 的价格是多少？",
+    "checks": [
+      [
+        "price",
+        "价格|计费|token"
+      ],
+      [
+        "kimi",
+        "Kimi|kimi"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "hunyuan-price",
+    "category": "pricing",
+    "entity": "tencent-cloud",
+    "q": "腾讯混元 API 的价格是多少？",
+    "checks": [
+      [
+        "price",
+        "价格|计费"
+      ],
+      [
+        "hunyuan",
+        "混元|hunyuan"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "mistral-price",
+    "category": "pricing",
+    "entity": "mistral",
+    "q": "Mistral API 怎么计费？",
+    "checks": [
+      [
+        "price",
+        "pricing|price|计费"
+      ],
+      [
+        "token",
+        "token|model"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "aliyun-billing",
+    "category": "pricing",
+    "entity": "aliyun",
+    "q": "阿里云 ECS 的按量付费是怎么计费的？",
+    "checks": [
+      [
+        "billing",
+        "按量付费|pay-as-you-go|计费"
+      ],
+      [
+        "price",
+        "价格|单价|price|费用"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "azure-app-pricing",
+    "category": "pricing",
+    "entity": "azure",
+    "q": "Azure App Service 的定价在哪里查？",
+    "checks": [
+      [
+        "appservice",
+        "App Service|app service"
+      ],
+      [
+        "pricing",
+        "pricing|价格|定价"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "bing-retire",
+    "category": "version",
+    "entity": "bing",
+    "q": "Bing Search API 是哪一天退役的？微软建议迁移到什么替代产品？",
+    "checks": [
+      [
+        "date",
+        "2025"
+      ],
+      [
+        "replacement",
+        "Grounding with Bing"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "bing-retire-en",
+    "category": "version",
+    "entity": "bing",
+    "q": "When was the Bing Search API retired?",
+    "checks": [
+      [
+        "date",
+        "2025"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "alias-bing",
+    "category": "version",
+    "entity": "bing",
+    "q": "必应搜索 API 退役时间",
+    "checks": [
+      [
+        "date",
+        "2025"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "google-cse",
+    "category": "version",
+    "entity": "google-cse",
+    "q": "Google Custom Search JSON API 还能给新客户用吗？什么时候停服？",
+    "checks": [
+      [
+        "shutdown",
+        "2027"
+      ],
+      [
+        "closed",
+        "新客户|closed"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "python-314",
+    "category": "version",
+    "entity": "python",
+    "q": "Python 3.14 有哪些新特性？",
+    "checks": [
+      [
+        "version",
+        "3\\.14"
+      ],
+      [
+        "whatsnew",
+        "what'?s new|release"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "node24-lts",
+    "category": "version",
+    "entity": "node",
+    "q": "Node.js 24 什么时候进入 LTS？",
+    "checks": [
+      [
+        "version",
+        "24"
+      ],
+      [
+        "lts",
+        "LTS|long-term"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "python313",
+    "category": "version",
+    "entity": "python",
+    "q": "Python 3.13 有哪些新特性？",
+    "checks": [
+      [
+        "version",
+        "3\\.13"
+      ],
+      [
+        "feature",
+        "free-threaded|JIT|what'?s new|新特性"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "postgres18",
+    "category": "version",
+    "entity": "postgres",
+    "q": "PostgreSQL 18 有哪些新特性？",
+    "checks": [
+      [
+        "version",
+        "18"
+      ],
+      [
+        "feature",
+        "new|release|feature|新特性"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "mysql84",
+    "category": "version",
+    "entity": "mysql",
+    "q": "MySQL 8.4 是 LTS 版本吗？",
+    "checks": [
+      [
+        "version",
+        "8\\.4"
+      ],
+      [
+        "lts",
+        "LTS|long-term|长期支持"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "k8s134",
+    "category": "version",
+    "entity": "kubernetes",
+    "q": "Kubernetes 1.34 什么时候发布？",
+    "checks": [
+      [
+        "version",
+        "1\\.34"
+      ],
+      [
+        "date",
+        "2025|release|发布"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "docker-healthcheck",
+    "category": "howto",
+    "entity": "docker",
+    "q": "Docker Compose 的 healthcheck 怎么写？",
+    "checks": [
+      [
+        "healthcheck",
+        "healthcheck"
+      ],
+      [
+        "test",
+        "test:"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "ts-satisfies",
+    "category": "howto",
+    "entity": "typescript",
+    "q": "TypeScript 的 satisfies 运算符怎么用？",
+    "checks": [
+      [
+        "satisfies",
+        "satisfies"
+      ],
+      [
+        "operator",
+        "operator|运算符"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "k8s-liveness",
+    "category": "howto",
+    "entity": "kubernetes",
+    "q": "Kubernetes 的 livenessProbe 怎么配置？",
+    "checks": [
+      [
+        "probe",
+        "livenessProbe|readinessProbe"
+      ],
+      [
+        "handler",
+        "httpGet|exec|tcpSocket"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "nginx-proxy",
+    "category": "howto",
+    "entity": "nginx",
+    "q": "Nginx 的 proxy_pass 怎么配置？",
+    "checks": [
+      [
+        "proxy_pass",
+        "proxy_pass"
+      ],
+      [
+        "location",
+        "location"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "node20-fs",
+    "category": "howto",
+    "entity": "node",
+    "q": "Node.js 20 的 fs.readFile 怎么用？",
+    "checks": [
+      [
+        "readFile",
+        "readFile"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "python-asyncio",
+    "category": "howto",
+    "entity": "python",
+    "q": "Python asyncio 的 gather 怎么用？",
+    "checks": [
+      [
+        "gather",
+        "gather"
+      ],
+      [
+        "await",
+        "await|coroutine"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "react-usestate",
+    "category": "howto",
+    "entity": "react",
+    "q": "React 的 useState 怎么用？",
+    "checks": [
+      [
+        "useState",
+        "useState"
+      ],
+      [
+        "hook",
+        "hook"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "postgres-table",
+    "category": "howto",
+    "entity": "postgres",
+    "q": "PostgreSQL 怎么创建表？",
+    "checks": [
+      [
+        "create",
+        "CREATE TABLE"
+      ],
+      [
+        "postgres",
+        "postgres"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "mysql-innodb",
+    "category": "howto",
+    "entity": "mysql",
+    "q": "MySQL InnoDB 的事务隔离级别有哪些？",
+    "checks": [
+      [
+        "isolation",
+        "隔离级别|isolation"
+      ],
+      [
+        "innodb",
+        "InnoDB|innodb"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "pypi-publish",
+    "category": "howto",
+    "entity": "pypi",
+    "q": "PyPI 怎么发布 Python 包？",
+    "checks": [
+      [
+        "publish",
+        "publish|upload"
+      ],
+      [
+        "twine",
+        "twine|token"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "searxng-429",
+    "category": "error",
+    "entity": "searxng",
+    "q": "SearXNG 对 429 的冷却时间是多少秒？",
+    "checks": [
+      [
+        "seconds",
+        "3600"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "redis-oom",
+    "category": "error",
+    "entity": "redis",
+    "q": "Redis 报错 OOM command not allowed 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "OOM"
+      ],
+      [
+        "config",
+        "maxmemory|eviction"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "postgres-toomany",
+    "category": "error",
+    "entity": "postgres",
+    "q": "PostgreSQL 报错 too many connections 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "too many connections"
+      ],
+      [
+        "config",
+        "max_connections|superuser_reserved_connections|connection"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "mysql-locktimeout",
+    "category": "error",
+    "entity": "mysql",
+    "q": "MySQL 报错 Lock wait timeout exceeded 怎么办？",
+    "checks": [
+      [
+        "error",
+        "Lock wait timeout"
+      ],
+      [
+        "config",
+        "innodb_lock_wait_timeout|lock"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "nginx-502",
+    "category": "error",
+    "entity": "nginx",
+    "q": "Nginx 502 Bad Gateway 常见原因是什么？",
+    "checks": [
+      [
+        "error",
+        "502"
+      ],
+      [
+        "cause",
+        "upstream|proxy|connect"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "docker-socket",
+    "category": "error",
+    "entity": "docker",
+    "q": "Docker 报错 permission denied while trying to connect to the Docker daemon socket 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "permission denied|docker daemon socket"
+      ],
+      [
+        "fix",
+        "docker group|sudo|permission"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "github-ratelimit",
+    "category": "error",
+    "entity": "github",
+    "q": "GitHub REST API 返回 403 rate limit exceeded 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "rate limit|403"
+      ],
+      [
+        "fix",
+        "x-ratelimit|retry|token"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "k8s-crashloop",
+    "category": "error",
+    "entity": "kubernetes",
+    "q": "Kubernetes Pod 一直 CrashLoopBackOff 怎么排查？",
+    "checks": [
+      [
+        "error",
+        "CrashLoopBackOff"
+      ],
+      [
+        "debug",
+        "logs|describe|events"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "python-module",
+    "category": "error",
+    "entity": "python",
+    "q": "Python 报错 ModuleNotFoundError 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "ModuleNotFoundError"
+      ],
+      [
+        "fix",
+        "pip|sys.path|install"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "node-eaddrinuse",
+    "category": "error",
+    "entity": "node",
+    "q": "Node.js 报错 EADDRINUSE 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "EADDRINUSE"
+      ],
+      [
+        "fix",
+        "port|kill|listen"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "multi-isolation",
+    "category": "compare",
+    "entity": "postgres",
+    "q": "PostgreSQL 和 MySQL 的事务隔离级别有什么区别？",
+    "checks": [
+      [
+        "postgres",
+        "PostgreSQL|postgres"
+      ],
+      [
+        "mysql",
+        "MySQL|mysql"
+      ],
+      [
+        "isolation",
+        "isolation|隔离级别"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "multi-react-vue",
+    "category": "compare",
+    "entity": "react",
+    "q": "React 和 Vue 的响应式原理有什么区别？",
+    "checks": [
+      [
+        "react",
+        "React|react"
+      ],
+      [
+        "vue",
+        "Vue|vue"
+      ],
+      [
+        "reactivity",
+        "reactiv|响应式"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "ruby-block",
+    "category": "compare",
+    "entity": "ruby",
+    "q": "Ruby 的 block 和 proc 有什么区别？",
+    "checks": [
+      [
+        "block",
+        "block"
+      ],
+      [
+        "proc",
+        "proc"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "compare-ports",
+    "category": "compare",
+    "entity": "postgres",
+    "q": "PostgreSQL 和 MySQL 的默认端口分别是多少？",
+    "checks": [
+      [
+        "postgres",
+        "5432"
+      ],
+      [
+        "mysql",
+        "3306"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "compare-redis-memcached",
+    "category": "compare",
+    "entity": "redis",
+    "q": "Redis 和 Memcached 有什么区别？",
+    "checks": [
+      [
+        "redis",
+        "Redis"
+      ],
+      [
+        "memcached",
+        "Memcached"
+      ],
+      [
+        "difference",
+        "difference|区别|feature"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "compare-docker-k8s",
+    "category": "compare",
+    "entity": "docker",
+    "q": "Docker Compose 和 Kubernetes 有什么区别？",
+    "checks": [
+      [
+        "compose",
+        "Compose|compose"
+      ],
+      [
+        "k8s",
+        "Kubernetes|k8s"
+      ],
+      [
+        "difference",
+        "orchestrat|区别|difference"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "compare-nginx-apache",
+    "category": "compare",
+    "entity": "nginx",
+    "q": "Nginx 和 Apache 有什么区别？",
+    "checks": [
+      [
+        "nginx",
+        "Nginx"
+      ],
+      [
+        "apache",
+        "Apache"
+      ],
+      [
+        "difference",
+        "performance|区别|difference|process"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "compare-sql-nosql",
+    "category": "compare",
+    "entity": "postgres",
+    "q": "PostgreSQL 和 MongoDB 有什么区别？",
+    "checks": [
+      [
+        "postgres",
+        "PostgreSQL|postgres"
+      ],
+      [
+        "mongo",
+        "MongoDB|mongo"
+      ],
+      [
+        "difference",
+        "schema|document|区别|difference"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "elixir-genserver",
+    "category": "compare",
+    "scope": "outside",
+    "q": "Elixir GenServer 怎么用？",
+    "checks": [
+      [
+        "genserver",
+        "GenServer"
+      ],
+      [
+        "call",
+        "call|cast"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "haskell-monad",
+    "category": "compare",
+    "scope": "outside",
+    "q": "Haskell 的 Monad 是什么？",
+    "checks": [
+      [
+        "monad",
+        "Monad"
+      ],
+      [
+        "bind",
+        ">>=|bind"
+      ]
+    ],
+    "kind": "core"
+  },
+  {
+    "id": "core-pricing-openai",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "openai",
+    "q": "OpenAI API 的定价页面在哪里？",
+    "checks": [
+      [
+        "pricing",
+        "pricing|price"
+      ],
+      [
+        "token",
+        "token|model"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-anthropic",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "anthropic",
+    "q": "Anthropic Claude API 怎么计费？",
+    "checks": [
+      [
+        "pricing",
+        "pricing|price|计费"
+      ],
+      [
+        "token",
+        "token|model"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-gcp",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "gcp",
+    "q": "Google Cloud 的 Gemini API 免费额度是多少？",
+    "checks": [
+      [
+        "free",
+        "free tier|免费|quota"
+      ],
+      [
+        "gemini",
+        "Gemini|gemini"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-cloudflare",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "cloudflare",
+    "q": "Cloudflare Workers 的定价是多少？",
+    "checks": [
+      [
+        "pricing",
+        "pricing|price|计费"
+      ],
+      [
+        "workers",
+        "Workers|worker"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-stripe",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "stripe",
+    "q": "Stripe 的支付手续费怎么算？",
+    "checks": [
+      [
+        "fee",
+        "fee|pricing|费率|手续费"
+      ],
+      [
+        "transaction",
+        "transaction|payment"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-node",
+    "category": "version",
+    "kind": "core",
+    "entity": "node",
+    "q": "node 的 22 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "22"
+      ],
+      [
+        "release",
+        "LTS|long-term"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-python",
+    "category": "version",
+    "kind": "core",
+    "entity": "python",
+    "q": "python 的 3\\.12 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "3\\.12"
+      ],
+      [
+        "release",
+        "release|what.?s new|新特性"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-postgres",
+    "category": "version",
+    "kind": "core",
+    "entity": "postgres",
+    "q": "postgres 的 17 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "17"
+      ],
+      [
+        "release",
+        "release|new|新特性"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-mysql",
+    "category": "version",
+    "kind": "core",
+    "entity": "mysql",
+    "q": "mysql 的 8\\.0 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "8\\.0"
+      ],
+      [
+        "release",
+        "EOL|end of life|support"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-redis",
+    "category": "version",
+    "kind": "core",
+    "entity": "redis",
+    "q": "redis 的 7 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "7"
+      ],
+      [
+        "release",
+        "release|feature"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-kubernetes",
+    "category": "version",
+    "kind": "core",
+    "entity": "kubernetes",
+    "q": "kubernetes 的 1\\.33 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "1\\.33"
+      ],
+      [
+        "release",
+        "release|发布"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-react",
+    "category": "version",
+    "kind": "core",
+    "entity": "react",
+    "q": "react 的 19 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "19"
+      ],
+      [
+        "release",
+        "release|feature"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-vue",
+    "category": "version",
+    "kind": "core",
+    "entity": "vue",
+    "q": "vue 的 3\\.5 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "3\\.5"
+      ],
+      [
+        "release",
+        "release|feature"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-angular",
+    "category": "version",
+    "kind": "core",
+    "entity": "angular",
+    "q": "angular 的 20 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "20"
+      ],
+      [
+        "release",
+        "release|feature"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-svelte",
+    "category": "version",
+    "kind": "core",
+    "entity": "svelte",
+    "q": "svelte 的 5 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "5"
+      ],
+      [
+        "release",
+        "release|feature"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-docker",
+    "category": "version",
+    "kind": "core",
+    "entity": "docker",
+    "q": "docker 的 28 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "28"
+      ],
+      [
+        "release",
+        "release|feature"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-typescript",
+    "category": "version",
+    "kind": "core",
+    "entity": "typescript",
+    "q": "typescript 的 5\\.9 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "5\\.9"
+      ],
+      [
+        "release",
+        "release|feature"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-go",
+    "category": "version",
+    "kind": "core",
+    "entity": "go",
+    "q": "go 的 1\\.24 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "1\\.24"
+      ],
+      [
+        "release",
+        "release|feature"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-rust",
+    "category": "version",
+    "kind": "core",
+    "entity": "rust",
+    "q": "rust 的 1\\.85 版本有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "1\\.85"
+      ],
+      [
+        "release",
+        "release|feature"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-node-js-eacces",
+    "category": "error",
+    "kind": "core",
+    "entity": "node",
+    "q": "Node.js 报错 EACCES 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "EACCES"
+      ],
+      [
+        "fix",
+        "permission|chmod|sudo"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-node-js-econnrefused",
+    "category": "error",
+    "kind": "core",
+    "entity": "node",
+    "q": "Node.js 报错 ECONNREFUSED 怎么排查？",
+    "checks": [
+      [
+        "error",
+        "ECONNREFUSED"
+      ],
+      [
+        "fix",
+        "connection|server|port"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-node-js-unhandledpromiserejection",
+    "category": "error",
+    "kind": "core",
+    "entity": "node",
+    "q": "Node.js 的 UnhandledPromiseRejection 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "UnhandledPromiseRejection|unhandled rejection"
+      ],
+      [
+        "fix",
+        "catch|rejection"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-python-importerror",
+    "category": "error",
+    "kind": "core",
+    "entity": "python",
+    "q": "Python 报错 ImportError 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "ImportError"
+      ],
+      [
+        "fix",
+        "module|import|path"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-python-permissionerror",
+    "category": "error",
+    "kind": "core",
+    "entity": "python",
+    "q": "Python 报错 PermissionError 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "PermissionError"
+      ],
+      [
+        "fix",
+        "permission|chmod"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-python-unicodedecodeerror",
+    "category": "error",
+    "kind": "core",
+    "entity": "python",
+    "q": "Python 报错 UnicodeDecodeError 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "UnicodeDecodeError"
+      ],
+      [
+        "fix",
+        "encoding|decode"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-postgresql-deadlock-detected",
+    "category": "error",
+    "kind": "core",
+    "entity": "postgres",
+    "q": "PostgreSQL 报错 deadlock detected 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "deadlock"
+      ],
+      [
+        "fix",
+        "transaction|lock"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-postgresql-could-not-serialize-access",
+    "category": "error",
+    "kind": "core",
+    "entity": "postgres",
+    "q": "PostgreSQL 报错 could not serialize access 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "serialize"
+      ],
+      [
+        "fix",
+        "transaction|isolation"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-postgresql-permission-denied-for-table",
+    "category": "error",
+    "kind": "core",
+    "entity": "postgres",
+    "q": "PostgreSQL 报错 permission denied for table 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "permission denied"
+      ],
+      [
+        "fix",
+        "grant|role"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-postgresql-connection-refused",
+    "category": "error",
+    "kind": "core",
+    "entity": "postgres",
+    "q": "PostgreSQL 报错 connection refused 怎么排查？",
+    "checks": [
+      [
+        "error",
+        "connection refused"
+      ],
+      [
+        "fix",
+        "listen|port|server"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-mysql-deadlock-found",
+    "category": "error",
+    "kind": "core",
+    "entity": "mysql",
+    "q": "MySQL 报错 Deadlock found 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "Deadlock"
+      ],
+      [
+        "fix",
+        "transaction|innodb"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-mysql-duplicate-entry",
+    "category": "error",
+    "kind": "core",
+    "entity": "mysql",
+    "q": "MySQL 报错 Duplicate entry 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "Duplicate entry"
+      ],
+      [
+        "fix",
+        "unique|index"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-mysql-access-denied-for-user",
+    "category": "error",
+    "kind": "core",
+    "entity": "mysql",
+    "q": "MySQL 报错 Access denied for user 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "Access denied"
+      ],
+      [
+        "fix",
+        "user|grant|password"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-mysql-server-has-gone-away",
+    "category": "error",
+    "kind": "core",
+    "entity": "mysql",
+    "q": "MySQL 报错 server has gone away 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "gone away"
+      ],
+      [
+        "fix",
+        "connection|timeout|max_allowed"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-nginx-413-request-entity-too-large",
+    "category": "error",
+    "kind": "core",
+    "entity": "nginx",
+    "q": "Nginx 报错 413 Request Entity Too Large 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "413"
+      ],
+      [
+        "fix",
+        "client_max_body_size|body"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-nginx-504-gateway-timeout",
+    "category": "error",
+    "kind": "core",
+    "entity": "nginx",
+    "q": "Nginx 报错 504 Gateway Timeout 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "504"
+      ],
+      [
+        "fix",
+        "timeout|proxy"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-nginx-403-forbidden",
+    "category": "error",
+    "kind": "core",
+    "entity": "nginx",
+    "q": "Nginx 报错 403 Forbidden 怎么排查？",
+    "checks": [
+      [
+        "error",
+        "403"
+      ],
+      [
+        "fix",
+        "permission|index|access"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-docker-port-is-already-allocated",
+    "category": "error",
+    "kind": "core",
+    "entity": "docker",
+    "q": "Docker 报错 port is already allocated 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "port"
+      ],
+      [
+        "fix",
+        "allocated|container|kill"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-docker-no-space-left-on-device",
+    "category": "error",
+    "kind": "core",
+    "entity": "docker",
+    "q": "Docker 报错 no space left on device 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "no space"
+      ],
+      [
+        "fix",
+        "disk|prune|space"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-docker-toomanyrequests",
+    "category": "error",
+    "kind": "core",
+    "entity": "docker",
+    "q": "Docker 拉取镜像报错 toomanyrequests 怎么办？",
+    "checks": [
+      [
+        "error",
+        "toomanyrequests|rate limit"
+      ],
+      [
+        "fix",
+        "login|pull|limit"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-github-rest-api-404",
+    "category": "error",
+    "kind": "core",
+    "entity": "github",
+    "q": "GitHub REST API 返回 404 怎么排查？",
+    "checks": [
+      [
+        "error",
+        "404"
+      ],
+      [
+        "fix",
+        "not found|path|token"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-github-rest-api-422",
+    "category": "error",
+    "kind": "core",
+    "entity": "github",
+    "q": "GitHub REST API 返回 422 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "422"
+      ],
+      [
+        "fix",
+        "validation|unprocessable"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-github-rest-api-401",
+    "category": "error",
+    "kind": "core",
+    "entity": "github",
+    "q": "GitHub REST API 返回 401 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "401"
+      ],
+      [
+        "fix",
+        "token|authentication|credentials"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-kubernetes-pod-imagepullbackoff",
+    "category": "error",
+    "kind": "core",
+    "entity": "kubernetes",
+    "q": "Kubernetes Pod 报错 ImagePullBackOff 怎么排查？",
+    "checks": [
+      [
+        "error",
+        "ImagePullBackOff"
+      ],
+      [
+        "fix",
+        "image|pull|registry"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-kubernetes-pod-oomkilled",
+    "category": "error",
+    "kind": "core",
+    "entity": "kubernetes",
+    "q": "Kubernetes Pod 报错 OOMKilled 怎么处理？",
+    "checks": [
+      [
+        "error",
+        "OOMKilled"
+      ],
+      [
+        "fix",
+        "memory|limit"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-redis-readonly-you-can-t-write-against-a-read-on",
+    "category": "error",
+    "kind": "core",
+    "entity": "redis",
+    "q": "Redis 报错 READONLY You can't write against a read only replica 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "READONLY"
+      ],
+      [
+        "fix",
+        "replica|replication|master"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-aws-ec2",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "aws",
+    "q": "AWS 的 EC2 按需实例怎么计费？",
+    "checks": [
+      [
+        "compute",
+        "EC2|ec2"
+      ],
+      [
+        "billing",
+        "按需|on-demand|hour|价格|pricing"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-azure",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "azure",
+    "q": "Azure 虚拟机怎么计费？",
+    "checks": [
+      [
+        "vm",
+        "virtual machine|VM|虚拟机"
+      ],
+      [
+        "pricing",
+        "pricing|价格|计费"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-google-cloud-compute-engine",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "gcp",
+    "q": "Google Cloud Compute Engine 怎么计费？",
+    "checks": [
+      [
+        "compute",
+        "Compute Engine"
+      ],
+      [
+        "pricing",
+        "pricing|价格|计费"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-openai-api-token",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "openai",
+    "q": "OpenAI API 的 token 价格是多少？",
+    "checks": [
+      [
+        "token",
+        "token"
+      ],
+      [
+        "price",
+        "price|pricing|价格"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-anthropic-api-token",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "anthropic",
+    "q": "Anthropic API 的 token 价格是多少？",
+    "checks": [
+      [
+        "token",
+        "token"
+      ],
+      [
+        "price",
+        "price|pricing|价格"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-mistral-api-token",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "mistral",
+    "q": "Mistral API 的 token 价格是多少？",
+    "checks": [
+      [
+        "token",
+        "token"
+      ],
+      [
+        "price",
+        "price|pricing|价格"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-tavily-api",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "tavily",
+    "q": "Tavily API 的搜索请求怎么计费？",
+    "checks": [
+      [
+        "request",
+        "search|request"
+      ],
+      [
+        "billing",
+        "credit|price|pricing"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-deepseek-api-token",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "deepseek",
+    "q": "DeepSeek API 的 token 价格是多少？",
+    "checks": [
+      [
+        "token",
+        "token"
+      ],
+      [
+        "price",
+        "price|pricing|价格"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-api-token",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "qwen",
+    "q": "通义千问 API 的 token 价格是多少？",
+    "checks": [
+      [
+        "token",
+        "token"
+      ],
+      [
+        "price",
+        "价格|计费"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-kimi-api-token",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "moonshot",
+    "q": "Kimi API 的 token 价格是多少？",
+    "checks": [
+      [
+        "token",
+        "token"
+      ],
+      [
+        "price",
+        "价格|计费"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-api",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "tencent-cloud",
+    "q": "腾讯云 API 怎么计费？",
+    "checks": [
+      [
+        "billing",
+        "计费|价格|pricing"
+      ],
+      [
+        "cloud",
+        "腾讯云|cloud"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-ecs",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "aliyun",
+    "q": "阿里云 ECS 包年包月怎么计费？",
+    "checks": [
+      [
+        "billing",
+        "包年包月|subscription|计费"
+      ],
+      [
+        "price",
+        "价格|price|费用"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-cloudflare-workers",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "cloudflare",
+    "q": "Cloudflare Workers 免费额度是多少？",
+    "checks": [
+      [
+        "free",
+        "free|免费"
+      ],
+      [
+        "quota",
+        "quota|额度|limit"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-stripe",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "stripe",
+    "q": "Stripe 的订阅计费怎么算？",
+    "checks": [
+      [
+        "subscription",
+        "subscription|订阅"
+      ],
+      [
+        "fee",
+        "fee|pricing|价格"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-supabase",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "supabase",
+    "q": "Supabase 的免费计划包含什么？",
+    "checks": [
+      [
+        "free",
+        "free|免费"
+      ],
+      [
+        "plan",
+        "plan|database|storage"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-mongodb-atlas",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "mongodb",
+    "q": "MongoDB Atlas 怎么计费？",
+    "checks": [
+      [
+        "atlas",
+        "Atlas"
+      ],
+      [
+        "pricing",
+        "pricing|price|计费"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-elasticsearch-elastic-cloud",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "elasticsearch",
+    "q": "Elasticsearch 的 Elastic Cloud 怎么计费？",
+    "checks": [
+      [
+        "cloud",
+        "Elastic Cloud|cloud"
+      ],
+      [
+        "pricing",
+        "pricing|price|计费"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-github-actions",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "github",
+    "q": "GitHub Actions 的分钟数怎么计费？",
+    "checks": [
+      [
+        "minutes",
+        "minutes|分钟"
+      ],
+      [
+        "billing",
+        "billing|free|计费"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-npm",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "npm",
+    "q": "npm 私有包怎么计费？",
+    "checks": [
+      [
+        "private",
+        "private|私有"
+      ],
+      [
+        "pricing",
+        "pricing|plan|价格"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-hugging-face-inference-api",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "huggingface",
+    "q": "Hugging Face Inference API 怎么计费？",
+    "checks": [
+      [
+        "inference",
+        "Inference|inference"
+      ],
+      [
+        "pricing",
+        "pricing|free|计费"
+      ]
+    ]
+  },
+  {
+    "id": "core-pricing-extra-langchain-langsmith",
+    "category": "pricing",
+    "kind": "core",
+    "entity": "langchain",
+    "q": "LangChain 的 LangSmith 怎么计费？",
+    "checks": [
+      [
+        "langsmith",
+        "LangSmith"
+      ],
+      [
+        "pricing",
+        "pricing|plan|计费"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-extra-node-js-20-eol",
+    "category": "version",
+    "kind": "core",
+    "entity": "node",
+    "q": "Node.js 20 什么时候 EOL？",
+    "checks": [
+      [
+        "version",
+        "20"
+      ],
+      [
+        "eol",
+        "EOL|end of life|maintenance"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-extra-python-3-11-eol",
+    "category": "version",
+    "kind": "core",
+    "entity": "python",
+    "q": "Python 3.11 什么时候 EOL？",
+    "checks": [
+      [
+        "version",
+        "3\\.11"
+      ],
+      [
+        "eol",
+        "EOL|end of life|maintenance"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-extra-postgresql-16",
+    "category": "version",
+    "kind": "core",
+    "entity": "postgres",
+    "q": "PostgreSQL 16 还支持到什么时候？",
+    "checks": [
+      [
+        "version",
+        "16"
+      ],
+      [
+        "support",
+        "support|EOL|2028"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-extra-docker-engine-27",
+    "category": "version",
+    "kind": "core",
+    "entity": "docker",
+    "q": "Docker Engine 27 有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "27"
+      ],
+      [
+        "release",
+        "release|feature|新特性"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-extra-typescript-5-8",
+    "category": "version",
+    "kind": "core",
+    "entity": "typescript",
+    "q": "TypeScript 5.8 有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "5\\.8"
+      ],
+      [
+        "release",
+        "release|feature|新特性"
+      ]
+    ]
+  },
+  {
+    "id": "core-version-extra-go-1-23",
+    "category": "version",
+    "kind": "core",
+    "entity": "go",
+    "q": "Go 1.23 有什么新特性？",
+    "checks": [
+      [
+        "version",
+        "1\\.23"
+      ],
+      [
+        "release",
+        "release|feature|新特性"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-extra-redis-noauth-authentication-required",
+    "category": "error",
+    "kind": "core",
+    "entity": "redis",
+    "q": "Redis 报错 NOAUTH Authentication required 怎么解决？",
+    "checks": [
+      [
+        "error",
+        "NOAUTH"
+      ],
+      [
+        "fix",
+        "requirepass|auth|password"
+      ]
+    ]
+  },
+  {
+    "id": "core-error-extra-kubernetes-pod-pending",
+    "category": "error",
+    "kind": "core",
+    "entity": "kubernetes",
+    "q": "Kubernetes Pod 一直 Pending 怎么排查？",
+    "checks": [
+      [
+        "error",
+        "Pending"
+      ],
+      [
+        "fix",
+        "schedule|resource|node"
+      ]
+    ]
+  },
+  {
+    "id": "probe-pricing-deepseek-billing",
+    "category": "pricing",
+    "kind": "coverage",
+    "entity": "deepseek",
+    "q": "deepseek 的 billing 是多少？",
+    "checks": [
+      [
+        "term",
+        "billing"
+      ]
+    ]
+  },
+  {
+    "id": "probe-pricing-google-cse-quota",
+    "category": "pricing",
+    "kind": "coverage",
+    "entity": "google-cse",
+    "q": "google custom search 的 quota 是多少？",
+    "checks": [
+      [
+        "term",
+        "quota"
+      ]
+    ]
+  },
+  {
+    "id": "probe-pricing-openai-billing",
+    "category": "pricing",
+    "kind": "coverage",
+    "entity": "openai",
+    "q": "openai 的 billing 是多少？",
+    "checks": [
+      [
+        "term",
+        "billing"
+      ]
+    ]
+  },
+  {
+    "id": "probe-pricing-anthropic-billing",
+    "category": "pricing",
+    "kind": "coverage",
+    "entity": "anthropic",
+    "q": "anthropic 的 billing 是多少？",
+    "checks": [
+      [
+        "term",
+        "billing"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-google-cse-shutdown",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "google-cse",
+    "q": "google custom search 的 shutdown 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "shutdown"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-bing-migration",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "bing",
+    "q": "bing 的 migration 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "migration"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-bing-lifecycle",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "bing",
+    "q": "bing 的 lifecycle 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "lifecycle"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-bing-shutdown",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "bing",
+    "q": "bing 的 shutdown 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "shutdown"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-node-lts",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "node",
+    "q": "node.js 的 lts 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "lts"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-prisma-migration",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "prisma",
+    "q": "prisma 的 migration 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "migration"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-laravel-migration",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "laravel",
+    "q": "laravel 的 migration 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "migration"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-django-migration",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "django",
+    "q": "django 的 migration 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "migration"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-rails-migration",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "rails",
+    "q": "rails 的 migration 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "migration"
+      ]
+    ]
+  },
+  {
+    "id": "probe-version-git",
+    "category": "version",
+    "kind": "coverage",
+    "entity": "git",
+    "q": "git 的 版本控制 是什么版本信息？",
+    "checks": [
+      [
+        "term",
+        "版本控制"
+      ]
+    ]
+  },
+  {
+    "id": "probe-error-searxng-suspended",
+    "category": "error",
+    "kind": "coverage",
+    "entity": "searxng",
+    "q": "searxng 的 suspended 报错怎么处理？",
+    "checks": [
+      [
+        "term",
+        "suspended"
+      ]
+    ]
+  },
+  {
+    "id": "probe-error-searxng-429",
+    "category": "error",
+    "kind": "coverage",
+    "entity": "searxng",
+    "q": "searxng 的 429 报错怎么处理？",
+    "checks": [
+      [
+        "term",
+        "429"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-deepseek-qps",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "deepseek",
+    "q": "deepseek 的 qps 怎么用？",
+    "checks": [
+      [
+        "term",
+        "qps"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-google-cse-customers",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "google-cse",
+    "q": "google custom search 的 customers 怎么用？",
+    "checks": [
+      [
+        "term",
+        "customers"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-bing-retirement",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "bing",
+    "q": "bing 的 retirement 怎么用？",
+    "checks": [
+      [
+        "term",
+        "retirement"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-bing-grounding",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "bing",
+    "q": "bing 的 grounding 怎么用？",
+    "checks": [
+      [
+        "term",
+        "grounding"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-bing-search-api",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "bing",
+    "q": "bing 的 search api 怎么用？",
+    "checks": [
+      [
+        "term",
+        "search api"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-bing-2025",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "bing",
+    "q": "bing 的 2025 怎么用？",
+    "checks": [
+      [
+        "term",
+        "2025"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-python-asyncio",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "python",
+    "q": "python 的 asyncio 怎么用？",
+    "checks": [
+      [
+        "term",
+        "asyncio"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-python-async",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "python",
+    "q": "python 的 async 怎么用？",
+    "checks": [
+      [
+        "term",
+        "async"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-python-await",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "python",
+    "q": "python 的 await 怎么用？",
+    "checks": [
+      [
+        "term",
+        "await"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-python-gather",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "python",
+    "q": "python 的 gather 怎么用？",
+    "checks": [
+      [
+        "term",
+        "gather"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-python-loop",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "python",
+    "q": "python 的 loop 怎么用？",
+    "checks": [
+      [
+        "term",
+        "loop"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-python-whatsnew",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "python",
+    "q": "python 的 whatsnew 怎么用？",
+    "checks": [
+      [
+        "term",
+        "whatsnew"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-python-3-14",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "python",
+    "q": "python 的 3.14 怎么用？",
+    "checks": [
+      [
+        "term",
+        "3\\.14"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-node-http",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "node",
+    "q": "node.js 的 http 怎么用？",
+    "checks": [
+      [
+        "term",
+        "http"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-node-module",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "node",
+    "q": "node.js 的 module 怎么用？",
+    "checks": [
+      [
+        "term",
+        "module"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-node-file",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "node",
+    "q": "node.js 的 file 怎么用？",
+    "checks": [
+      [
+        "term",
+        "file"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-node-readfile",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "node",
+    "q": "node.js 的 readfile 怎么用？",
+    "checks": [
+      [
+        "term",
+        "readfile"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-node-stream",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "node",
+    "q": "node.js 的 stream 怎么用？",
+    "checks": [
+      [
+        "term",
+        "stream"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-node-download",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "node",
+    "q": "node.js 的 download 怎么用？",
+    "checks": [
+      [
+        "term",
+        "download"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-node-node",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "node",
+    "q": "node.js 的 node 怎么用？",
+    "checks": [
+      [
+        "term",
+        "node"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-rest",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 rest 怎么用？",
+    "checks": [
+      [
+        "term",
+        "rest"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-authentication",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 authentication 怎么用？",
+    "checks": [
+      [
+        "term",
+        "authentication"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-rate",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 rate 怎么用？",
+    "checks": [
+      [
+        "term",
+        "rate"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-endpoints",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 endpoints 怎么用？",
+    "checks": [
+      [
+        "term",
+        "endpoints"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-actions",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 actions 怎么用？",
+    "checks": [
+      [
+        "term",
+        "actions"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-workflow",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 workflow 怎么用？",
+    "checks": [
+      [
+        "term",
+        "workflow"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-runner",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 runner 怎么用？",
+    "checks": [
+      [
+        "term",
+        "runner"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-authorization",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 authorization 怎么用？",
+    "checks": [
+      [
+        "term",
+        "authorization"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-token",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 token 怎么用？",
+    "checks": [
+      [
+        "term",
+        "token"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-github-pull-request",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 的 pull request 怎么用？",
+    "checks": [
+      [
+        "term",
+        "pull request"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-javascript",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 javascript 怎么用？",
+    "checks": [
+      [
+        "term",
+        "javascript"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-reference",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 reference 怎么用？",
+    "checks": [
+      [
+        "term",
+        "reference"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-array",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 array 怎么用？",
+    "checks": [
+      [
+        "term",
+        "array"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-promise",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 promise 怎么用？",
+    "checks": [
+      [
+        "term",
+        "promise"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-fetch",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 fetch 怎么用？",
+    "checks": [
+      [
+        "term",
+        "fetch"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-then",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 then 怎么用？",
+    "checks": [
+      [
+        "term",
+        "then"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-catch",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 catch 怎么用？",
+    "checks": [
+      [
+        "term",
+        "catch"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-resolve",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 resolve 怎么用？",
+    "checks": [
+      [
+        "term",
+        "resolve"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-reject",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 reject 怎么用？",
+    "checks": [
+      [
+        "term",
+        "reject"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-css",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 css 怎么用？",
+    "checks": [
+      [
+        "term",
+        "css"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-html",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 html 怎么用？",
+    "checks": [
+      [
+        "term",
+        "html"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-web",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 web 怎么用？",
+    "checks": [
+      [
+        "term",
+        "web"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-mdn-dom",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "mdn",
+    "q": "mdn 的 dom 怎么用？",
+    "checks": [
+      [
+        "term",
+        "dom"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-react-hooks",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "react",
+    "q": "react 的 hooks 怎么用？",
+    "checks": [
+      [
+        "term",
+        "hooks"
+      ]
+    ]
+  },
+  {
+    "id": "probe-howto-react-usestate",
+    "category": "howto",
+    "kind": "coverage",
+    "entity": "react",
+    "q": "react 的 usestate 怎么用？",
+    "checks": [
+      [
+        "term",
+        "usestate"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-postgres-mysql",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "postgres",
+    "q": "postgres 和 mysql 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "postgres"
+      ],
+      [
+        "right",
+        "mysql"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-react-vue",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "react",
+    "q": "react 和 vue 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "react"
+      ],
+      [
+        "right",
+        "vue"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-docker-kubernetes",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "docker",
+    "q": "docker 和 kubernetes 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "docker"
+      ],
+      [
+        "right",
+        "kubernetes"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-node-python",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "node",
+    "q": "node.js 和 python 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "node\\.js"
+      ],
+      [
+        "right",
+        "python"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-rust-go",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "rust",
+    "q": "rust 和 golang 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "rust"
+      ],
+      [
+        "right",
+        "golang"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-redis-mongodb",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "redis",
+    "q": "redis 和 mongodb 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "redis"
+      ],
+      [
+        "right",
+        "mongodb"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-nginx-openresty",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "nginx",
+    "q": "nginx 和 openresty 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "nginx"
+      ],
+      [
+        "right",
+        "openresty"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-github-gitee",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "github",
+    "q": "github 和 gitee 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "github"
+      ],
+      [
+        "right",
+        "gitee"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-aws-azure",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "aws",
+    "q": "aws 和 azure 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "aws"
+      ],
+      [
+        "right",
+        "azure"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-gcp-azure",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "gcp",
+    "q": "gcp 和 azure 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "gcp"
+      ],
+      [
+        "right",
+        "azure"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-deepseek-qwen",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "deepseek",
+    "q": "deepseek 和 qwen 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "deepseek"
+      ],
+      [
+        "right",
+        "qwen"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-openai-anthropic",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "openai",
+    "q": "openai 和 anthropic 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "openai"
+      ],
+      [
+        "right",
+        "anthropic"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-mistral-ollama",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "mistral",
+    "q": "mistral 和 ollama 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "mistral"
+      ],
+      [
+        "right",
+        "ollama"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-huggingface-langchain",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "huggingface",
+    "q": "huggingface 和 langchain 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "huggingface"
+      ],
+      [
+        "right",
+        "langchain"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-prometheus-grafana",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "prometheus",
+    "q": "prometheus 和 grafana 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "prometheus"
+      ],
+      [
+        "right",
+        "grafana"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-angular-svelte",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "angular",
+    "q": "angular 和 svelte 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "angular"
+      ],
+      [
+        "right",
+        "svelte"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-jest-vitest",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "jest",
+    "q": "jest 和 vitest 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "jest"
+      ],
+      [
+        "right",
+        "vitest"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-cypress-playwright",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "cypress",
+    "q": "cypress 和 playwright 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "cypress"
+      ],
+      [
+        "right",
+        "playwright"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-flask-django",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "flask",
+    "q": "flask 和 django 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "flask"
+      ],
+      [
+        "right",
+        "django"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-express-fastapi",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "express",
+    "q": "express 和 fastapi 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "express"
+      ],
+      [
+        "right",
+        "fastapi"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-helm-argocd",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "helm",
+    "q": "helm 和 argo cd 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "helm"
+      ],
+      [
+        "right",
+        "argo cd"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-ansible-terraform",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "ansible",
+    "q": "ansible 和 terraform 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "ansible"
+      ],
+      [
+        "right",
+        "terraform"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-mysql-mongodb",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "mysql",
+    "q": "mysql 和 mongodb 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "mysql"
+      ],
+      [
+        "right",
+        "mongodb"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-elasticsearch-sqlite",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "elasticsearch",
+    "q": "elasticsearch 和 sqlite 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "elasticsearch"
+      ],
+      [
+        "right",
+        "sqlite"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-npm-pnpm",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "npm",
+    "q": "npm 和 pnpm 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "npm"
+      ],
+      [
+        "right",
+        "pnpm"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-eslint-vitest",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "eslint",
+    "q": "eslint 和 vitest 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "eslint"
+      ],
+      [
+        "right",
+        "vitest"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-tailwind-antd",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "tailwind",
+    "q": "tailwind 和 antd 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "tailwind"
+      ],
+      [
+        "right",
+        "antd"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-bun-deno",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "bun",
+    "q": "bun 和 deno 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "bun"
+      ],
+      [
+        "right",
+        "deno"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-java-dotnet",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "java",
+    "q": "java 和 dotnet 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "java"
+      ],
+      [
+        "right",
+        "dotnet"
+      ]
+    ]
+  },
+  {
+    "id": "probe-compare-ruby-scala",
+    "category": "compare",
+    "kind": "coverage",
+    "entity": "ruby",
+    "q": "ruby 和 scala 有什么区别？",
+    "checks": [
+      [
+        "left",
+        "ruby"
+      ],
+      [
+        "right",
+        "scala"
+      ]
+    ]
+  }
+]

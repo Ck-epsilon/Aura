@@ -1,0 +1,156 @@
+{
+  "at": "2026-10-23T20:13:09.213Z",
+  "questions": 4,
+  "passed": 4,
+  "rate": 1,
+  "minRate": 0.9,
+  "p50": 75,
+  "p95": 120,
+  "failures": [],
+  "rows": [
+    {
+      "id": "heldout-docker-healthcheck",
+      "q": "Docker Compose 的 healthcheck 怎么写？",
+      "ms": 75,
+      "mode": "registry",
+      "entity": "docker",
+      "note": "deep-index",
+      "sources": 6,
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true
+        },
+        {
+          "name": "mode",
+          "ok": true
+        },
+        {
+          "name": "sources",
+          "ok": true
+        },
+        {
+          "name": "healthcheck",
+          "ok": true
+        },
+        {
+          "name": "test",
+          "ok": true
+        },
+        {
+          "name": "citations",
+          "ok": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "heldout-ts-satisfies",
+      "q": "TypeScript 的 satisfies 运算符怎么用？",
+      "ms": 120,
+      "mode": "registry",
+      "entity": "typescript",
+      "note": "deep-index",
+      "sources": 3,
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true
+        },
+        {
+          "name": "mode",
+          "ok": true
+        },
+        {
+          "name": "sources",
+          "ok": true
+        },
+        {
+          "name": "satisfies",
+          "ok": true
+        },
+        {
+          "name": "operator",
+          "ok": true
+        },
+        {
+          "name": "citations",
+          "ok": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "heldout-k8s-liveness",
+      "q": "Kubernetes 的 livenessProbe 怎么配置？",
+      "ms": 108,
+      "mode": "registry",
+      "entity": "kubernetes",
+      "note": "deep-index",
+      "sources": 5,
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true
+        },
+        {
+          "name": "mode",
+          "ok": true
+        },
+        {
+          "name": "sources",
+          "ok": true
+        },
+        {
+          "name": "probe",
+          "ok": true
+        },
+        {
+          "name": "handler",
+          "ok": true
+        },
+        {
+          "name": "citations",
+          "ok": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "heldout-nginx-proxy",
+      "q": "Nginx 的 proxy_pass 怎么配置？",
+      "ms": 70,
+      "mode": "registry",
+      "entity": "nginx",
+      "note": "deep-index",
+      "sources": 6,
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true
+        },
+        {
+          "name": "mode",
+          "ok": true
+        },
+        {
+          "name": "sources",
+          "ok": true
+        },
+        {
+          "name": "proxy_pass",
+          "ok": true
+        },
+        {
+          "name": "location",
+          "ok": true
+        },
+        {
+          "name": "citations",
+          "ok": true
+        }
+      ],
+      "error": null
+    }
+  ]
+}

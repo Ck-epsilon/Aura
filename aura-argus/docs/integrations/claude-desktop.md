@@ -10,7 +10,7 @@ Claude Desktop supports stdio MCP servers. Edit `claude_desktop_config.json`:
   "mcpServers": {
     "aura-argus": {
       "command": "npx",
-      "args": ["-y", "aura-argus", "mcp"]
+      "args": ["-y", "aura-argus", "aura_argus_mcp"]
     }
   }
 }
@@ -23,7 +23,7 @@ Windows fallback if `npx` is not spawned correctly:
   "mcpServers": {
     "aura-argus": {
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "aura-argus", "mcp"]
+      "args": ["/c", "npx", "-y", "aura-argus", "aura_argus_mcp"]
     }
   }
 }

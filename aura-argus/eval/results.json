@@ -1,0 +1,5516 @@
+{
+  "at": "2026-10-23T20:13:01.883Z",
+  "questions": 74,
+  "hard": {
+    "passed": 361,
+    "total": 361
+  },
+  "soft": {
+    "passed": 2,
+    "total": 2
+  },
+  "latency": {
+    "p50": 1035,
+    "p95": 2408,
+    "p99": 3005,
+    "mean": 1103
+  },
+  "avgChars": 4036,
+  "avgSources": 1.78,
+  "avgConfidence": 0.86,
+  "avgFacetRatio": 0.89,
+  "indexHits": 0,
+  "failures": [],
+  "rows": [
+    {
+      "id": "deepseek-price",
+      "q": "DeepSeek 的 Search API 每次成功请求多少钱？QPS 上限是多少？",
+      "soft": false,
+      "entity": "deepseek",
+      "entities": [
+        "deepseek"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://api-docs.deepseek.com/guides/search/",
+        "https://api-docs.deepseek.com/quick_start/pricing/"
+      ],
+      "ms": 621,
+      "chars": 6289,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "successful",
+          "deepseek",
+          "requests",
+          "pricing",
+          "search",
+          "price",
+          "limit",
+          "qps"
+        ],
+        "covered": [
+          "successful",
+          "deepseek",
+          "requests",
+          "pricing",
+          "search",
+          "price",
+          "limit",
+          "qps"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 612,
+        "extractMs": 3,
+        "selectMs": 7,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 617
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got deepseek"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "price",
+          "ok": true,
+          "detail": "\\$0\\.75"
+        },
+        {
+          "name": "qps",
+          "ok": true,
+          "detail": "\\b100\\b"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "decompose-price-qps",
+      "q": "DeepSeek 的 Search API 每次成功请求多少钱？QPS 上限是多少？",
+      "soft": false,
+      "entity": "deepseek",
+      "entities": [
+        "deepseek"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://api-docs.deepseek.com/guides/search/",
+        "https://api-docs.deepseek.com/quick_start/pricing/"
+      ],
+      "ms": 402,
+      "chars": 9086,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "successful",
+          "deepseek",
+          "requests",
+          "pricing",
+          "search",
+          "price",
+          "limit",
+          "qps"
+        ],
+        "covered": [
+          "successful",
+          "deepseek",
+          "requests",
+          "pricing",
+          "search",
+          "price",
+          "limit",
+          "qps"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 399,
+        "extractMs": 1,
+        "selectMs": 6,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "decomposeMs": 401,
+        "totalMs": 402
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got deepseek"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "plan",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "price",
+          "ok": true,
+          "detail": "\\$0\\.75"
+        },
+        {
+          "name": "qps",
+          "ok": true,
+          "detail": "\\b100\\b"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "deepseek-price-en",
+      "q": "How much does the DeepSeek search API cost per request?",
+      "soft": false,
+      "entity": "deepseek",
+      "entities": [
+        "deepseek"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://api-docs.deepseek.com/quick_start/pricing/",
+        "https://api-docs.deepseek.com/guides/search/"
+      ],
+      "ms": 343,
+      "chars": 5881,
+      "confidence": {
+        "score": 0.89,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "deepseek",
+          "request",
+          "search",
+          "cost",
+          "per"
+        ],
+        "covered": [
+          "deepseek",
+          "request",
+          "search",
+          "per"
+        ],
+        "missing": [
+          "cost"
+        ],
+        "ratio": 0.8
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 333,
+        "extractMs": 1,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 333
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got deepseek"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "price",
+          "ok": true,
+          "detail": "0\\.75"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "searxng-429",
+      "q": "SearXNG 对 429 的冷却时间是多少秒？",
+      "soft": false,
+      "entity": "searxng",
+      "entities": [
+        "searxng"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.searxng.org/admin/settings/settings_search.html"
+      ],
+      "ms": 592,
+      "chars": 2276,
+      "confidence": {
+        "score": 0.74,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "suspended",
+          "searxng",
+          "timeout",
+          "seconds",
+          "time"
+        ],
+        "covered": [
+          "suspended",
+          "searxng",
+          "seconds",
+          "time"
+        ],
+        "missing": [
+          "timeout"
+        ],
+        "ratio": 0.8
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 588,
+        "extractMs": 2,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 591
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got searxng"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "seconds",
+          "ok": true,
+          "detail": "3600"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "searxng-json",
+      "q": "SearXNG 默认会不会输出 JSON？要在配置里改哪里？",
+      "soft": false,
+      "entity": "searxng",
+      "entities": [
+        "searxng"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.searxng.org/dev/search_api.html",
+        "https://docs.searxng.org/admin/settings/settings_search.html"
+      ],
+      "ms": 169,
+      "chars": 4170,
+      "confidence": {
+        "score": 0.96,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "searxng",
+          "default",
+          "output",
+          "json"
+        ],
+        "covered": [
+          "searxng",
+          "default",
+          "output",
+          "json"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 169,
+        "extractMs": 2,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 169
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got searxng"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "formats",
+          "ok": true,
+          "detail": "formats"
+        },
+        {
+          "name": "json",
+          "ok": true,
+          "detail": "json"
+        },
+        {
+          "name": "html",
+          "ok": true,
+          "detail": "html"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "tavily-price",
+      "q": "Tavily 一个 credit 多少钱？免费计划每月给多少 credit？",
+      "soft": false,
+      "entity": "tavily",
+      "entities": [
+        "tavily"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.tavily.com/documentation/api-credits",
+        "https://docs.tavily.com/",
+        "https://www.tavily.com/pricing"
+      ],
+      "ms": 2835,
+      "chars": 6338,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "pricing",
+          "tavily",
+          "credit",
+          "price",
+          "free"
+        ],
+        "covered": [
+          "pricing",
+          "tavily",
+          "credit",
+          "price",
+          "free"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 2553,
+        "extractMs": 8,
+        "selectMs": 5,
+        "followMs": 278,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 2834
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got tavily"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "price",
+          "ok": true,
+          "detail": "0\\.008"
+        },
+        {
+          "name": "free",
+          "ok": true,
+          "detail": "1,000"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "google-cse",
+      "q": "Google Custom Search JSON API 还能给新客户用吗？什么时候停服？",
+      "soft": false,
+      "entity": "google-cse",
+      "entities": [
+        "google-cse"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://developers.google.cn/custom-search/v1/overview?hl=zh-cn"
+      ],
+      "ms": 1629,
+      "chars": 1594,
+      "confidence": {
+        "score": 0.63,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "google-cse",
+          "retirement",
+          "customers",
+          "shutdown",
+          "google",
+          "custom",
+          "search",
+          "json"
+        ],
+        "covered": [
+          "google",
+          "custom",
+          "search",
+          "json"
+        ],
+        "missing": [
+          "google-cse",
+          "retirement",
+          "customers",
+          "shutdown"
+        ],
+        "ratio": 0.5
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1626,
+        "extractMs": 0,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1627
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got google-cse"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "shutdown",
+          "ok": true,
+          "detail": "2027"
+        },
+        {
+          "name": "closed",
+          "ok": true,
+          "detail": "新客户|closed"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "bing-retire",
+      "q": "Bing Search API 是哪一天退役的？微软建议迁移到什么替代产品？",
+      "soft": false,
+      "entity": "bing",
+      "entities": [
+        "bing"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement"
+      ],
+      "ms": 1219,
+      "chars": 1099,
+      "confidence": {
+        "score": 0.63,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "retirement",
+          "migration",
+          "search",
+          "bing"
+        ],
+        "covered": [
+          "search",
+          "bing"
+        ],
+        "missing": [
+          "retirement",
+          "migration"
+        ],
+        "ratio": 0.5
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1219,
+        "extractMs": 0,
+        "selectMs": 1,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1219
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got bing"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "date",
+          "ok": true,
+          "detail": "2025"
+        },
+        {
+          "name": "replacement",
+          "ok": true,
+          "detail": "Grounding with Bing"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "bing-retire-en",
+      "q": "When was the Bing Search API retired?",
+      "soft": false,
+      "entity": "bing",
+      "entities": [
+        "bing"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement"
+      ],
+      "ms": 221,
+      "chars": 1099,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "retired",
+          "search",
+          "bing"
+        ],
+        "covered": [
+          "retired",
+          "search",
+          "bing"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 218,
+        "extractMs": 1,
+        "selectMs": 0,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 221
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got bing"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "date",
+          "ok": true,
+          "detail": "2025"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "python-asyncio",
+      "q": "Python asyncio 的 gather 怎么用？",
+      "soft": false,
+      "entity": "python",
+      "entities": [
+        "python"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.python.org/3/library/asyncio-task.html",
+        "https://docs.python.org/3/whatsnew/3.14.html",
+        "https://docs.python.org/3/library/asyncio.html"
+      ],
+      "ms": 1035,
+      "chars": 7817,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "asyncio",
+          "python",
+          "gather"
+        ],
+        "covered": [
+          "asyncio",
+          "python",
+          "gather"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1033,
+        "extractMs": 24,
+        "selectMs": 22,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1035
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got python"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "gather",
+          "ok": true,
+          "detail": "gather"
+        },
+        {
+          "name": "await",
+          "ok": true,
+          "detail": "await|coroutine"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "python-314",
+      "q": "Python 3.14 有哪些新特性？",
+      "soft": false,
+      "entity": "python",
+      "entities": [
+        "python"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.python.org/3/whatsnew/3.14.html",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "ms": 406,
+      "chars": 3296,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "release",
+          "python",
+          "notes",
+          "3.14"
+        ],
+        "covered": [
+          "release",
+          "python",
+          "notes",
+          "3.14"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 405,
+        "extractMs": 23,
+        "selectMs": 22,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 406
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got python"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "version",
+          "ok": true,
+          "detail": "3\\.14"
+        },
+        {
+          "name": "whatsnew",
+          "ok": true,
+          "detail": "what'?s new|release"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "node-http",
+      "q": "Node.js 怎么用 http 模块创建服务器？",
+      "soft": false,
+      "entity": "node",
+      "entities": [
+        "node"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://nodejs.org/api/http.html"
+      ],
+      "ms": 1199,
+      "chars": 4032,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "createserver",
+          "node.js",
+          "create",
+          "node",
+          "http"
+        ],
+        "covered": [
+          "createserver",
+          "node.js",
+          "create",
+          "node",
+          "http"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1199,
+        "extractMs": 44,
+        "selectMs": 66,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1199
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got node"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "createServer",
+          "ok": true,
+          "detail": "createServer"
+        },
+        {
+          "name": "http",
+          "ok": true,
+          "detail": "http"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "node-fs",
+      "q": "Node.js fs 模块怎么读文件？",
+      "soft": false,
+      "entity": "node",
+      "entities": [
+        "node"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://nodejs.org/api/fs.html",
+        "https://nodejs.org/api/http.html"
+      ],
+      "ms": 457,
+      "chars": 5321,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "readfile",
+          "node.js",
+          "node"
+        ],
+        "covered": [
+          "readfile",
+          "node.js",
+          "node"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 456,
+        "extractMs": 42,
+        "selectMs": 57,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 457
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got node"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "readFile",
+          "ok": true,
+          "detail": "readFile"
+        },
+        {
+          "name": "fs",
+          "ok": true,
+          "detail": "fs"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "github-rest",
+      "q": "GitHub REST API 怎么做认证？",
+      "soft": false,
+      "entity": "github",
+      "entities": [
+        "github"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api",
+        "https://docs.github.com/en/rest"
+      ],
+      "ms": 917,
+      "chars": 5781,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "authentication",
+          "github",
+          "rest"
+        ],
+        "covered": [
+          "authentication",
+          "github",
+          "rest"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 916,
+        "extractMs": 5,
+        "selectMs": 5,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 917
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got github"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "auth",
+          "ok": true,
+          "detail": "authentication|authorization"
+        },
+        {
+          "name": "token",
+          "ok": true,
+          "detail": "token"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "github-actions",
+      "q": "GitHub Actions 的 workflow 文件放在哪里？",
+      "soft": false,
+      "entity": "github",
+      "entities": [
+        "github"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.github.com/en/actions"
+      ],
+      "ms": 169,
+      "chars": 2297,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "workflow",
+          "actions",
+          "github"
+        ],
+        "covered": [
+          "workflow",
+          "actions",
+          "github"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 169,
+        "extractMs": 2,
+        "selectMs": 1,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 169
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got github"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "workflow",
+          "ok": true,
+          "detail": "workflow"
+        },
+        {
+          "name": "path",
+          "ok": true,
+          "detail": "workflows|\\.github"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "mdn-promise",
+      "q": "MDN 的 JavaScript Promise 文档在哪里？",
+      "soft": false,
+      "entity": "mdn",
+      "entities": [
+        "mdn"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise"
+      ],
+      "ms": 1122,
+      "chars": 4549,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "javascript",
+          "promise",
+          "mdn"
+        ],
+        "covered": [
+          "javascript",
+          "promise",
+          "mdn"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1121,
+        "extractMs": 5,
+        "selectMs": 6,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1122
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got mdn"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "promise",
+          "ok": true,
+          "detail": "Promise"
+        },
+        {
+          "name": "then",
+          "ok": true,
+          "detail": "then"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "react-usestate",
+      "q": "React 的 useState 怎么用？",
+      "soft": false,
+      "entity": "react",
+      "entities": [
+        "react"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://react.dev/reference/react/useState"
+      ],
+      "ms": 969,
+      "chars": 2338,
+      "confidence": {
+        "score": 0.86,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "usestate",
+          "react"
+        ],
+        "covered": [
+          "usestate",
+          "react"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 968,
+        "extractMs": 6,
+        "selectMs": 3,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 969
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got react"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "useState",
+          "ok": true,
+          "detail": "useState"
+        },
+        {
+          "name": "hook",
+          "ok": true,
+          "detail": "hook"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "vue-reactivity",
+      "q": "Vue 的响应式原理是什么？",
+      "soft": false,
+      "entity": "vue",
+      "entities": [
+        "vue"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://vuejs.org/guide/essentials/reactivity-fundamentals.html"
+      ],
+      "ms": 871,
+      "chars": 3006,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "reactivity",
+          "reactive",
+          "vue"
+        ],
+        "covered": [
+          "reactivity",
+          "reactive",
+          "vue"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 870,
+        "extractMs": 2,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 870
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got vue"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "reactivity",
+          "ok": true,
+          "detail": "reactiv"
+        },
+        {
+          "name": "ref",
+          "ok": true,
+          "detail": "ref|effect"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "rust-ownership",
+      "q": "Rust 的 ownership 规则是什么？",
+      "soft": false,
+      "entity": "rust",
+      "entities": [
+        "rust"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html",
+        "https://doc.rust-lang.org/book/"
+      ],
+      "ms": 710,
+      "chars": 4353,
+      "confidence": {
+        "score": 0.99,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "ownership",
+          "rust"
+        ],
+        "covered": [
+          "ownership",
+          "rust"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 708,
+        "extractMs": 2,
+        "selectMs": 3,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 710
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got rust"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "ownership",
+          "ok": true,
+          "detail": "ownership"
+        },
+        {
+          "name": "rules",
+          "ok": true,
+          "detail": "rule|scope|memory"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "go-module",
+      "q": "Go 的 module 怎么初始化？",
+      "soft": false,
+      "entity": "go",
+      "entities": [
+        "go"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://go.dev/doc/"
+      ],
+      "ms": 1112,
+      "chars": 1752,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "go"
+        ],
+        "covered": [
+          "go"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1112,
+        "extractMs": 1,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1112
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got go"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "mod",
+          "ok": true,
+          "detail": "go mod|go\\.mod"
+        },
+        {
+          "name": "module",
+          "ok": true,
+          "detail": "module"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "docker-install",
+      "q": "Docker Engine 怎么安装？",
+      "soft": false,
+      "entity": "docker",
+      "entities": [
+        "docker"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.docker.com/engine/install/"
+      ],
+      "ms": 801,
+      "chars": 1780,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "docker",
+          "engine"
+        ],
+        "covered": [
+          "docker",
+          "engine"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 800,
+        "extractMs": 0,
+        "selectMs": 1,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 800
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got docker"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "engine",
+          "ok": true,
+          "detail": "Docker Engine"
+        },
+        {
+          "name": "install",
+          "ok": true,
+          "detail": "install"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "postgres-table",
+      "q": "PostgreSQL 怎么创建表？",
+      "soft": false,
+      "entity": "postgres",
+      "entities": [
+        "postgres"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://www.postgresql.org/docs/current/sql-createtable.html",
+        "https://www.postgresql.org/docs/current/transaction-iso.html"
+      ],
+      "ms": 1404,
+      "chars": 5463,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "postgresql",
+          "postgres",
+          "create",
+          "table"
+        ],
+        "covered": [
+          "postgresql",
+          "postgres",
+          "create",
+          "table"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1403,
+        "extractMs": 8,
+        "selectMs": 8,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1404
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got postgres"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "create",
+          "ok": true,
+          "detail": "CREATE TABLE"
+        },
+        {
+          "name": "postgres",
+          "ok": true,
+          "detail": "postgres"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "nginx-config",
+      "q": "nginx 的配置文件结构是怎样的？",
+      "soft": false,
+      "entity": "nginx",
+      "entities": [
+        "nginx"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://nginx.org/en/docs/"
+      ],
+      "ms": 1127,
+      "chars": 2508,
+      "confidence": {
+        "score": 0.78,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "nginx"
+        ],
+        "covered": [
+          "nginx"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1126,
+        "extractMs": 1,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1127
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got nginx"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "directive",
+          "ok": true,
+          "detail": "directive|configuration"
+        },
+        {
+          "name": "nginx",
+          "ok": true,
+          "detail": "nginx"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "k8s-pod",
+      "q": "Kubernetes 的 Pod 是什么？",
+      "soft": false,
+      "entity": "kubernetes",
+      "entities": [
+        "kubernetes"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://kubernetes.io/docs/home/"
+      ],
+      "ms": 1132,
+      "chars": 2282,
+      "confidence": {
+        "score": 0.77,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "kubernetes",
+          "pod"
+        ],
+        "covered": [
+          "kubernetes",
+          "pod"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1130,
+        "extractMs": 3,
+        "selectMs": 1,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1131
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got kubernetes"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "pod",
+          "ok": true,
+          "detail": "Pod"
+        },
+        {
+          "name": "container",
+          "ok": true,
+          "detail": "kubectl|container"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "redis-commands",
+      "q": "Redis 的常用命令有哪些？",
+      "soft": false,
+      "entity": "redis",
+      "entities": [
+        "redis"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://redis.io/docs/latest/commands/set/",
+        "https://redis.io/docs/latest/commands/"
+      ],
+      "ms": 1173,
+      "chars": 5428,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "commands",
+          "redis"
+        ],
+        "covered": [
+          "commands",
+          "redis"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1173,
+        "extractMs": 29,
+        "selectMs": 21,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1173
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got redis"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "command",
+          "ok": true,
+          "detail": "command"
+        },
+        {
+          "name": "set",
+          "ok": true,
+          "detail": "SET|GET"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "alias-deepseek",
+      "q": "深度求索的搜索 API 价格",
+      "soft": false,
+      "entity": "deepseek",
+      "entities": [
+        "deepseek"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://api-docs.deepseek.com/quick_start/pricing/",
+        "https://api-docs.deepseek.com/guides/search/"
+      ],
+      "ms": 505,
+      "chars": 5708,
+      "confidence": {
+        "score": 0.94,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "deepseek",
+          "pricing",
+          "price"
+        ],
+        "covered": [
+          "deepseek",
+          "pricing",
+          "price"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 503,
+        "extractMs": 2,
+        "selectMs": 4,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 504
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got deepseek"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "price",
+          "ok": true,
+          "detail": "0\\.75|5 元"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "alias-node",
+      "q": "nodejs 怎么创建 http server",
+      "soft": false,
+      "entity": "node",
+      "entities": [
+        "node"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://nodejs.org/api/http.html",
+        "https://nodejs.org/en/about/previous-releases"
+      ],
+      "ms": 1019,
+      "chars": 4837,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "nodejs",
+          "create",
+          "node",
+          "http"
+        ],
+        "covered": [
+          "nodejs",
+          "create",
+          "node",
+          "http"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1016,
+        "extractMs": 44,
+        "selectMs": 47,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1017
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got node"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "createServer",
+          "ok": true,
+          "detail": "createServer|http"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "alias-go",
+      "q": "golang 的 go.mod 是什么",
+      "soft": false,
+      "entity": "go",
+      "entities": [
+        "go"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://go.dev/doc/"
+      ],
+      "ms": 776,
+      "chars": 961,
+      "confidence": {
+        "score": 0.82,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "golang",
+          "go.mod",
+          "go"
+        ],
+        "covered": [
+          "golang",
+          "go.mod",
+          "go"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 2,
+        "fetchMs": 773,
+        "extractMs": 1,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 776
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got go"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "mod",
+          "ok": true,
+          "detail": "go\\.mod|module"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "alias-k8s",
+      "q": "k8s 的 deployment 怎么滚动更新",
+      "soft": false,
+      "entity": "kubernetes",
+      "entities": [
+        "kubernetes"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://kubernetes.io/docs/home/"
+      ],
+      "ms": 567,
+      "chars": 572,
+      "confidence": {
+        "score": 0.6,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "kubernetes",
+          "deployment",
+          "rolling",
+          "update",
+          "k8s"
+        ],
+        "covered": [
+          "kubernetes",
+          "deployment",
+          "k8s"
+        ],
+        "missing": [
+          "rolling",
+          "update"
+        ],
+        "ratio": 0.6
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 564,
+        "extractMs": 2,
+        "selectMs": 0,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 566
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got kubernetes"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "deployment",
+          "ok": true,
+          "detail": "deployment|rollout"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "alias-bing",
+      "q": "必应搜索 API 退役时间",
+      "soft": false,
+      "entity": "bing",
+      "entities": [
+        "bing"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement"
+      ],
+      "ms": 1357,
+      "chars": 935,
+      "confidence": {
+        "score": 0.57,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "retirement",
+          "bing",
+          "time"
+        ],
+        "covered": [
+          "bing",
+          "time"
+        ],
+        "missing": [
+          "retirement"
+        ],
+        "ratio": 0.667
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1357,
+        "extractMs": 0,
+        "selectMs": 1,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1357
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got bing"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "date",
+          "ok": true,
+          "detail": "2025"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "aliyun-ecs",
+      "q": "阿里云 ECS 的实例规格怎么选？",
+      "soft": false,
+      "entity": "aliyun",
+      "entities": [
+        "aliyun"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://help.aliyun.com/zh/ecs/user-guide/instance-specification-naming-and-classification",
+        "https://help.aliyun.com/zh/ecs/"
+      ],
+      "ms": 733,
+      "chars": 3342,
+      "confidence": {
+        "score": 0.74,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "specification",
+          "instance",
+          "aliyun",
+          "ecs"
+        ],
+        "covered": [
+          "instance",
+          "aliyun",
+          "ecs"
+        ],
+        "missing": [
+          "specification"
+        ],
+        "ratio": 0.75
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 369,
+        "extractMs": 6,
+        "selectMs": 6,
+        "followMs": 358,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 732
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got aliyun"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "ecs",
+          "ok": true,
+          "detail": "ECS|ecs"
+        },
+        {
+          "name": "spec",
+          "ok": true,
+          "detail": "实例规格|规格族|选型|instance type|instance family"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "wechat-phone",
+      "q": "微信小程序怎么获取用户手机号？",
+      "soft": false,
+      "entity": "wechat-miniprogram",
+      "entities": [
+        "wechat-miniprogram"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/getPhoneNumber.html",
+        "https://developers.weixin.qq.com/miniprogram/dev/api/"
+      ],
+      "ms": 367,
+      "chars": 3892,
+      "confidence": {
+        "score": 0.74,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "wechat-miniprogram",
+          "number",
+          "phone"
+        ],
+        "covered": [
+          "number",
+          "phone"
+        ],
+        "missing": [
+          "wechat-miniprogram"
+        ],
+        "ratio": 0.667
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 345,
+        "extractMs": 13,
+        "selectMs": 17,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 367
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got wechat-miniprogram"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "phone",
+          "ok": true,
+          "detail": "手机号"
+        },
+        {
+          "name": "api",
+          "ok": true,
+          "detail": "getPhoneNumber|getphonenumber|open-type"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "qwen-price",
+      "q": "通义千问 API 怎么计费？",
+      "soft": false,
+      "entity": "qwen",
+      "entities": [
+        "qwen"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://help.aliyun.com/zh/model-studio/model-pricing",
+        "https://help.aliyun.com/zh/model-studio/what-is-model-studio",
+        "https://help.aliyun.com/zh/model-studio/models"
+      ],
+      "ms": 863,
+      "chars": 5919,
+      "confidence": {
+        "score": 0.98,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "billing",
+          "pricing",
+          "qwen"
+        ],
+        "covered": [
+          "billing",
+          "pricing",
+          "qwen"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 862,
+        "extractMs": 23,
+        "selectMs": 21,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 863
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got qwen"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "price",
+          "ok": true,
+          "detail": "计费|价格"
+        },
+        {
+          "name": "qwen",
+          "ok": true,
+          "detail": "千问|qwen"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "kimi-price",
+      "q": "Kimi API 的价格是多少？",
+      "soft": false,
+      "entity": "moonshot",
+      "entities": [
+        "moonshot"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://platform.kimi.com/docs/get-api-key",
+        "https://platform.kimi.com/docs/pricing/chat",
+        "https://platform.kimi.com/docs/pricing/batch"
+      ],
+      "ms": 1488,
+      "chars": 4279,
+      "confidence": {
+        "score": 0.73,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "moonshot",
+          "pricing",
+          "price",
+          "kimi"
+        ],
+        "covered": [
+          "moonshot",
+          "kimi"
+        ],
+        "missing": [
+          "pricing",
+          "price"
+        ],
+        "ratio": 0.5
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1156,
+        "extractMs": 6,
+        "selectMs": 3,
+        "followMs": 327,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1487
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got moonshot"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "price",
+          "ok": true,
+          "detail": "价格|计费|token"
+        },
+        {
+          "name": "kimi",
+          "ok": true,
+          "detail": "Kimi|kimi"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "hunyuan-price",
+      "q": "腾讯混元 API 的价格是多少？",
+      "soft": false,
+      "entity": "tencent-cloud",
+      "entities": [
+        "tencent-cloud"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://cloud.tencent.com/document/product/1729",
+        "https://cloud.tencent.com/document/product/1729/97731"
+      ],
+      "ms": 663,
+      "chars": 2921,
+      "confidence": {
+        "score": 0.43,
+        "label": "low"
+      },
+      "facets": {
+        "terms": [
+          "tencent-cloud",
+          "pricing",
+          "price"
+        ],
+        "covered": [],
+        "missing": [
+          "tencent-cloud",
+          "pricing",
+          "price"
+        ],
+        "ratio": 0
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 659,
+        "extractMs": 4,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 662
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got tencent-cloud"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "price",
+          "ok": true,
+          "detail": "价格|计费"
+        },
+        {
+          "name": "hunyuan",
+          "ok": true,
+          "detail": "混元|hunyuan"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "antd-table",
+      "q": "Ant Design 的 Table 组件怎么分页？",
+      "soft": false,
+      "entity": "antd",
+      "entities": [
+        "antd"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://ant.design/components/overview-cn/",
+        "https://ant.design/components/table-cn/",
+        "https://ant.design/docs/react/introduce-cn/"
+      ],
+      "ms": 1689,
+      "chars": 5009,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "pagination",
+          "design",
+          "table",
+          "antd",
+          "ant"
+        ],
+        "covered": [
+          "pagination",
+          "design",
+          "table",
+          "antd",
+          "ant"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 1688,
+        "extractMs": 23,
+        "selectMs": 9,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1689
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got antd"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "table",
+          "ok": true,
+          "detail": "Table|表格"
+        },
+        {
+          "name": "pagination",
+          "ok": true,
+          "detail": "分页|pagination"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "spring-datasource",
+      "q": "Spring Boot 怎么配置数据源？",
+      "soft": false,
+      "entity": "spring-boot",
+      "entities": [
+        "spring-boot"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.spring.io/spring-boot/how-to/data-access.html",
+        "https://docs.spring.io/spring-boot/reference/data/sql.html",
+        "https://docs.spring.io/spring-boot/"
+      ],
+      "ms": 1003,
+      "chars": 9129,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "spring-boot",
+          "datasource",
+          "spring",
+          "boot"
+        ],
+        "covered": [
+          "spring-boot",
+          "datasource",
+          "spring",
+          "boot"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 1002,
+        "extractMs": 9,
+        "selectMs": 11,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1003
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got spring-boot"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "datasource",
+          "ok": true,
+          "detail": "数据源|DataSource|datasource"
+        },
+        {
+          "name": "jdbc",
+          "ok": true,
+          "detail": "JDBC|jdbc|JPA|jpa"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "mysql-innodb",
+      "q": "MySQL InnoDB 的事务隔离级别有哪些？",
+      "soft": false,
+      "entity": "mysql",
+      "entities": [
+        "mysql"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://dev.mysql.com/doc/refman/8.4/en/",
+        "https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html"
+      ],
+      "ms": 1067,
+      "chars": 4622,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "transaction",
+          "isolation",
+          "innodb",
+          "mysql",
+          "level"
+        ],
+        "covered": [
+          "transaction",
+          "isolation",
+          "innodb",
+          "mysql",
+          "level"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1067,
+        "extractMs": 9,
+        "selectMs": 19,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1067
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got mysql"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "isolation",
+          "ok": true,
+          "detail": "隔离级别|isolation"
+        },
+        {
+          "name": "innodb",
+          "ok": true,
+          "detail": "InnoDB|innodb"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "multi-isolation",
+      "q": "PostgreSQL 和 MySQL 的事务隔离级别有什么区别？",
+      "soft": false,
+      "entity": "postgres",
+      "entities": [
+        "postgres",
+        "mysql"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://www.postgresql.org/docs/current/transaction-iso.html",
+        "https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html"
+      ],
+      "ms": 1210,
+      "chars": 6652,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "transaction",
+          "postgresql",
+          "isolation",
+          "postgres",
+          "mysql",
+          "level"
+        ],
+        "covered": [
+          "transaction",
+          "postgresql",
+          "isolation",
+          "postgres",
+          "mysql",
+          "level"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1207,
+        "extractMs": 2,
+        "selectMs": 6,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1209
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got postgres"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "entities",
+          "ok": true,
+          "detail": "got mysql,postgres"
+        },
+        {
+          "name": "confidence",
+          "ok": true,
+          "detail": "got 0.9"
+        },
+        {
+          "name": "postgres",
+          "ok": true,
+          "detail": "PostgreSQL|postgres"
+        },
+        {
+          "name": "mysql",
+          "ok": true,
+          "detail": "MySQL|mysql"
+        },
+        {
+          "name": "isolation",
+          "ok": true,
+          "detail": "isolation|隔离级别"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "multi-react-vue",
+      "q": "React 和 Vue 的响应式原理有什么区别？",
+      "soft": false,
+      "entity": "react",
+      "entities": [
+        "react",
+        "vue"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://vuejs.org/guide/essentials/reactivity-fundamentals.html",
+        "https://react.dev/reference/react"
+      ],
+      "ms": 2122,
+      "chars": 4716,
+      "confidence": {
+        "score": 0.37,
+        "label": "low"
+      },
+      "facets": {
+        "terms": [
+          "reactivity",
+          "reactive",
+          "react",
+          "vue"
+        ],
+        "covered": [
+          "reactivity",
+          "reactive",
+          "react",
+          "vue"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 788,
+        "extractMs": 4,
+        "selectMs": 6,
+        "followMs": 0,
+        "recursiveMs": 1537,
+        "indexMs": 0,
+        "totalMs": 2121
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got react"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "entities",
+          "ok": true,
+          "detail": "got react,vue"
+        },
+        {
+          "name": "react",
+          "ok": true,
+          "detail": "React|react"
+        },
+        {
+          "name": "vue",
+          "ok": true,
+          "detail": "Vue|vue"
+        },
+        {
+          "name": "reactivity",
+          "ok": true,
+          "detail": "reactiv|响应式"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "contract-confidence",
+      "q": "Redis 的默认端口是多少？",
+      "soft": false,
+      "entity": "redis",
+      "entities": [
+        "redis"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://redis.io/docs/latest/commands/set/",
+        "https://redis.io/docs/latest/commands/",
+        "https://redis.io/docs/latest/"
+      ],
+      "ms": 1009,
+      "chars": 7078,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "default",
+          "redis",
+          "port"
+        ],
+        "covered": [
+          "default",
+          "redis",
+          "port"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1009,
+        "extractMs": 24,
+        "selectMs": 15,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1009
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got redis"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "confidence",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "facets",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "port",
+          "ok": true,
+          "detail": "6379"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "azure-app",
+      "q": "Azure App Service 怎么配置自定义域？",
+      "soft": false,
+      "entity": "azure",
+      "entities": [
+        "azure"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/app-service/app-service-web-tutorial-custom-domain",
+        "https://learn.microsoft.com/en-us/azure/"
+      ],
+      "ms": 2393,
+      "chars": 4678,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "service",
+          "custom",
+          "domain",
+          "azure",
+          "app"
+        ],
+        "covered": [
+          "service",
+          "custom",
+          "domain",
+          "azure",
+          "app"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 2392,
+        "extractMs": 19,
+        "selectMs": 18,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 2393
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got azure"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "appservice",
+          "ok": true,
+          "detail": "App Service|app service"
+        },
+        {
+          "name": "domain",
+          "ok": true,
+          "detail": "custom domain|自定义域|domain"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "gcp-compute",
+      "q": "Google Cloud Compute Engine 怎么创建虚拟机实例？",
+      "soft": false,
+      "entity": "gcp",
+      "entities": [
+        "gcp"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.cloud.google.com/compute/docs/instances?hl=zh-cn",
+        "https://docs.cloud.google.com/docs?hl=zh-cn"
+      ],
+      "ms": 2919,
+      "chars": 3132,
+      "confidence": {
+        "score": 0.92,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "instance",
+          "compute",
+          "google",
+          "engine",
+          "create",
+          "cloud",
+          "gcp"
+        ],
+        "covered": [
+          "instance",
+          "compute",
+          "google",
+          "engine",
+          "create",
+          "cloud"
+        ],
+        "missing": [
+          "gcp"
+        ],
+        "ratio": 0.857
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 2919,
+        "extractMs": 5,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 2919
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got gcp"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "compute",
+          "ok": true,
+          "detail": "Compute Engine|compute engine"
+        },
+        {
+          "name": "instance",
+          "ok": true,
+          "detail": "instance|实例"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "mistral-price",
+      "q": "Mistral API 怎么计费？",
+      "soft": false,
+      "entity": "mistral",
+      "entities": [
+        "mistral"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.mistral.ai/"
+      ],
+      "ms": 1257,
+      "chars": 3185,
+      "confidence": {
+        "score": 0.72,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "mistral",
+          "billing",
+          "pricing"
+        ],
+        "covered": [
+          "mistral",
+          "billing"
+        ],
+        "missing": [
+          "pricing"
+        ],
+        "ratio": 0.667
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1255,
+        "extractMs": 4,
+        "selectMs": 1,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1257
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got mistral"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "price",
+          "ok": true,
+          "detail": "pricing|price|计费"
+        },
+        {
+          "name": "token",
+          "ok": true,
+          "detail": "token|model"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "hf-transformers",
+      "q": "Hugging Face Transformers 怎么加载本地模型？",
+      "soft": false,
+      "entity": "huggingface",
+      "entities": [
+        "huggingface"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://huggingface.co/docs/transformers/main/en/installation",
+        "https://huggingface.co/docs"
+      ],
+      "ms": 1168,
+      "chars": 4939,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "transformers",
+          "huggingface",
+          "hugging",
+          "model",
+          "local",
+          "face"
+        ],
+        "covered": [
+          "transformers",
+          "huggingface",
+          "hugging",
+          "model",
+          "local",
+          "face"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1167,
+        "extractMs": 4,
+        "selectMs": 5,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1167
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got huggingface"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "transformers",
+          "ok": true,
+          "detail": "transformers"
+        },
+        {
+          "name": "local",
+          "ok": true,
+          "detail": "from_pretrained|local|本地"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "langchain-agent",
+      "q": "LangChain 怎么创建一个 agent？",
+      "soft": false,
+      "entity": "langchain",
+      "entities": [
+        "langchain"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.langchain.com/oss/python/langchain/overview"
+      ],
+      "ms": 1311,
+      "chars": 2700,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "langchain",
+          "create",
+          "agent"
+        ],
+        "covered": [
+          "langchain",
+          "create",
+          "agent"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1310,
+        "extractMs": 3,
+        "selectMs": 3,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1310
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got langchain"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "agent",
+          "ok": true,
+          "detail": "agent"
+        },
+        {
+          "name": "tool",
+          "ok": true,
+          "detail": "tool|tools"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "ollama-pull",
+      "q": "Ollama 怎么拉取模型？",
+      "soft": false,
+      "entity": "ollama",
+      "entities": [
+        "ollama"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.ollama.com/api/pull",
+        "https://docs.ollama.com/"
+      ],
+      "ms": 967,
+      "chars": 1414,
+      "confidence": {
+        "score": 0.95,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "ollama",
+          "model",
+          "pull"
+        ],
+        "covered": [
+          "ollama",
+          "model",
+          "pull"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 967,
+        "extractMs": 1,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 967
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got ollama"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "pull",
+          "ok": true,
+          "detail": "pull"
+        },
+        {
+          "name": "model",
+          "ok": true,
+          "detail": "model"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "mongodb-index",
+      "q": "MongoDB 怎么创建索引？",
+      "soft": false,
+      "entity": "mongodb",
+      "entities": [
+        "mongodb"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://www.mongodb.com/zh-cn/docs/manual/indexes/",
+        "https://www.mongodb.com/zh-cn/docs/manual/"
+      ],
+      "ms": 2399,
+      "chars": 4993,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "mongodb",
+          "create",
+          "index"
+        ],
+        "covered": [
+          "mongodb",
+          "create",
+          "index"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1818,
+        "extractMs": 5,
+        "selectMs": 3,
+        "followMs": 579,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 2399
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got mongodb"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "index",
+          "ok": true,
+          "detail": "createIndex|create index|index"
+        },
+        {
+          "name": "collection",
+          "ok": true,
+          "detail": "collection|field"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "sqlite-wal",
+      "q": "SQLite 的 WAL 模式怎么开启？",
+      "soft": false,
+      "entity": "sqlite",
+      "entities": [
+        "sqlite"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://www.sqlite.org/wal.html",
+        "https://www.sqlite.org/docs.html"
+      ],
+      "ms": 1255,
+      "chars": 3435,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "sqlite",
+          "enable",
+          "mode",
+          "wal"
+        ],
+        "covered": [
+          "sqlite",
+          "enable",
+          "mode",
+          "wal"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1253,
+        "extractMs": 4,
+        "selectMs": 4,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1255
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got sqlite"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "wal",
+          "ok": true,
+          "detail": "wal"
+        },
+        {
+          "name": "pragma",
+          "ok": true,
+          "detail": "pragma|journal_mode"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "elasticsearch-index",
+      "q": "Elasticsearch 怎么创建索引？",
+      "soft": false,
+      "entity": "elasticsearch",
+      "entities": [
+        "elasticsearch"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-create",
+        "https://www.elastic.co/docs/reference/elasticsearch"
+      ],
+      "ms": 1286,
+      "chars": 5697,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "elasticsearch",
+          "create",
+          "index"
+        ],
+        "covered": [
+          "elasticsearch",
+          "create",
+          "index"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 1285,
+        "extractMs": 3,
+        "selectMs": 4,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1286
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got elasticsearch"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "index",
+          "ok": true,
+          "detail": "indices.create|create index|index"
+        },
+        {
+          "name": "mapping",
+          "ok": true,
+          "detail": "mapping|settings"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "prometheus-promql",
+      "q": "Prometheus 的 PromQL 怎么查 CPU 使用率？",
+      "soft": false,
+      "entity": "prometheus",
+      "entities": [
+        "prometheus"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://prometheus.io/docs/introduction/overview/"
+      ],
+      "ms": 1167,
+      "chars": 3040,
+      "confidence": {
+        "score": 0.65,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "prometheus",
+          "promql",
+          "cpu"
+        ],
+        "covered": [
+          "prometheus",
+          "promql"
+        ],
+        "missing": [
+          "cpu"
+        ],
+        "ratio": 0.667
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 1164,
+        "extractMs": 1,
+        "selectMs": 0,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1166
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got prometheus"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "promql",
+          "ok": true,
+          "detail": "promql|cpu"
+        },
+        {
+          "name": "rate",
+          "ok": true,
+          "detail": "rate|usage|使用率"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "grafana-datasource",
+      "q": "Grafana 怎么配置数据源？",
+      "soft": false,
+      "entity": "grafana",
+      "entities": [
+        "grafana"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://grafana.com/grafana/dashboards/13786-grafana-usage-insights-datasource-details/",
+        "https://grafana.com/grafana/dashboards/630-sun-and-moon-datasource/",
+        "https://grafana.com/docs/grafana/latest/"
+      ],
+      "ms": 3005,
+      "chars": 4570,
+      "confidence": {
+        "score": 0.91,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "datasource",
+          "grafana"
+        ],
+        "covered": [
+          "datasource",
+          "grafana"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 903,
+        "extractMs": 4,
+        "selectMs": 1,
+        "followMs": 0,
+        "recursiveMs": 2100,
+        "indexMs": 0,
+        "totalMs": 3003
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got grafana"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "datasource",
+          "ok": true,
+          "detail": "data source|datasource"
+        },
+        {
+          "name": "add",
+          "ok": true,
+          "detail": "add|配置"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "angular-signal",
+      "q": "Angular 的 signal 和 computed 怎么用？",
+      "soft": false,
+      "entity": "angular",
+      "entities": [
+        "angular"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://angular.dev/guide/signals",
+        "https://angular.dev/overview"
+      ],
+      "ms": 954,
+      "chars": 5533,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "computed",
+          "angular",
+          "signal"
+        ],
+        "covered": [
+          "computed",
+          "angular",
+          "signal"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 952,
+        "extractMs": 5,
+        "selectMs": 5,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 954
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got angular"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "signal",
+          "ok": true,
+          "detail": "signal"
+        },
+        {
+          "name": "computed",
+          "ok": true,
+          "detail": "computed|effect"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "svelte-runes",
+      "q": "Svelte 的 runes 是什么？",
+      "soft": false,
+      "entity": "svelte",
+      "entities": [
+        "svelte"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://svelte.dev/docs/svelte/what-are-runes",
+        "https://svelte.dev/docs/svelte/overview"
+      ],
+      "ms": 1172,
+      "chars": 2071,
+      "confidence": {
+        "score": 0.91,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "svelte",
+          "runes"
+        ],
+        "covered": [
+          "svelte",
+          "runes"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 966,
+        "extractMs": 0,
+        "selectMs": 2,
+        "followMs": 205,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1172
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got svelte"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "runes",
+          "ok": true,
+          "detail": "runes"
+        },
+        {
+          "name": "state",
+          "ok": true,
+          "detail": "state|derived"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "pypi-publish",
+      "q": "PyPI 怎么发布 Python 包？",
+      "soft": false,
+      "entity": "pypi",
+      "entities": [
+        "pypi"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://packaging.python.org/en/latest/tutorials/packaging-projects/",
+        "https://docs.pypi.org/"
+      ],
+      "ms": 1521,
+      "chars": 4047,
+      "confidence": {
+        "score": 0.98,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "python",
+          "pypi"
+        ],
+        "covered": [
+          "python",
+          "pypi"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1521,
+        "extractMs": 3,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1521
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got pypi"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "publish",
+          "ok": true,
+          "detail": "publish|upload"
+        },
+        {
+          "name": "twine",
+          "ok": true,
+          "detail": "twine|token"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "ghsa-advisory",
+      "q": "GitHub Advisory 怎么查依赖漏洞？",
+      "soft": false,
+      "entity": "github-advisories",
+      "entities": [
+        "github-advisories"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.github.com/en/code-security/concepts/supply-chain-security/best-practices-for-maintaining-dependencies",
+        "https://docs.github.com/en/code-security/concepts/vulnerability-reporting-and-management/github-advisory-database",
+        "https://github.com/advisories"
+      ],
+      "ms": 1682,
+      "chars": 9433,
+      "confidence": {
+        "score": 0.74,
+        "label": "medium"
+      },
+      "facets": {
+        "terms": [
+          "github-advisories",
+          "vulnerability",
+          "dependencies",
+          "dependency",
+          "advisory",
+          "github"
+        ],
+        "covered": [
+          "vulnerability",
+          "dependencies",
+          "dependency",
+          "advisory",
+          "github"
+        ],
+        "missing": [
+          "github-advisories"
+        ],
+        "ratio": 0.833
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1322,
+        "extractMs": 8,
+        "selectMs": 7,
+        "followMs": 354,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1682
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got github-advisories"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "advisory",
+          "ok": true,
+          "detail": "advisory|vulnerability"
+        },
+        {
+          "name": "dependency",
+          "ok": true,
+          "detail": "dependency|package|依赖"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "flutter-page",
+      "q": "Flutter 怎么创建一个页面？",
+      "soft": false,
+      "entity": "flutter",
+      "entities": [
+        "flutter"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.flutter.dev/ui",
+        "https://docs.flutter.dev/"
+      ],
+      "ms": 1034,
+      "chars": 4104,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "scaffold",
+          "flutter",
+          "create",
+          "widget",
+          "page"
+        ],
+        "covered": [
+          "scaffold",
+          "flutter",
+          "create",
+          "widget",
+          "page"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1034,
+        "extractMs": 5,
+        "selectMs": 3,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1034
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got flutter"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "widget",
+          "ok": true,
+          "detail": "widget"
+        },
+        {
+          "name": "scaffold",
+          "ok": true,
+          "detail": "material|scaffold"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "node20-fs",
+      "q": "Node.js 20 的 fs.readFile 怎么用？",
+      "soft": false,
+      "entity": "node",
+      "entities": [
+        "node"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://nodejs.org/docs/latest-v20.x/api/fs.html",
+        "https://nodejs.org/docs/latest-v20.x/api/http.html"
+      ],
+      "ms": 949,
+      "chars": 5915,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "fs.readfile",
+          "node.js",
+          "node"
+        ],
+        "covered": [
+          "fs.readfile",
+          "node.js",
+          "node"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 949,
+        "extractMs": 36,
+        "selectMs": 35,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 949
+      },
+      "version": "20",
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got node"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "version",
+          "ok": true,
+          "detail": "got 20"
+        },
+        {
+          "name": "readFile",
+          "ok": true,
+          "detail": "readFile"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "ruby-block",
+      "q": "Ruby 的 block 和 proc 有什么区别？",
+      "soft": false,
+      "entity": "ruby",
+      "entities": [
+        "ruby"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.ruby-lang.org/en/3.3/",
+        "https://docs.ruby-lang.org/en/3.3/Fiddle/Closure/BlockCaller.html"
+      ],
+      "ms": 1152,
+      "chars": 3239,
+      "confidence": {
+        "score": 0.93,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "block",
+          "ruby",
+          "proc"
+        ],
+        "covered": [
+          "block",
+          "ruby",
+          "proc"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 979,
+        "extractMs": 3,
+        "selectMs": 0,
+        "followMs": 166,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1151
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got ruby"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "block",
+          "ok": true,
+          "detail": "block"
+        },
+        {
+          "name": "proc",
+          "ok": true,
+          "detail": "proc"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "scala-case",
+      "q": "Scala 的 case class 怎么用？",
+      "soft": false,
+      "entity": "scala",
+      "entities": [
+        "scala"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.scala-lang.org/tour/case-classes.html"
+      ],
+      "ms": 1202,
+      "chars": 2725,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "scala",
+          "class",
+          "case"
+        ],
+        "covered": [
+          "scala",
+          "class",
+          "case"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1202,
+        "extractMs": 1,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1202
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got scala"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "case",
+          "ok": true,
+          "detail": "case class"
+        },
+        {
+          "name": "scala",
+          "ok": true,
+          "detail": "scala"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "cassandra-table",
+      "q": "Cassandra 怎么创建表？",
+      "soft": false,
+      "entity": "cassandra",
+      "entities": [
+        "cassandra"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/virtualtables.html"
+      ],
+      "ms": 1262,
+      "chars": 3753,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "cassandra",
+          "create",
+          "table"
+        ],
+        "covered": [
+          "cassandra",
+          "create",
+          "table"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 910,
+        "extractMs": 3,
+        "selectMs": 3,
+        "followMs": 351,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1262
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got cassandra"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "table",
+          "ok": true,
+          "detail": "CREATE TABLE|table"
+        },
+        {
+          "name": "keyspace",
+          "ok": true,
+          "detail": "keyspace"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "ansible-playbook",
+      "q": "Ansible 怎么写 playbook？",
+      "soft": false,
+      "entity": "ansible",
+      "entities": [
+        "ansible"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_intro.html",
+        "https://docs.ansible.com/projects/ansible/latest/"
+      ],
+      "ms": 1089,
+      "chars": 4839,
+      "confidence": {
+        "score": 1,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "playbook",
+          "ansible"
+        ],
+        "covered": [
+          "playbook",
+          "ansible"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1089,
+        "extractMs": 2,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1089
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got ansible"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "playbook",
+          "ok": true,
+          "detail": "playbook"
+        },
+        {
+          "name": "task",
+          "ok": true,
+          "detail": "task|tasks"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "istio-route",
+      "q": "Istio 怎么配置流量路由？",
+      "soft": false,
+      "entity": "istio",
+      "entities": [
+        "istio"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://istio.io/latest/docs/concepts/traffic-management/",
+        "https://istio.io/latest/docs/"
+      ],
+      "ms": 972,
+      "chars": 2532,
+      "confidence": {
+        "score": 0.92,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "istio"
+        ],
+        "covered": [
+          "istio"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 971,
+        "extractMs": 3,
+        "selectMs": 5,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 972
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got istio"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "route",
+          "ok": true,
+          "detail": "VirtualService|routing|route"
+        },
+        {
+          "name": "traffic",
+          "ok": true,
+          "detail": "traffic"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "argocd-sync",
+      "q": "Argo CD 怎么同步应用？",
+      "soft": false,
+      "entity": "argocd",
+      "entities": [
+        "argocd"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://argo-cd.readthedocs.io/en/stable/"
+      ],
+      "ms": 900,
+      "chars": 2179,
+      "confidence": {
+        "score": 0.9,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "argocd",
+          "argo"
+        ],
+        "covered": [
+          "argocd",
+          "argo"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 900,
+        "extractMs": 1,
+        "selectMs": 1,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 900
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got argocd"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "sync",
+          "ok": true,
+          "detail": "sync"
+        },
+        {
+          "name": "app",
+          "ok": true,
+          "detail": "application"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "jest-mock",
+      "q": "Jest 怎么 mock 一个模块？",
+      "soft": false,
+      "entity": "jest",
+      "entities": [
+        "jest"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://jestjs.io/docs/getting-started"
+      ],
+      "ms": 782,
+      "chars": 2661,
+      "confidence": {
+        "score": 0.81,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "jest",
+          "mock"
+        ],
+        "covered": [
+          "jest",
+          "mock"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 781,
+        "extractMs": 2,
+        "selectMs": 1,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 782
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got jest"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 1"
+        },
+        {
+          "name": "mock",
+          "ok": true,
+          "detail": "jest.mock|mock"
+        },
+        {
+          "name": "module",
+          "ok": true,
+          "detail": "module"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "cypress-wait",
+      "q": "Cypress 怎么等待元素出现？",
+      "soft": false,
+      "entity": "cypress",
+      "entities": [
+        "cypress"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.cypress.io/app/get-started/why-cypress",
+        "https://docs.cypress.io/api/commands/get"
+      ],
+      "ms": 896,
+      "chars": 4922,
+      "confidence": {
+        "score": 0.91,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "cypress"
+        ],
+        "covered": [
+          "cypress"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 895,
+        "extractMs": 5,
+        "selectMs": 4,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 895
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got cypress"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "get",
+          "ok": true,
+          "detail": "cy.get|should|wait"
+        },
+        {
+          "name": "element",
+          "ok": true,
+          "detail": "element|selector"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "pytest-param",
+      "q": "pytest 怎么参数化测试？",
+      "soft": false,
+      "entity": "pytest",
+      "entities": [
+        "pytest"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://docs.pytest.org/en/stable/",
+        "https://docs.pytest.org/en/stable/how-to/parametrize.html"
+      ],
+      "ms": 872,
+      "chars": 6041,
+      "confidence": {
+        "score": 0.96,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "testing",
+          "pytest",
+          "test"
+        ],
+        "covered": [
+          "testing",
+          "pytest",
+          "test"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 871,
+        "extractMs": 2,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 871
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got pytest"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "param",
+          "ok": true,
+          "detail": "parametrize"
+        },
+        {
+          "name": "test",
+          "ok": true,
+          "detail": "test"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "flask-route",
+      "q": "Flask 怎么用 app.route 定义路由？",
+      "soft": false,
+      "entity": "flask",
+      "entities": [
+        "flask"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://flask.palletsprojects.com/en/stable/api/",
+        "https://flask.palletsprojects.com/en/stable/quickstart/",
+        "https://flask.palletsprojects.com/en/stable/"
+      ],
+      "ms": 1278,
+      "chars": 6057,
+      "confidence": {
+        "score": 0.94,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "app.route",
+          "flask"
+        ],
+        "covered": [
+          "app.route",
+          "flask"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1278,
+        "extractMs": 32,
+        "selectMs": 29,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1278
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got flask"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        },
+        {
+          "name": "route",
+          "ok": true,
+          "detail": "route"
+        },
+        {
+          "name": "app",
+          "ok": true,
+          "detail": "app|Flask"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "express-middleware",
+      "q": "Express 怎么定义中间件？",
+      "soft": false,
+      "entity": "express",
+      "entities": [
+        "express"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://expressjs.com/en/4x/api/",
+        "https://expressjs.com/en/guide/using-middleware/"
+      ],
+      "ms": 1428,
+      "chars": 5179,
+      "confidence": {
+        "score": 0.84,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "express"
+        ],
+        "covered": [
+          "express"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 1427,
+        "extractMs": 4,
+        "selectMs": 3,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1428
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got express"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "middleware",
+          "ok": true,
+          "detail": "middleware"
+        },
+        {
+          "name": "use",
+          "ok": true,
+          "detail": "app.use|use"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "helm-chart",
+      "q": "Helm 怎么创建一个 chart？",
+      "soft": false,
+      "entity": "helm",
+      "entities": [
+        "helm"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://helm.sh/docs/chart_template_guide/values_files/",
+        "https://helm.sh/docs/"
+      ],
+      "ms": 737,
+      "chars": 3970,
+      "confidence": {
+        "score": 0.96,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "create",
+          "chart",
+          "helm"
+        ],
+        "covered": [
+          "create",
+          "chart",
+          "helm"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 1,
+        "fetchMs": 735,
+        "extractMs": 2,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 737
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got helm"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "chart",
+          "ok": true,
+          "detail": "chart"
+        },
+        {
+          "name": "values",
+          "ok": true,
+          "detail": "values"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "otel-span",
+      "q": "OpenTelemetry 怎么创建 span？",
+      "soft": false,
+      "entity": "otel",
+      "entities": [
+        "otel"
+      ],
+      "mode": "registry",
+      "sources": [
+        "https://opentelemetry.io/docs/concepts/signals/traces/",
+        "https://opentelemetry.io/docs/"
+      ],
+      "ms": 1113,
+      "chars": 3687,
+      "confidence": {
+        "score": 0.96,
+        "label": "high"
+      },
+      "facets": {
+        "terms": [
+          "opentelemetry",
+          "create",
+          "otel",
+          "span"
+        ],
+        "covered": [
+          "opentelemetry",
+          "create",
+          "otel",
+          "span"
+        ],
+        "missing": [],
+        "ratio": 1
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 1111,
+        "extractMs": 5,
+        "selectMs": 2,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "indexMs": 0,
+        "totalMs": 1113
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got otel"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got registry"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 2"
+        },
+        {
+          "name": "span",
+          "ok": true,
+          "detail": "span"
+        },
+        {
+          "name": "tracer",
+          "ok": true,
+          "detail": "tracer"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "no-sites-optout",
+      "q": "阿里云 ECS 的实例规格怎么选？",
+      "soft": false,
+      "entity": null,
+      "entities": [],
+      "mode": "none",
+      "sources": [],
+      "ms": 0,
+      "chars": 0,
+      "confidence": {
+        "score": 0,
+        "label": "none",
+        "reason": "no-evidence"
+      },
+      "facets": {
+        "terms": [
+          "specification",
+          "instance",
+          "ecs"
+        ],
+        "covered": [],
+        "missing": [
+          "specification",
+          "instance",
+          "ecs"
+        ],
+        "ratio": 0
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 0,
+        "extractMs": 0,
+        "selectMs": 0,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "totalMs": 0
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got null"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got none"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 0"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "no-entity",
+      "q": "量子计算机的退相干时间是多少？",
+      "soft": false,
+      "entity": null,
+      "entities": [],
+      "mode": "none",
+      "sources": [],
+      "ms": 0,
+      "chars": 0,
+      "confidence": {
+        "score": 0,
+        "label": "none",
+        "reason": "no-evidence"
+      },
+      "facets": {
+        "terms": [
+          "time"
+        ],
+        "covered": [],
+        "missing": [
+          "time"
+        ],
+        "ratio": 0
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 0,
+        "extractMs": 0,
+        "selectMs": 0,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "totalMs": 0
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "entity",
+          "ok": true,
+          "detail": "got null"
+        },
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got none"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 0"
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "fallback-weather",
+      "q": "西安今天的天气",
+      "soft": true,
+      "entity": null,
+      "entities": [],
+      "mode": "web-fallback",
+      "sources": [
+        "https://www.weather.com.cn/weather/101110101.shtml",
+        "https://www.tianqi.com/xian",
+        "https://www.tianqi.com/xian/today/"
+      ],
+      "ms": 2408,
+      "chars": 3575,
+      "confidence": {
+        "score": 0.4,
+        "label": "low"
+      },
+      "facets": {
+        "terms": [],
+        "covered": [],
+        "missing": [],
+        "ratio": 0
+      },
+      "timings": {
+        "routeMs": 0,
+        "fetchMs": 0,
+        "extractMs": 0,
+        "selectMs": 0,
+        "followMs": 0,
+        "recursiveMs": 0,
+        "totalMs": 2407
+      },
+      "version": null,
+      "cache": "none",
+      "checks": [
+        {
+          "name": "mode",
+          "ok": true,
+          "detail": "got web-fallback"
+        },
+        {
+          "name": "sources",
+          "ok": true,
+          "detail": "got 3"
+        }
+      ],
+      "error": null
+    }
+  ]
+}

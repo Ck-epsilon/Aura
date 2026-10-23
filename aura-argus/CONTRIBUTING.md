@@ -36,7 +36,7 @@ per-PR checks. `npm test` must stay deterministic and offline.
 
 ## Pull request checklist
 
-- [ ] `npm test` passes (51/51).
+- [ ] `npm test` passes (94/94).
 - [ ] New behavior has a happy path and a negative/boundary test.
 - [ ] No secrets, tokens, or personal paths in code, tests, or fixtures.
 - [ ] No new runtime dependency without a written reason.

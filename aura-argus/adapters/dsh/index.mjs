@@ -29,7 +29,14 @@ export function createProviders({ searchImpl = search, fetchImpl = fetchDocument
       if (signal?.aborted) throw providerError('search aborted', 'WEB_ABORTED');
       const limit = Math.max(1, Math.min(maxSources, Number(request?.maxResults ?? maxSources)));
       try {
-        const result = await searchImpl(request.query, { maxSources: limit, cache: config.cache !== false, fallback: config.fallback === true });
+        const result = await searchImpl(request.query, {
+          maxSources: limit,
+          cache: config.cache !== false,
+          fallback: config.fallback === true,
+          sites: config.sites !== false,
+          sitesFile: config.sitesFile,
+          allowPrivate,
+        });
         if (result.error) throw providerError(`aura-argus search failed: ${result.error.code} (${result.error.attempts ?? 0} sources)`);
         const sources = (result.evidence || []).map((entry) => {
           const raw = entry.passages?.[0]?.text || '';

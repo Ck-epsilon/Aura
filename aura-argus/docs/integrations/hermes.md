@@ -8,13 +8,13 @@ Back up `%LOCALAPPDATA%\hermes\config.yaml` first. `hermes mcp add` asks which t
 (interactive); pipe `Y` for a non-interactive run:
 
 ```powershell
-"Y" | hermes mcp add aura-argus --command node --args E:/workspaces/aura-argus/src/cli.mjs mcp
+"Y" | hermes mcp add aura-argus --command node --args E:/workspaces/aura-argus/src/cli.mjs aura_argus_mcp
 ```
 
 After publishing:
 
 ```powershell
-"Y" | hermes mcp add aura-argus --command npx --args -y aura-argus mcp
+"Y" | hermes mcp add aura-argus --command npx --args -y aura-argus aura_argus_mcp
 ```
 
 Check it:
@@ -29,7 +29,7 @@ Observed on 2026-10-21:
 ```
 ✓ Connected (1937ms)
 ✓ Tools discovered: 4
-  search / search_batch / fetch / sources
+  aura_argus_search / aura_argus_search_batch / aura_argus_fetch / aura_argus_sources
 ```
 
 Remove it with `hermes mcp remove aura-argus`.

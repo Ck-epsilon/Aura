@@ -470,6 +470,17 @@
             "sql",
             "column"
           ]
+        },
+        {
+          "url": "https://www.postgresql.org/docs/current/transaction-iso.html",
+          "title": "Transaction Isolation",
+          "covers": [
+            "isolation",
+            "transaction",
+            "mvcc",
+            "隔离级别",
+            "事务"
+          ]
         }
       ]
     },
@@ -889,7 +900,7 @@
       ],
       "sources": [
         {
-          "url": "https://platform.openai.com/docs/",
+          "url": "https://developers.openai.com/api/docs",
           "title": "OpenAI API Docs",
           "covers": [
             "openai",
@@ -902,7 +913,7 @@
           ]
         },
         {
-          "url": "https://openai.com/api/pricing/",
+          "url": "https://developers.openai.com/api/docs/pricing",
           "title": "OpenAI API Pricing",
           "covers": [
             "pricing",
@@ -923,7 +934,7 @@
       ],
       "sources": [
         {
-          "url": "https://docs.anthropic.com/en/docs/",
+          "url": "https://platform.claude.com/docs/en/intro",
           "title": "Anthropic Docs",
           "covers": [
             "anthropic",
@@ -935,7 +946,7 @@
           ]
         },
         {
-          "url": "https://www.anthropic.com/pricing",
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
           "title": "Anthropic Pricing",
           "covers": [
             "pricing",
@@ -1541,6 +1552,200 @@
             "macro"
           ]
         }
+      ]
+    },
+    "azure": {
+      "aliases": ["azure", "microsoft azure", "微软云"],
+      "sources": [
+        { "url": "https://learn.microsoft.com/en-us/azure/", "title": "Azure documentation", "covers": ["azure", "cloud", "vm", "functions", "storage", "pricing", "app service"] },
+        { "url": "https://learn.microsoft.com/en-us/azure/app-service/app-service-web-tutorial-custom-domain", "title": "App Service custom domain", "covers": ["app service", "custom domain", "dns", "certificate"] }
+      ]
+    },
+    "gcp": {
+      "aliases": ["gcp", "google cloud", "google cloud platform", "谷歌云"],
+      "sources": [
+        { "url": "https://cloud.google.com/docs", "title": "Google Cloud documentation", "covers": ["gcp", "google cloud", "compute", "storage", "bigquery", "pricing"] },
+        { "url": "https://cloud.google.com/compute/docs/instances", "title": "Compute Engine instances", "covers": ["compute engine", "instance", "vm", "create"] }
+      ]
+    },
+    "mistral": {
+      "aliases": ["mistral", "mistral ai", "mistral api"],
+      "sources": [
+        { "url": "https://docs.mistral.ai/", "title": "Mistral AI documentation", "covers": ["mistral", "api", "model", "pricing", "token", "chat"] }
+      ]
+    },
+    "huggingface": {
+      "aliases": ["huggingface", "hugging face", "transformers"],
+      "sources": [
+        { "url": "https://huggingface.co/docs", "title": "Hugging Face documentation", "covers": ["huggingface", "transformers", "datasets", "tokenizers", "model", "hub"] },
+        { "url": "https://huggingface.co/docs/transformers/main/en/installation", "title": "Transformers installation", "covers": ["transformers", "install", "local", "offline", "from_pretrained"] }
+      ]
+    },
+    "langchain": {
+      "aliases": ["langchain", "lang chain"],
+      "sources": [
+        { "url": "https://docs.langchain.com/oss/python/langchain/overview", "title": "LangChain documentation", "covers": ["langchain", "agent", "chain", "rag", "tool", "prompt"] }
+      ]
+    },
+    "ollama": {
+      "aliases": ["ollama"],
+      "sources": [
+        { "url": "https://docs.ollama.com/", "title": "Ollama documentation", "covers": ["ollama", "model", "api", "pull", "run", "modelfile"] },
+        { "url": "https://docs.ollama.com/api/pull", "title": "Ollama pull API", "covers": ["ollama", "pull", "model", "api"] }
+      ]
+    },
+    "mongodb": {
+      "aliases": ["mongodb", "mongo"],
+      "sources": [
+        { "url": "https://www.mongodb.com/docs/manual/", "title": "MongoDB manual", "covers": ["mongodb", "database", "collection", "query", "index", "replica", "aggregation"] }
+      ]
+    },
+    "sqlite": {
+      "aliases": ["sqlite", "sqlite3"],
+      "sources": [
+        { "url": "https://www.sqlite.org/docs.html", "title": "SQLite documentation", "covers": ["sqlite", "database", "sql", "pragma", "wal", "index"] },
+        { "url": "https://www.sqlite.org/wal.html", "title": "SQLite WAL mode", "covers": ["sqlite", "wal", "pragma", "journal"] }
+      ]
+    },
+    "elasticsearch": {
+      "aliases": ["elasticsearch", "elastic search"],
+      "sources": [
+        { "url": "https://www.elastic.co/docs/reference/elasticsearch", "title": "Elasticsearch reference", "covers": ["elasticsearch", "index", "query", "dsl", "cluster", "mapping"] },
+        { "url": "https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-create", "title": "Create index API", "covers": ["elasticsearch", "create index", "indices.create", "mapping", "settings"] }
+      ]
+    },
+    "prometheus": {
+      "aliases": ["prometheus"],
+      "sources": [
+        { "url": "https://prometheus.io/docs/introduction/overview/", "title": "Prometheus documentation", "covers": ["prometheus", "metrics", "promql", "scrape", "alert", "exporter"] }
+      ]
+    },
+    "grafana": {
+      "aliases": ["grafana"],
+      "sources": [
+        { "url": "https://grafana.com/docs/grafana/latest/", "title": "Grafana documentation", "covers": ["grafana", "dashboard", "datasource", "alert", "panel", "query"] }
+      ]
+    },
+    "angular": {
+      "aliases": ["angular"],
+      "sources": [
+        { "url": "https://angular.dev/overview", "title": "Angular documentation", "covers": ["angular", "component", "signal", "router", "template", "dependency injection"] },
+        { "url": "https://angular.dev/guide/signals", "title": "Angular signals", "covers": ["angular", "signal", "computed", "effect"] }
+      ]
+    },
+    "svelte": {
+      "aliases": ["svelte", "sveltekit", "svelte kit"],
+      "sources": [
+        { "url": "https://svelte.dev/docs/svelte/overview", "title": "Svelte documentation", "covers": ["svelte", "component", "runes", "reactivity", "sveltekit"] }
+      ]
+    },
+    "pypi": {
+      "aliases": ["pypi", "python package index"],
+      "sources": [
+        { "url": "https://pypi.org/help/", "title": "PyPI help", "covers": ["pypi", "package", "publish", "wheel", "sdist", "token"] },
+        { "url": "https://packaging.python.org/en/latest/tutorials/packaging-projects/", "title": "Packaging Python projects", "covers": ["pypi", "package", "publish", "twine", "upload", "token"] }
+      ]
+    },
+    "github-advisories": {
+      "aliases": ["github advisories", "github advisory", "security advisory", "ghsa"],
+      "sources": [
+        { "url": "https://github.com/advisories", "title": "GitHub Advisory Database", "covers": ["security", "vulnerability", "cve", "ghsa", "advisory", "dependency"] },
+        { "url": "https://docs.github.com/en/code-security/concepts/vulnerability-reporting-and-management/github-advisory-database", "title": "GitHub Advisory Database docs", "covers": ["security", "advisory", "vulnerability", "dependency", "ghsa"] }
+      ]
+    },
+    "flutter": {
+      "aliases": ["flutter", "dart ui"],
+      "sources": [
+        { "url": "https://docs.flutter.dev/", "title": "Flutter documentation", "covers": ["flutter", "widget", "dart", "build", "ios", "android"] },
+        { "url": "https://docs.flutter.dev/ui", "title": "Flutter UI", "covers": ["flutter", "widget", "scaffold", "layout", "material"] }
+      ]
+    },
+    "ruby": {
+      "aliases": ["ruby", "ruby lang"],
+      "sources": [
+        { "url": "https://docs.ruby-lang.org/en/3.3/", "title": "Ruby documentation", "covers": ["ruby", "block", "proc", "lambda", "gem", "class"] }
+      ]
+    },
+    "scala": {
+      "aliases": ["scala"],
+      "sources": [
+        { "url": "https://docs.scala-lang.org/", "title": "Scala documentation", "covers": ["scala", "case class", "trait", "pattern matching", "sbt"] },
+        { "url": "https://docs.scala-lang.org/tour/case-classes.html", "title": "Scala case classes", "covers": ["scala", "case class", "case classes", "pattern matching"] }
+      ]
+    },
+    "cassandra": {
+      "aliases": ["cassandra", "apache cassandra"],
+      "sources": [
+        { "url": "https://cassandra.apache.org/doc/latest/", "title": "Cassandra documentation", "covers": ["cassandra", "cql", "table", "keyspace", "replication"] }
+      ]
+    },
+    "ansible": {
+      "aliases": ["ansible", "ansible playbook"],
+      "sources": [
+        { "url": "https://docs.ansible.com/ansible/latest/", "title": "Ansible documentation", "covers": ["ansible", "playbook", "task", "module", "inventory"] },
+        { "url": "https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html", "title": "Ansible playbooks", "covers": ["ansible", "playbook", "task", "tasks", "module"] }
+      ]
+    },
+    "istio": {
+      "aliases": ["istio", "istio service mesh"],
+      "sources": [
+        { "url": "https://istio.io/latest/docs/", "title": "Istio documentation", "covers": ["istio", "virtualservice", "traffic", "gateway", "sidecar"] },
+        { "url": "https://istio.io/latest/docs/concepts/traffic-management/", "title": "Istio traffic management", "covers": ["istio", "traffic", "routing", "route", "virtualservice"] }
+      ]
+    },
+    "argocd": {
+      "aliases": ["argo cd", "argocd", "argo-cd"],
+      "sources": [
+        { "url": "https://argo-cd.readthedocs.io/en/stable/", "title": "Argo CD documentation", "covers": ["argo cd", "argocd", "sync", "application", "gitops"] }
+      ]
+    },
+    "jest": {
+      "aliases": ["jest", "jestjs"],
+      "sources": [
+        { "url": "https://jestjs.io/docs/getting-started", "title": "Jest documentation", "covers": ["jest", "mock", "test", "expect", "snapshot"] }
+      ]
+    },
+    "cypress": {
+      "aliases": ["cypress"],
+      "sources": [
+        { "url": "https://docs.cypress.io/app/get-started/why-cypress", "title": "Cypress documentation", "covers": ["cypress", "e2e", "selector", "should", "wait"] },
+        { "url": "https://docs.cypress.io/api/commands/get", "title": "Cypress get command", "covers": ["cypress", "element", "selector", "get", "should", "wait"] }
+      ]
+    },
+    "pytest": {
+      "aliases": ["pytest", "py.test"],
+      "sources": [
+        { "url": "https://docs.pytest.org/en/stable/", "title": "pytest documentation", "covers": ["pytest", "fixture", "parametrize", "assert", "test"] },
+        { "url": "https://docs.pytest.org/en/stable/how-to/parametrize.html", "title": "pytest parametrize", "covers": ["pytest", "parametrize", "fixture", "test"] }
+      ]
+    },
+    "flask": {
+      "aliases": ["flask"],
+      "sources": [
+        { "url": "https://flask.palletsprojects.com/en/stable/", "title": "Flask documentation", "covers": ["flask", "route", "blueprint", "request", "app"] },
+        { "url": "https://flask.palletsprojects.com/en/stable/quickstart/", "title": "Flask quickstart", "covers": ["flask", "route", "routing", "app", "request"] },
+        { "url": "https://flask.palletsprojects.com/en/stable/api/", "title": "Flask API", "covers": ["flask", "route", "routing", "app", "request", "blueprint"] }
+      ]
+    },
+    "express": {
+      "aliases": ["express", "expressjs", "express.js"],
+      "sources": [
+        { "url": "https://expressjs.com/en/4x/api/", "title": "Express API", "covers": ["express", "middleware", "router", "request", "response"] },
+        { "url": "https://expressjs.com/en/guide/using-middleware.html", "title": "Express middleware", "covers": ["express", "middleware", "app.use", "use"] }
+      ]
+    },
+    "helm": {
+      "aliases": ["helm", "helm chart"],
+      "sources": [
+        { "url": "https://helm.sh/docs/", "title": "Helm documentation", "covers": ["helm", "chart", "values", "template", "release"] },
+        { "url": "https://helm.sh/docs/chart_template_guide/values_files/", "title": "Helm values files", "covers": ["helm", "values", "chart", "template"] }
+      ]
+    },
+    "otel": {
+      "aliases": ["opentelemetry", "otel"],
+      "sources": [
+        { "url": "https://opentelemetry.io/docs/", "title": "OpenTelemetry documentation", "covers": ["opentelemetry", "span", "tracer", "metrics", "collector"] },
+        { "url": "https://opentelemetry.io/docs/concepts/signals/traces/", "title": "OpenTelemetry traces", "covers": ["opentelemetry", "span", "tracer", "trace"] }
       ]
     }
   }

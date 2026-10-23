@@ -7,13 +7,13 @@ Tested with `codex-cli 0.163.0-alpha.10.2` on Windows.
 Back up `~/.codex/config.toml` first, then:
 
 ```bash
-codex mcp add aura-argus -- node E:/workspaces/aura-argus/src/cli.mjs mcp
+codex mcp add aura-argus -- node E:/workspaces/aura-argus/src/cli.mjs aura_argus_mcp
 ```
 
 After publishing, the same with npm:
 
 ```bash
-codex mcp add aura-argus -- npx -y aura-argus mcp
+codex mcp add aura-argus -- npx -y aura-argus aura_argus_mcp
 ```
 
 Check it:

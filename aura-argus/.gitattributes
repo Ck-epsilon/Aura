@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.zip binary
+*.tgz binary
+*.png binary
+*.jpg binary
+*.ico binary
+.github/ export-ignore
+AuraArgus-0.1-交接单.md export-ignore

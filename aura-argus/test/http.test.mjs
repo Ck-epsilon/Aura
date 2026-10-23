@@ -141,12 +141,20 @@ test('http server: health, auth, sources, fetch, 400 and 404', async () => {
     const health = await fetch(`${url}/health`).then((r) => r.json());
     assert.equal(health.ok, true);
     assert.equal(health.name, 'aura-argus');
+    assert.ok(health.entities >= 10);
+    assert.match(health.coverageVersion, /^[0-9a-f]{12}-/);
+    const aliasHealth = await fetch(`${url}/aura_argus/health`).then((r) => r.json());
+    assert.equal(aliasHealth.ok, true);
+    assert.equal(aliasHealth.name, 'aura-argus');
 
     const unauthorized = await fetch(`${url}/sources`);
     assert.equal(unauthorized.status, 401);
 
     const sources = await fetch(`${url}/sources`, { headers: { authorization: 'Bearer secret' } }).then((r) => r.json());
+    const aliasSources = await fetch(`${url}/aura_argus/sources`, { headers: { authorization: 'Bearer secret' } }).then((r) => r.json());
+    assert.equal(aliasSources.entities.length, sources.entities.length);
     assert.ok(sources.entities.length >= 10);
+    assert.ok(sources.entities.some((entity) => entity.origin === 'default'));
 
     const fetched = await fetch(`${url}/fetch?url=${encodeURIComponent(`${fixture.base}/page`)}`, {
       headers: { authorization: 'Bearer secret' },

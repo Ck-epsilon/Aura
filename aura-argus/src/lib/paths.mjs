@@ -14,6 +14,16 @@ export function defaultCacheDir(env = process.env, platform = process.platform, 
   return path.join(base, APP, 'cache');
 }
 
+export function defaultSitesFile(env = process.env, platform = process.platform, homedir = os.homedir()) {
+  if (env.AURA_ARGUS_CONFIG_DIR) return path.join(path.resolve(expandHome(env.AURA_ARGUS_CONFIG_DIR, homedir)), 'sites.json');
+  if (platform === 'win32') {
+    const base = env.APPDATA || path.join(homedir, 'AppData', 'Roaming');
+    return path.join(base, APP, 'sites.json');
+  }
+  const base = env.XDG_CONFIG_HOME || path.join(homedir, '.config');
+  return path.join(base, APP, 'sites.json');
+}
+
 export function expandHome(input, homedir = os.homedir()) {
   if (!input) return input;
   if (input === '~') return homedir;

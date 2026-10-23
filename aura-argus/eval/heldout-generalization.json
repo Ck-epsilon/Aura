@@ -1,0 +1,36 @@
+[
+  { "id": "g-flask-sqlalchemy", "category": "howto", "kind": "heldout", "entity": "flask", "q": "Flask-SQLAlchemy 怎么定义模型？", "checks": [["model", "Model|db.Model|class"], ["column", "db.Column|column"]] },
+  { "id": "g-helm-values", "category": "howto", "kind": "heldout", "entity": "helm", "q": "Helm chart 的 values.yaml 怎么覆盖？", "checks": [["values", "values"], ["override", "--set|override|覆盖|-f "]] },
+  { "id": "g-jest-timer", "category": "howto", "kind": "heldout", "entity": "jest", "q": "Jest 怎么 fake 定时器？", "checks": [["timer", "useFakeTimers|fake"], ["jest", "jest"]] },
+  { "id": "g-cassandra-ttl", "category": "howto", "kind": "heldout", "entity": "cassandra", "q": "Cassandra 的 TTL 怎么设置？", "checks": [["ttl", "TTL|ttl"], ["set", "USING TTL|set"]] },
+  { "id": "g-grafana-alert", "category": "howto", "kind": "heldout", "entity": "grafana", "q": "Grafana 怎么配置告警规则？", "checks": [["alert", "alert"], ["rule", "rule"]] },
+  { "id": "g-ansible-var", "category": "howto", "kind": "heldout", "entity": "ansible", "q": "Ansible 的变量优先级是怎样的？", "checks": [["variable", "variable|var"], ["precedence", "precedence|优先级|order"]] },
+  { "id": "g-vite-proxy", "category": "howto", "kind": "heldout", "entity": "vite", "q": "Vite 的 server.proxy 怎么配置？", "checks": [["proxy", "proxy"], ["server", "server"]] },
+  { "id": "g-prisma-migrate", "category": "howto", "kind": "heldout", "entity": "prisma", "q": "Prisma 怎么运行 migration？", "checks": [["migrate", "migrate"], ["command", "prisma migrate|dev|deploy"]] },
+  { "id": "g-vitest-snapshot", "category": "howto", "kind": "heldout", "entity": "vitest", "q": "Vitest 的快照测试怎么用？", "checks": [["snapshot", "snapshot"], ["match", "toMatch|toMatchSnapshot"]] },
+  { "id": "g-eslint-flat", "category": "howto", "kind": "heldout", "entity": "eslint", "q": "ESLint 的 flat config 怎么写？", "checks": [["flat", "flat"], ["config", "eslint.config|config"]] },
+
+  { "id": "g-error-cassandra-timeout", "category": "error", "kind": "heldout", "entity": "cassandra", "q": "Cassandra 报错 OperationTimedOut 怎么处理？", "checks": [["error", "OperationTimedOut|timed out"], ["fix", "timeout|consistency|retry"]] },
+  { "id": "g-error-grafana-502", "category": "error", "kind": "heldout", "entity": "grafana", "q": "Grafana 登录后 502 怎么排查？", "checks": [["error", "502"], ["fix", "proxy|upstream|nginx|timeout"]] },
+  { "id": "g-error-vite-port", "category": "error", "kind": "heldout", "entity": "vite", "q": "Vite 启动报错 Port 5173 is already in use 怎么解决？", "checks": [["error", "already in use|5173"], ["fix", "port|--port|strictPort"]] },
+  { "id": "g-error-helm-rollback", "category": "error", "kind": "heldout", "entity": "helm", "q": "Helm release 安装失败后怎么回滚？", "checks": [["rollback", "rollback|回滚"], ["command", "helm rollback|history"]] },
+  { "id": "g-error-deno-perm", "category": "error", "kind": "heldout", "entity": "deno", "q": "Deno 报错 Needs --allow-read permission 怎么解决？", "checks": [["error", "--allow-read|permission"], ["fix", "allow|flag|deno.json"]] },
+  { "id": "g-error-ant-design-modal", "category": "error", "kind": "heldout", "entity": "antd", "q": "Ant Design Modal 关闭后 state 没重置怎么处理？", "checks": [["modal", "Modal|modal"], ["fix", "destroyOnClose|forceRender|state"]] },
+
+  { "id": "g-price-ollama", "category": "pricing", "kind": "heldout", "entity": "ollama", "q": "Ollama 是免费的吗？", "checks": [["free", "free|免费|open source|开源"]] },
+  { "id": "g-price-hf-spaces", "category": "pricing", "kind": "heldout", "entity": "huggingface", "q": "Hugging Face Spaces 的硬件怎么收费？", "checks": [["hardware", "hardware|CPU|GPU"], ["price", "free|paid|price|pricing|收费"]] },
+  { "id": "g-price-gitee", "category": "pricing", "kind": "heldout", "entity": "gitee", "q": "Gitee 的私有仓库收费吗？", "checks": [["private", "私有|private"], ["price", "免费|收费|free|price|plan"]] },
+  { "id": "g-price-supabase-db", "category": "pricing", "kind": "heldout", "entity": "supabase", "q": "Supabase 数据库超出免费额度怎么收费？", "checks": [["free", "free|免费"], ["db", "database|数据库|postgres"]] },
+
+  { "id": "g-version-deno2", "category": "version", "kind": "heldout", "entity": "deno", "q": "Deno 2 有什么新特性？", "checks": [["version", "Deno 2|deno 2|2\\.0|2\\.1"], ["feature", "new|feature|新特性|release"]] },
+  { "id": "g-version-bun", "category": "version", "kind": "heldout", "entity": "bun", "q": "Bun 1.2 有什么新特性？", "checks": [["version", "1\\.2"], ["feature", "new|feature|release"]] },
+  { "id": "g-version-vite7", "category": "version", "kind": "heldout", "entity": "vite", "q": "Vite 7 什么时候发布？", "checks": [["version", "7|seven"], ["date", "2025|2026|release|发布"]] },
+  { "id": "g-version-tailwind4", "category": "version", "kind": "heldout", "entity": "tailwind", "q": "Tailwind CSS 4 的新特性有哪些？", "checks": [["version", "4"], ["feature", "new|feature|engine|release"]] },
+
+  { "id": "g-compare-vite-webpack", "category": "compare", "kind": "heldout", "entity": "vite", "q": "Vite 和 Webpack 有什么区别？", "checks": [["vite", "Vite"], ["webpack", "Webpack|webpack"], ["diff", "difference|区别|faster|dev server"]] },
+  { "id": "g-compare-npm-pnpm", "category": "compare", "kind": "heldout", "entity": "npm", "q": "npm 和 pnpm 有什么区别？", "checks": [["npm", "npm"], ["pnpm", "pnpm"], ["diff", "difference|区别|disk|symlink"]] },
+  { "id": "g-compare-deno-bun", "category": "compare", "kind": "heldout", "entity": "deno", "q": "Deno 和 Bun 有什么区别？", "checks": [["deno", "Deno"], ["bun", "Bun"], ["diff", "difference|区别|secure|compatibility"]] },
+  { "id": "g-compare-jest-vitest", "category": "compare", "kind": "heldout", "entity": "jest", "q": "Jest 和 Vitest 有什么区别？", "checks": [["jest", "Jest"], ["vitest", "Vitest"], ["diff", "difference|区别|faster|esm"]] },
+  { "id": "g-compare-gitee-github", "category": "compare", "kind": "heldout", "entity": "gitee", "q": "Gitee 和 GitHub 有什么区别？", "checks": [["gitee", "Gitee"], ["github", "GitHub"], ["diff", "区别|difference|china|国内"]] },
+  { "id": "g-compare-cloudflare-aws", "category": "compare", "kind": "heldout", "entity": "cloudflare", "q": "Cloudflare Workers 和 AWS Lambda 有什么区别？", "checks": [["cloudflare", "Cloudflare"], ["lambda", "Lambda"], ["diff", "区别|difference|edge|cold start"]] }
+]

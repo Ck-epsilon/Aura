@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "AuraArgus HTTP API",
-    "version": "0.1.0",
-    "description": "Local, keyless retrieval over registered official sources. Returns evidence passages with source URLs. Bind to 127.0.0.1 by default; set a bearer token when exposing the server."
+    "version": "2.3.0",
+    "description": "Local, keyless retrieval over primary sources (registry + default/user site packs). Returns evidence passages with source URLs and origins. Bind to 127.0.0.1 by default; set a bearer token when exposing the server."
   },
   "servers": [
     {
@@ -19,7 +19,7 @@
   "paths": {
     "/health": {
       "get": {
-        "operationId": "health",
+        "operationId": "aura_argus_health",
         "summary": "Health and version",
         "responses": {
           "200": {
@@ -37,7 +37,7 @@
     },
     "/sources": {
       "get": {
-        "operationId": "sources",
+        "operationId": "aura_argus_sources",
         "summary": "Registered entities and sources",
         "responses": {
           "200": {
@@ -58,7 +58,7 @@
     },
     "/search": {
       "get": {
-        "operationId": "searchGet",
+        "operationId": "aura_argus_search_get",
         "summary": "Search one question",
         "parameters": [
           {
@@ -98,6 +98,16 @@
               "type": "string"
             },
             "description": "Restrict to one domain; fetch its sitemap/body as evidence."
+          },
+          {
+            "name": "sites",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "description": "Set sites=0 to ignore default/user site packs and use only registry.json."
           }
         ],
         "responses": {
@@ -130,7 +140,7 @@
         }
       },
       "post": {
-        "operationId": "searchPost",
+        "operationId": "aura_argus_search",
         "summary": "Search one question",
         "requestBody": {
           "required": true,
@@ -174,7 +184,7 @@
     },
     "/search/batch": {
       "post": {
-        "operationId": "searchBatch",
+        "operationId": "aura_argus_search_batch",
         "summary": "Search up to 50 questions with bounded concurrency",
         "requestBody": {
           "required": true,
@@ -208,7 +218,7 @@
     },
     "/fetch": {
       "get": {
-        "operationId": "fetchGet",
+        "operationId": "aura_argus_fetch_get",
         "summary": "Fetch one URL as Markdown",
         "parameters": [
           {
@@ -255,7 +265,7 @@
         }
       },
       "post": {
-        "operationId": "fetchPost",
+        "operationId": "aura_argus_fetch",
         "summary": "Fetch one URL as Markdown",
         "requestBody": {
           "required": true,
@@ -338,6 +348,8 @@
           "ok",
           "name",
           "version",
+          "coverageVersion",
+          "entities",
           "sources"
         ],
         "properties": {
@@ -349,6 +361,12 @@
           },
           "version": {
             "type": "string"
+          },
+          "coverageVersion": {
+            "type": "string"
+          },
+          "entities": {
+            "type": "integer"
           },
           "sources": {
             "type": "integer"
@@ -363,6 +381,7 @@
         "required": [
           "ok",
           "version",
+          "coverageVersion",
           "entities"
         ],
         "properties": {
@@ -371,6 +390,26 @@
           },
           "version": {
             "type": "string"
+          },
+          "coverageVersion": {
+            "type": "string"
+          },
+          "sites": {
+            "type": "object",
+            "properties": {
+              "default": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "user": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
           },
           "entities": {
             "type": "array",
@@ -396,9 +435,56 @@
             "maximum": 6,
             "default": 3
           },
-          "fallback": {
+          "multi": {
             "type": "boolean",
-            "default": false
+            "description": "Route comparative questions to multiple entities (default: auto)."
+          },
+          "followLinks": {
+            "type": "boolean",
+            "default": true,
+            "description": "Follow one same-host documentation link when key facets are missing."
+          },
+          "maxFollowLinks": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 1
+          },
+          "fast": {
+            "type": "boolean",
+            "description": "Use the local section index for fact-lookup questions; open how-to/comparison questions still use live retrieval."
+          },
+          "docVersion": {
+            "type": "string",
+            "description": "Prefer versioned docs for entities with a version map, e.g. 20, 3.11, 8.0, 16."
+          },
+          "decompose": {
+            "type": "boolean",
+            "description": "Split compound questions into clauses and merge evidence with clause provenance."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "deep"
+            ],
+            "description": "Preset: fast=2 sources/no link following/index; balanced=defaults; deep=6 sources/2 followed links/decompose/no early stop."
+          },
+          "fallback": {
+            "description": "CLI/MCP/HTTP default auto: official evidence first, web fallback only when official evidence is empty, low-confidence, or a critical facet is missing. Set false to disable.",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "auto"
+                ]
+              }
+            ],
+            "default": "auto"
           },
           "cache": {
             "type": "boolean",
@@ -407,6 +493,21 @@
           "site": {
             "type": "string",
             "description": "Restrict to one domain."
+          },
+          "sites": {
+            "type": "boolean",
+            "default": true,
+            "description": "Set false to ignore default/user site packs."
+          },
+          "budgetMs": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Wall-clock budget; returns partial:true with gathered evidence when exhausted."
+          },
+          "deepIndex": {
+            "type": "boolean",
+            "description": "Use a deep local index built with aura-argus index --deep."
           }
         }
       },
@@ -436,9 +537,56 @@
             "maximum": 6,
             "default": 3
           },
-          "fallback": {
+          "multi": {
             "type": "boolean",
-            "default": false
+            "description": "Route comparative questions to multiple entities (default: auto when 2+ entities and a comparison signal are present)."
+          },
+          "followLinks": {
+            "type": "boolean",
+            "default": true,
+            "description": "Follow one same-host documentation link when key facets are missing."
+          },
+          "maxFollowLinks": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 1
+          },
+          "fast": {
+            "type": "boolean",
+            "description": "Use the local section index for fact-lookup questions; open how-to/comparison questions still use live retrieval."
+          },
+          "docVersion": {
+            "type": "string",
+            "description": "Prefer versioned docs for entities with a version map, e.g. 20, 3.11, 8.0, 16."
+          },
+          "decompose": {
+            "type": "boolean",
+            "description": "Split compound questions into clauses and merge evidence with clause provenance."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "deep"
+            ],
+            "description": "Preset: fast=2 sources/no link following/index; balanced=defaults; deep=6 sources/2 followed links/decompose/no early stop."
+          },
+          "fallback": {
+            "description": "CLI/MCP/HTTP default auto: official evidence first, web fallback only when official evidence is empty, low-confidence, or a critical facet is missing. Set false to disable.",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "auto"
+                ]
+              }
+            ],
+            "default": "auto"
           },
           "cache": {
             "type": "boolean",
@@ -452,6 +600,15 @@
           "site": {
             "type": "string",
             "description": "Restrict every question to one domain."
+          },
+          "sites": {
+            "type": "boolean",
+            "default": true,
+            "description": "Set false to ignore default/user site packs."
+          },
+          "deepIndex": {
+            "type": "boolean",
+            "description": "Use a deep local index built with aura-argus index --deep."
           }
         }
       },
@@ -498,11 +655,63 @@
           "score"
         ],
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable 12-character passage id derived from source URL, heading path and text."
+          },
           "text": {
             "type": "string"
           },
           "score": {
             "type": "number"
+          },
+          "kind": {
+            "type": "string",
+            "description": "prose, code, list, table, or heading."
+          },
+          "heading": {
+            "type": "string"
+          },
+          "headingPath": {
+            "type": "string"
+          },
+          "anchor": {
+            "type": "string",
+            "description": "Heading slug suitable for a URL fragment; may be approximate for sites with custom heading ids."
+          },
+          "anchorType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "heading-slug",
+              null
+            ]
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "citation": {
+            "type": "string",
+            "description": "Source URL plus heading anchor when available."
+          },
+          "lineStart": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Start line in the extracted Markdown."
+          },
+          "lineEnd": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "End line in the extracted Markdown."
           }
         }
       },
@@ -513,6 +722,10 @@
           "passages"
         ],
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable 12-character source id derived from the final URL."
+          },
           "url": {
             "type": "string"
           },
@@ -521,6 +734,33 @@
           },
           "site": {
             "type": "string"
+          },
+          "origin": {
+            "type": "string",
+            "description": "registry, default, or user."
+          },
+          "entity": {
+            "type": "string",
+            "description": "Entity id when merged from a multi-entity search."
+          },
+          "depth": {
+            "type": "integer",
+            "description": "0 for a primary source, 1 for a followed link."
+          },
+          "via": {
+            "type": "string",
+            "description": "link or discovery when the source was not a primary registry source."
+          },
+          "version": {
+            "type": "string",
+            "description": "Document version when the source was rewritten to a versioned URL."
+          },
+          "updated": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last-Modified value of the fetched page, when provided by the server."
           },
           "passages": {
             "type": "array",
@@ -555,11 +795,128 @@
           "status": {
             "type": "integer"
           },
+          "cache": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "page",
+              "page-revalidated",
+              "miss",
+              "page-miss",
+              "bypass"
+            ]
+          },
           "error": {
             "type": "string"
           },
           "message": {
             "type": "string"
+          },
+          "fallback": {
+            "type": "boolean",
+            "description": "True when this attempt used a fallback source."
+          }
+        }
+      },
+      "Fact": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "value",
+          "citation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable 12-character fact id."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "price",
+              "percent",
+              "version",
+              "date",
+              "limit",
+              "status"
+            ]
+          },
+          "value": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "unit": {
+            "type": "string"
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "Matched context excerpt."
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "passageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "citation": {
+            "type": "string"
+          }
+        }
+      },
+      "Consensus": {
+        "type": "object",
+        "required": [
+          "sourceCount",
+          "comparable",
+          "agreementRatio",
+          "agreements",
+          "conflicts"
+        ],
+        "properties": {
+          "sourceCount": {
+            "type": "integer"
+          },
+          "comparable": {
+            "type": "integer"
+          },
+          "agreementRatio": {
+            "type": "number"
+          },
+          "agreements": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
           }
         }
       },
@@ -587,12 +944,28 @@
               "null"
             ]
           },
+          "entityOrigin": {
+            "type": "string",
+            "description": "registry, default, user, or a merged origin such as registry+default."
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Resolved document version, e.g. 20, 3.11, 8.0."
+          },
+          "versionRequested": {
+            "type": "string",
+            "description": "Explicit docVersion requested by the caller."
+          },
           "mode": {
             "type": "string",
             "enum": [
               "registry",
               "web-fallback",
-              "none"
+              "none",
+              "error"
             ]
           },
           "evidence": {
@@ -606,6 +979,44 @@
             "items": {
               "$ref": "#/components/schemas/Attempt"
             }
+          },
+          "facts": {
+            "type": "array",
+            "description": "Typed facts extracted from cited passages; deterministic and intent-filtered.",
+            "items": {
+              "$ref": "#/components/schemas/Fact"
+            }
+          },
+          "consensus": {
+            "description": "Cross-source agreement/conflict summary; omitted when fewer than two sources or no comparable facts.",
+            "$ref": "#/components/schemas/Consensus"
+          },
+          "partial": {
+            "type": "boolean",
+            "description": "True when a wall-clock budget stopped retrieval before all planned sources."
+          },
+          "budget": {
+            "type": "object",
+            "properties": {
+              "limitMs": {
+                "type": "integer"
+              },
+              "usedMs": {
+                "type": "integer"
+              },
+              "exhausted": {
+                "type": "boolean"
+              }
+            }
+          },
+          "searchMode": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "deep"
+            ],
+            "description": "Preset supplied by the caller."
           },
           "error": {
             "type": "object",
@@ -629,6 +1040,149 @@
           },
           "cached": {
             "type": "boolean"
+          },
+          "cache": {
+            "type": "string",
+            "enum": [
+              "none",
+              "result",
+              "index"
+            ]
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "origin": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "object"
+                },
+                "facets": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "confidence": {
+            "type": "object",
+            "properties": {
+              "score": {
+                "type": "number"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          "facets": {
+            "type": "object",
+            "properties": {
+              "terms": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "covered": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "missing": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ratio": {
+                "type": "number"
+              }
+            }
+          },
+          "timings": {
+            "type": "object",
+            "properties": {
+              "routeMs": {
+                "type": "number"
+              },
+              "fetchMs": {
+                "type": "number"
+              },
+              "extractMs": {
+                "type": "number"
+              },
+              "selectMs": {
+                "type": "number"
+              },
+              "followMs": {
+                "type": "number"
+              },
+              "indexMs": {
+                "type": "number"
+              },
+              "totalMs": {
+                "type": "number"
+              }
+            }
+          },
+          "index": {
+            "type": "object",
+            "properties": {
+              "entities": {
+                "type": "integer"
+              },
+              "stale": {
+                "type": "boolean"
+              },
+              "builtAt": {
+                "type": "integer"
+              }
+            }
+          },
+          "next": {
+            "type": "object",
+            "properties": {
+              "missingFacets": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "hint": {
+                "type": "string"
+              }
+            }
+          },
+          "fallback": {
+            "type": "object",
+            "description": "Present when web fallback was used.",
+            "properties": {
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "snippets": {
+                "type": "boolean"
+              },
+              "officialSources": {
+                "type": "integer"
+              },
+              "webSources": {
+                "type": "integer"
+              },
+              "augmented": {
+                "type": "boolean"
+              }
+            }
           }
         }
       },
@@ -672,6 +1226,18 @@
           "contentType": {
             "type": "string"
           },
+          "updated": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "etag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "tookMs": {
             "type": "integer"
           }
@@ -712,4 +1278,3 @@
     }
   }
 }
-

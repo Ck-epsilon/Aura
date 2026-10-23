@@ -1,0 +1,1601 @@
+{
+  "at": "2026-10-23T20:14:20.434Z",
+  "tasks": 77,
+  "success": 62,
+  "successRate": 0.805,
+  "citationRate": 1,
+  "factLinkRate": 1,
+  "latency": {
+    "p50": 53,
+    "p95": 1330,
+    "p99": 2718
+  },
+  "score": 0.903,
+  "failures": [
+    {
+      "id": "deepseek-price",
+      "failed": [
+        "qps"
+      ]
+    },
+    {
+      "id": "tavily-price",
+      "failed": [
+        "price"
+      ]
+    },
+    {
+      "id": "bing-retire",
+      "failed": [
+        "replacement"
+      ]
+    },
+    {
+      "id": "github-actions",
+      "failed": [
+        "path"
+      ]
+    },
+    {
+      "id": "rust-ownership",
+      "failed": [
+        "rules"
+      ]
+    },
+    {
+      "id": "alias-deepseek",
+      "failed": [
+        "price"
+      ]
+    },
+    {
+      "id": "alias-bing",
+      "failed": [
+        "date"
+      ]
+    },
+    {
+      "id": "mistral-price",
+      "failed": [
+        "price"
+      ]
+    },
+    {
+      "id": "mongodb-index",
+      "failed": [
+        "collection"
+      ]
+    },
+    {
+      "id": "sqlite-wal",
+      "failed": [
+        "pragma"
+      ]
+    },
+    {
+      "id": "grafana-datasource",
+      "failed": [
+        "add"
+      ]
+    },
+    {
+      "id": "istio-route",
+      "failed": [
+        "traffic"
+      ]
+    },
+    {
+      "id": "argocd-sync",
+      "failed": [
+        "sync"
+      ]
+    },
+    {
+      "id": "cypress-wait",
+      "failed": [
+        "element"
+      ]
+    },
+    {
+      "id": "pytest-param",
+      "failed": [
+        "param"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "id": "deepseek-price",
+      "ms": 370,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 2172,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "qps"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 2,
+        "linked": 2
+      },
+      "error": null
+    },
+    {
+      "id": "decompose-price-qps",
+      "ms": 293,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 1961,
+      "checks": 6,
+      "passed": 6,
+      "failed": [],
+      "citations": {
+        "total": 8,
+        "valid": 8
+      },
+      "facts": {
+        "total": 2,
+        "linked": 2
+      },
+      "error": null
+    },
+    {
+      "id": "deepseek-price-en",
+      "ms": 20,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 1902,
+      "checks": 4,
+      "passed": 4,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 4,
+        "linked": 4
+      },
+      "error": null
+    },
+    {
+      "id": "searxng-429",
+      "ms": 574,
+      "mode": "registry",
+      "sources": 1,
+      "chars": 725,
+      "checks": 4,
+      "passed": 4,
+      "failed": [],
+      "citations": {
+        "total": 3,
+        "valid": 3
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "searxng-json",
+      "ms": 2,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 1422,
+      "checks": 6,
+      "passed": 6,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "tavily-price",
+      "ms": 995,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 1516,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "price"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "google-cse",
+      "ms": 1047,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 708,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 5,
+        "valid": 5
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "bing-retire",
+      "ms": 1265,
+      "mode": "registry",
+      "sources": 1,
+      "chars": 329,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "replacement"
+      ],
+      "citations": {
+        "total": 3,
+        "valid": 3
+      },
+      "facts": {
+        "total": 2,
+        "linked": 2
+      },
+      "error": null
+    },
+    {
+      "id": "bing-retire-en",
+      "ms": 13,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 890,
+      "checks": 4,
+      "passed": 4,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 2,
+        "linked": 2
+      },
+      "error": null
+    },
+    {
+      "id": "python-asyncio",
+      "ms": 24,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 2691,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "python-314",
+      "ms": 899,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 776,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "node-http",
+      "ms": 50,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 2878,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 2,
+        "linked": 2
+      },
+      "error": null
+    },
+    {
+      "id": "node-fs",
+      "ms": 70,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 2029,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "github-rest",
+      "ms": 36,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 1367,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "github-actions",
+      "ms": 29,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 999,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "path"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "mdn-promise",
+      "ms": 33,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 2632,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "react-usestate",
+      "ms": 4,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 2258,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "vue-reactivity",
+      "ms": 34,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 1808,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "rust-ownership",
+      "ms": 23,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 2705,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "rules"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "go-module",
+      "ms": 7,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 732,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "docker-install",
+      "ms": 53,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 574,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 3,
+        "linked": 3
+      },
+      "error": null
+    },
+    {
+      "id": "postgres-table",
+      "ms": 42,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 1642,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 2,
+        "linked": 2
+      },
+      "error": null
+    },
+    {
+      "id": "nginx-config",
+      "ms": 72,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 2549,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "k8s-pod",
+      "ms": 68,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 1146,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "redis-commands",
+      "ms": 1100,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 5428,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 12,
+        "valid": 12
+      },
+      "facts": {
+        "total": 5,
+        "linked": 5
+      },
+      "error": null
+    },
+    {
+      "id": "alias-deepseek",
+      "ms": 15,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 1191,
+      "checks": 4,
+      "passed": 3,
+      "failed": [
+        "price"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 3,
+        "linked": 3
+      },
+      "error": null
+    },
+    {
+      "id": "alias-node",
+      "ms": 41,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 2565,
+      "checks": 4,
+      "passed": 4,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "alias-go",
+      "ms": 8,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 1613,
+      "checks": 4,
+      "passed": 4,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "alias-k8s",
+      "ms": 967,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 1991,
+      "checks": 4,
+      "passed": 4,
+      "failed": [],
+      "citations": {
+        "total": 5,
+        "valid": 5
+      },
+      "facts": {
+        "total": 16,
+        "linked": 16
+      },
+      "error": null
+    },
+    {
+      "id": "alias-bing",
+      "ms": 686,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 1118,
+      "checks": 4,
+      "passed": 3,
+      "failed": [
+        "date"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "aliyun-ecs",
+      "ms": 766,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 2215,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 12,
+        "valid": 12
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "wechat-phone",
+      "ms": 323,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 2560,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 11,
+        "valid": 11
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "qwen-price",
+      "ms": 870,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 5919,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 18,
+        "valid": 18
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "kimi-price",
+      "ms": 983,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 1435,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "hunyuan-price",
+      "ms": 380,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 1083,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "antd-table",
+      "ms": 1330,
+      "mode": "registry",
+      "sources": 8,
+      "chars": 8535,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 24,
+        "valid": 24
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "spring-datasource",
+      "ms": 14,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 2710,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "mysql-innodb",
+      "ms": 809,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 2376,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 12,
+        "valid": 12
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "multi-isolation",
+      "ms": 1229,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 3116,
+      "checks": 8,
+      "passed": 8,
+      "failed": [],
+      "citations": {
+        "total": 9,
+        "valid": 9
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "multi-react-vue",
+      "ms": 2261,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 2684,
+      "checks": 7,
+      "passed": 7,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "contract-confidence",
+      "ms": 1022,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 7078,
+      "checks": 6,
+      "passed": 6,
+      "failed": [],
+      "citations": {
+        "total": 18,
+        "valid": 18
+      },
+      "facts": {
+        "total": 6,
+        "linked": 6
+      },
+      "error": null
+    },
+    {
+      "id": "azure-app",
+      "ms": 18,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 858,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "gcp-compute",
+      "ms": 2718,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 1475,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "mistral-price",
+      "ms": 1094,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 1931,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "price"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "hf-transformers",
+      "ms": 43,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 2917,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "langchain-agent",
+      "ms": 31,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 2481,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "ollama-pull",
+      "ms": 12,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 1802,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "mongodb-index",
+      "ms": 24,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 1699,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "collection"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "sqlite-wal",
+      "ms": 11,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 1819,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "pragma"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 6,
+        "linked": 6
+      },
+      "error": null
+    },
+    {
+      "id": "elasticsearch-index",
+      "ms": 22,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 656,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "prometheus-promql",
+      "ms": 823,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 5850,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 12,
+        "valid": 12
+      },
+      "facts": {
+        "total": 2,
+        "linked": 2
+      },
+      "error": null
+    },
+    {
+      "id": "grafana-datasource",
+      "ms": 70,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 2654,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "add"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "angular-signal",
+      "ms": 24,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 1616,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "svelte-runes",
+      "ms": 4,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 2206,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "pypi-publish",
+      "ms": 46,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 2194,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "ghsa-advisory",
+      "ms": 1510,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 2581,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "flutter-page",
+      "ms": 114,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 1646,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "node20-fs",
+      "ms": 1016,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 7978,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 18,
+        "valid": 18
+      },
+      "facts": {
+        "total": 5,
+        "linked": 5
+      },
+      "error": null
+    },
+    {
+      "id": "ruby-block",
+      "ms": 21,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 1543,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "scala-case",
+      "ms": 5,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 1783,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "cassandra-table",
+      "ms": 790,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 4175,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 12,
+        "valid": 12
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "ansible-playbook",
+      "ms": 44,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 1041,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "istio-route",
+      "ms": 54,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 545,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "traffic"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "argocd-sync",
+      "ms": 24,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 2556,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "sync"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 3,
+        "linked": 3
+      },
+      "error": null
+    },
+    {
+      "id": "jest-mock",
+      "ms": 58,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 785,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "cypress-wait",
+      "ms": 33,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 2396,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "element"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 3,
+        "linked": 3
+      },
+      "error": null
+    },
+    {
+      "id": "pytest-param",
+      "ms": 12,
+      "mode": "registry",
+      "sources": 2,
+      "chars": 1850,
+      "checks": 5,
+      "passed": 4,
+      "failed": [
+        "param"
+      ],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 2,
+        "linked": 2
+      },
+      "error": null
+    },
+    {
+      "id": "flask-route",
+      "ms": 24,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 1700,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "express-middleware",
+      "ms": 56,
+      "mode": "registry",
+      "sources": 4,
+      "chars": 2223,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "helm-chart",
+      "ms": 33,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 3452,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 7,
+        "linked": 7
+      },
+      "error": null
+    },
+    {
+      "id": "otel-span",
+      "ms": 1212,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 5133,
+      "checks": 5,
+      "passed": 5,
+      "failed": [],
+      "citations": {
+        "total": 12,
+        "valid": 12
+      },
+      "facts": {
+        "total": 2,
+        "linked": 2
+      },
+      "error": null
+    },
+    {
+      "id": "no-sites-optout",
+      "ms": 0,
+      "mode": "none",
+      "sources": 0,
+      "chars": 0,
+      "checks": 3,
+      "passed": 3,
+      "failed": [],
+      "citations": {
+        "total": 0,
+        "valid": 0
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "no-entity",
+      "ms": 0,
+      "mode": "none",
+      "sources": 0,
+      "chars": 0,
+      "checks": 3,
+      "passed": 3,
+      "failed": [],
+      "citations": {
+        "total": 0,
+        "valid": 0
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "heldout-docker-healthcheck",
+      "ms": 47,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 526,
+      "checks": 3,
+      "passed": 3,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 1,
+        "linked": 1
+      },
+      "error": null
+    },
+    {
+      "id": "heldout-ts-satisfies",
+      "ms": 105,
+      "mode": "registry",
+      "sources": 3,
+      "chars": 1673,
+      "checks": 3,
+      "passed": 3,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "heldout-k8s-liveness",
+      "ms": 90,
+      "mode": "registry",
+      "sources": 5,
+      "chars": 2725,
+      "checks": 3,
+      "passed": 3,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    },
+    {
+      "id": "heldout-nginx-proxy",
+      "ms": 60,
+      "mode": "registry",
+      "sources": 6,
+      "chars": 2767,
+      "checks": 3,
+      "passed": 3,
+      "failed": [],
+      "citations": {
+        "total": 6,
+        "valid": 6
+      },
+      "facts": {
+        "total": 0,
+        "linked": 0
+      },
+      "error": null
+    }
+  ]
+}

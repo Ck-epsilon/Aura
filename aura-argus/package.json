@@ -1,6 +1,6 @@
 {
   "name": "aura-argus",
-  "version": "0.2.0",
+  "version": "2.4.0",
   "description": "Agent-native retrieval layer: route questions to primary sources, return citable passages. No API key, no per-call billing.",
   "type": "module",
   "license": "MIT",
@@ -9,7 +9,9 @@
   },
   "exports": {
     ".": "./src/core.mjs",
-    "./registry": "./src/registry.json"
+    "./client": "./src/client.mjs",
+    "./registry": "./src/registry.json",
+    "./sites": "./src/sites.json"
   },
   "files": [
     "src",
@@ -18,6 +20,7 @@
     "schema",
     "openapi.json",
     "README.md",
+    "CONTRACT.md",
     "RESULTS.md",
     "SECURITY.md",
     "CHANGELOG.md",
@@ -27,11 +30,21 @@
     "test": "node --test",
     "eval": "node eval/run.mjs",
     "bench": "node eval/bench.mjs",
+    "answerability": "node eval/answerability.mjs",
+    "gate": "node eval/gate.mjs",
+    "bench:agent": "node eval/agent-bench.mjs",
     "verify": "node eval/verify-registry.mjs",
+    "verify:registry": "node eval/verify-registry.mjs --registry-only",
     "verify-dsh": "node eval/verify-dsh.mjs",
-    "serve": "node src/cli.mjs serve",
-    "mcp": "node src/cli.mjs mcp",
-    "prepublishOnly": "npm test"
+    "warm": "node src/cli.mjs aura_argus_warm",
+    "gaps": "node src/cli.mjs aura_argus_gaps",
+    "index": "node src/cli.mjs aura_argus_index",
+    "serve": "node src/cli.mjs aura_argus_serve",
+    "mcp": "node src/cli.mjs aura_argus_mcp",
+    "prepublishOnly": "npm test",
+    "eval:heldout": "node eval/heldout.mjs",
+    "bench:pk50": "node eval/pk50.mjs",
+    "bench:pk215": "node eval/pk215.mjs"
   },
   "engines": {
     "node": ">=20"

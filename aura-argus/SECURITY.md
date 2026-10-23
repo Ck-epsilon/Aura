@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-`0.1.x` is the current public beta line. Security fixes land on the latest `0.1.x`.
+`1.2.x` is the current stable line. Security fixes land on the latest `1.2.x`; `1.1.x` receives critical fixes.
 
 ## Reporting
 
@@ -32,8 +32,8 @@ API key, and does not send telemetry.
   policy.
 - **HTTP server is local by default.** `serve` binds `127.0.0.1`. When binding to another host,
   always set `--token`; the token is a bearer secret, not a substitute for network isolation.
-- **Cache is local.** Search results and pages are cached under the user cache directory; use
-  `--no-cache` to bypass the result cache.
+- **Cache is local.** Search results and pages are cached under the user cache directory; the page cache stores fetched text with `ETag` / `Last-Modified` and separates public/private entries. The optional section index (`aura-argus index`) stores fetched sections under the local cache, with the same public/private separation. Use `--no-cache` to bypass.
+- **Query log is opt-in and local.** `AURA_ARGUS_QUERY_LOG=1` writes question text and evidence metadata to a local JSONL file; nothing is sent anywhere. Unset it to stop logging. `aura-argus gaps` only reads that local file.
 
 ## Known limitations
 

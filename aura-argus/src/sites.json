@@ -1,0 +1,618 @@
+{
+  "version": 1,
+  "note": "默认站点包：优先收录大陆直连（无代理）可用的一手文档。新 id 作为可路由站点；与 registry.json 同 id 时合并 sources；fallback=true 的源只在主源没有证据时尝试。",
+  "sites": {
+    "aliyun": {
+      "aliases": ["阿里云", "aliyun", "alibaba cloud", "阿里云 ecs"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://help.aliyun.com/zh/ecs/",
+          "title": "阿里云 ECS 文档",
+          "covers": ["ecs", "云服务器", "实例", "镜像", "规格", "计费", "价格", "服务器"]
+        },
+        {
+          "url": "https://www.alibabacloud.com/help/en/ecs",
+          "title": "Alibaba Cloud ECS documentation",
+          "covers": ["ecs", "instance type", "instance family", "规格", "选型", "云服务器"]
+        },
+        {
+          "url": "https://help.aliyun.com/zh/oss/",
+          "title": "阿里云 OSS 文档",
+          "covers": ["oss", "对象存储", "bucket", "存储", "上传", "下载", "权限"]
+        }
+      ]
+    },
+    "tencent-cloud": {
+      "aliases": ["腾讯云", "腾讯混元", "混元", "hunyuan", "tencent cloud", "tencentcloud", "qcloud"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://cloud.tencent.com/document/product/213",
+          "title": "腾讯云 CVM 文档",
+          "covers": ["cvm", "云服务器", "实例", "镜像", "规格", "计费", "服务器"]
+        },
+        {
+          "url": "https://cloud.tencent.com/document/product/436",
+          "title": "腾讯云 COS 文档",
+          "covers": ["cos", "对象存储", "bucket", "存储", "上传", "下载"]
+        },
+        {
+          "url": "https://cloud.tencent.com/document/product/1729",
+          "title": "腾讯混元大模型文档",
+          "covers": ["hunyuan", "混元", "大模型", "api", "模型", "推理"]
+        },
+        {
+          "url": "https://cloud.tencent.com/document/product/1729/97731",
+          "title": "腾讯混元生文计费",
+          "covers": ["hunyuan", "混元", "计费", "价格", "token", "模型"]
+        }
+      ]
+    },
+    "huawei-cloud": {
+      "aliases": ["华为云", "huawei cloud", "huaweicloud"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://support.huaweicloud.com/ecs/index.html",
+          "title": "华为云 ECS 文档",
+          "covers": ["ecs", "弹性云服务器", "云服务器", "实例", "规格", "镜像"]
+        },
+        {
+          "url": "https://support.huaweicloud.com/obs/index.html",
+          "title": "华为云 OBS 文档",
+          "covers": ["obs", "对象存储", "bucket", "存储", "上传", "下载"]
+        },
+        {
+          "url": "https://support.huaweicloud.com/modelarts/index.html",
+          "title": "华为云 ModelArts 文档",
+          "covers": ["modelarts", "模型", "训练", "推理", "ai", "notebook"]
+        }
+      ]
+    },
+    "volcengine": {
+      "aliases": ["火山引擎", "火山方舟", "volcengine", "豆包", "doubao"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://docs.volcengine.com/docs/ark?lang=zh",
+          "title": "火山方舟文档",
+          "covers": ["ark", "方舟", "豆包", "大模型", "模型", "api", "推理", "上下文"]
+        }
+      ]
+    },
+    "qwen": {
+      "aliases": ["通义千问", "通义", "qwen", "百炼", "model studio"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://help.aliyun.com/zh/model-studio/what-is-model-studio",
+          "title": "阿里云百炼介绍",
+          "covers": ["百炼", "model studio", "通义", "qwen", "模型", "api", "智能体"]
+        },
+        {
+          "url": "https://help.aliyun.com/zh/model-studio/models",
+          "title": "百炼模型大全与计费",
+          "covers": ["模型", "计费", "价格", "qwen", "token", "上下文", "多模态"]
+        },
+        {
+          "url": "https://help.aliyun.com/zh/model-studio/model-pricing",
+          "title": "百炼模型价格",
+          "covers": ["价格", "计费", "pricing", "qwen", "token", "输入", "输出"]
+        }
+      ]
+    },
+    "zhipu": {
+      "aliases": ["智谱", "智谱ai", "zhipu", "glm", "bigmodel", "chatglm"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://docs.bigmodel.cn/cn/guide/start/introduction",
+          "title": "智谱开放平台介绍",
+          "covers": ["智谱", "glm", "bigmodel", "模型", "api", "平台"]
+        },
+        {
+          "url": "https://docs.bigmodel.cn/cn/guide/start/model-overview",
+          "title": "智谱模型概览",
+          "covers": ["glm", "模型", "上下文", "token", "多模态", "推理"]
+        },
+        {
+          "url": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+          "title": "智谱 API 定价",
+          "covers": ["价格", "定价", "计费", "pricing", "token", "模型"]
+        }
+      ]
+    },
+    "moonshot": {
+      "aliases": ["kimi", "moonshot", "月之暗面", "kimi api"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://platform.kimi.com/docs/get-api-key",
+          "title": "Kimi API 快速开始",
+          "covers": ["kimi", "api key", "快速开始", "quickstart", "调用"]
+        },
+        {
+          "url": "https://platform.kimi.com/docs/models",
+          "title": "Kimi 模型列表",
+          "covers": ["kimi", "模型", "上下文", "多模态", "k3", "k2"]
+        },
+        {
+          "url": "https://platform.kimi.com/docs/pricing/chat",
+          "title": "Kimi 模型推理价格",
+          "covers": ["kimi", "价格", "计费", "pricing", "token", "模型"]
+        }
+      ]
+    },
+    "siliconflow": {
+      "aliases": ["硅基流动", "siliconflow", "silicon flow"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://docs.siliconflow.cn/docs/userguide/introduction",
+          "title": "SiliconFlow 平台介绍",
+          "covers": ["siliconflow", "硅基流动", "模型", "平台", "api", "推理"]
+        },
+        {
+          "url": "https://docs.siliconflow.cn/docs/userguide/quickstart",
+          "title": "SiliconFlow 快速开始",
+          "covers": ["quickstart", "快速开始", "api", "模型", "调用"]
+        },
+        {
+          "url": "https://www.siliconflow.cn/pricing",
+          "title": "SiliconFlow 价格方案",
+          "covers": ["价格", "计费", "pricing", "模型", "token", "免费"]
+        }
+      ]
+    },
+    "baidu-cloud": {
+      "aliases": ["百度智能云", "百度云", "千帆大模型", "qianfan", "文心一言", "ernie"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://cloud.baidu.com/doc/qianfan/s/rmh8khvwu",
+          "title": "百度千帆平台简介",
+          "covers": ["千帆", "qianfan", "文心", "ernie", "大模型", "模型", "api", "agent"]
+        },
+        {
+          "url": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+          "title": "百度千帆模型服务计费",
+          "covers": ["千帆", "qianfan", "计费", "价格", "token", "模型", "文心"]
+        },
+        {
+          "url": "https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp",
+          "title": "百度千帆模型更新记录",
+          "covers": ["千帆", "qianfan", "模型", "文心", "ernie", "版本", "更新"]
+        },
+        {
+          "url": "https://cloud.baidu.com/doc/qianfan/index.html",
+          "title": "百度千帆大模型平台",
+          "covers": ["千帆", "qianfan", "文心", "ernie", "大模型", "模型", "api"]
+        },
+        {
+          "url": "https://cloud.baidu.com/doc/index.html",
+          "title": "百度智能云产品文档",
+          "covers": ["百度智能云", "文档", "产品", "服务器", "存储"]
+        }
+      ]
+    },
+    "wechat-miniprogram": {
+      "aliases": ["微信小程序", "小程序开发", "wechat miniprogram", "weapp", "miniprogram"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/",
+          "title": "微信小程序开发指南",
+          "covers": ["小程序", "框架", "wxml", "wxss", "组件", "页面", "生命周期"]
+        },
+        {
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/api/",
+          "title": "微信小程序 API",
+          "covers": ["小程序", "api", "wx.", "接口", "登录", "支付", "网络"]
+        },
+        {
+          "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/getPhoneNumber.html",
+          "title": "微信小程序手机号快速验证",
+          "covers": ["手机号", "getphonenumber", "phonenumber", "open-type", "验证", "用户信息"]
+        }
+      ]
+    },
+    "wechat-pay": {
+      "aliases": ["微信支付", "wechat pay", "wxpay", "jsapi支付"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012062524",
+          "title": "微信支付 JSAPI 支付",
+          "covers": ["微信支付", "jsapi", "支付", "下单", "回调", "商户", "appid"]
+        }
+      ]
+    },
+    "gitee": {
+      "aliases": ["gitee", "码云"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://help.gitee.com/",
+          "title": "Gitee 帮助中心",
+          "covers": ["gitee", "码云", "仓库", "企业版", "ssh", "部署", "成员"]
+        }
+      ]
+    },
+    "uniapp": {
+      "aliases": ["uniapp", "uni-app", "dcloud"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://uniapp.dcloud.net.cn/",
+          "title": "uni-app 官方文档",
+          "covers": ["uni-app", "uniapp", "跨端", "vue", "小程序", "打包", "组件"]
+        }
+      ]
+    },
+    "antd": {
+      "aliases": ["antd", "ant design", "ant-design"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://ant.design/components/overview-cn/",
+          "title": "Ant Design 组件总览",
+          "covers": ["antd", "ant design", "组件", "button", "table", "form", "modal"]
+        },
+        {
+          "url": "https://ant.design/docs/react/introduce-cn/",
+          "title": "Ant Design 介绍",
+          "covers": ["antd", "react", "安装", "使用", "主题", "国际化"]
+        },
+        {
+          "url": "https://ant.design/components/table-cn/",
+          "title": "Ant Design Table",
+          "covers": ["antd", "table", "表格", "分页", "pagination", "排序", "筛选"]
+        }
+      ]
+    },
+    "element-plus": {
+      "aliases": ["element plus", "element-plus", "elementplus"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://element-plus.org/zh-CN/guide/quickstart.html",
+          "title": "Element Plus 快速开始",
+          "covers": ["element plus", "组件", "安装", "vue", "按需引入", "配置"]
+        }
+      ]
+    },
+    "echarts": {
+      "aliases": ["echarts", "apache echarts"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://echarts.apache.org/handbook/zh/get-started/",
+          "title": "Apache ECharts 快速上手",
+          "covers": ["echarts", "图表", "配置", "option", "数据集", "坐标轴", "系列"]
+        }
+      ]
+    },
+    "nacos": {
+      "aliases": ["nacos", "alibaba nacos"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://nacos.io/docs/latest/overview/",
+          "title": "Nacos 概览",
+          "covers": ["nacos", "服务发现", "配置中心", "注册中心", "集群", "命名空间"]
+        }
+      ]
+    },
+    "dubbo": {
+      "aliases": ["dubbo", "apache dubbo"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://cn.dubbo.apache.org/zh-cn/overview/what/",
+          "title": "Apache Dubbo 介绍",
+          "covers": ["dubbo", "rpc", "微服务", "注册中心", "服务治理", "协议"]
+        }
+      ]
+    },
+    "rocketmq": {
+      "aliases": ["rocketmq", "apache rocketmq"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://rocketmq.apache.org/zh/docs/",
+          "title": "Apache RocketMQ 文档",
+          "covers": ["rocketmq", "消息队列", "mq", "生产者", "消费者", "顺序消息", "事务消息"]
+        }
+      ]
+    },
+    "openresty": {
+      "aliases": ["openresty", "open resty"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://openresty.org/cn/",
+          "title": "OpenResty 中文站",
+          "covers": ["openresty", "nginx", "lua", "lua-resty", "模块", "高并发"]
+        },
+        {
+          "url": "https://openresty.org/cn/installation.html",
+          "title": "OpenResty 安装",
+          "covers": ["openresty", "安装", "编译", "依赖", "linux", "macos"]
+        }
+      ]
+    },
+    "mysql": {
+      "aliases": ["mysql", "mysql 8"],
+      "region": "global",
+      "sources": [
+        {
+          "url": "https://dev.mysql.com/doc/refman/8.4/en/",
+          "title": "MySQL 8.4 Reference Manual",
+          "covers": ["mysql", "sql", "索引", "事务", "复制", "备份", "查询"]
+        },
+        {
+          "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-storage-engine.html",
+          "title": "MySQL InnoDB 存储引擎",
+          "covers": ["innodb", "存储引擎", "事务", "锁", "mvcc", "索引", "隔离级别"]
+        },
+        {
+          "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html",
+          "title": "MySQL InnoDB 事务隔离级别",
+          "covers": ["隔离级别", "isolation", "事务", "transaction", "锁", "mvcc"]
+        }
+      ]
+    },
+    "spring-boot": {
+      "aliases": ["spring boot", "springboot", "spring-boot"],
+      "region": "global",
+      "sources": [
+        {
+          "url": "https://docs.spring.io/spring-boot/",
+          "title": "Spring Boot 文档",
+          "covers": ["spring boot", "springboot", "自动配置", "starter", "配置"]
+        },
+        {
+          "url": "https://docs.spring.io/spring-boot/reference/data/sql.html",
+          "title": "Spring Boot SQL Databases",
+          "covers": ["spring boot", "sql", "数据库", "数据源", "jdbc", "jpa", "datasource"]
+        },
+        {
+          "url": "https://docs.spring.io/spring-boot/how-to/data-access.html",
+          "title": "Spring Boot Data Access",
+          "covers": ["spring boot", "数据访问", "jdbc", "jpa", "mybatis", "数据源"]
+        }
+      ]
+    },
+    "mybatis": {
+      "aliases": ["mybatis", "mybatis 3"],
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://mybatis.org/mybatis-3/zh_CN/index.html",
+          "title": "MyBatis 3 简介",
+          "covers": ["mybatis", "sql", "mapper", "持久层", "jdbc", "orm"]
+        },
+        {
+          "url": "https://mybatis.org/mybatis-3/zh_CN/configuration.html",
+          "title": "MyBatis 3 配置",
+          "covers": ["mybatis", "配置", "configuration", "mapper", "xml", "typealias"]
+        }
+      ]
+    },
+    "maven": {
+      "aliases": ["maven", "apache maven"],
+      "region": "global",
+      "sources": [
+        {
+          "url": "https://maven.apache.org/guides/",
+          "title": "Maven Guides",
+          "covers": ["maven", "构建", "依赖", "仓库", "插件", "生命周期"]
+        },
+        {
+          "url": "https://maven.apache.org/pom.html",
+          "title": "Maven POM Reference",
+          "covers": ["maven", "pom", "依赖", "dependency", "parent", "plugin"]
+        }
+      ]
+    },
+    "gradle": {
+      "aliases": ["gradle", "gradle build"],
+      "region": "global",
+      "sources": [
+        {
+          "url": "https://docs.gradle.org/current/userguide/userguide.html",
+          "title": "Gradle User Manual",
+          "covers": ["gradle", "构建", "task", "依赖", "plugin", "kotlin dsl"]
+        }
+      ]
+    },
+    "go": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://golang.google.cn/doc/",
+          "title": "Go 文档（大陆镜像）",
+          "covers": ["go", "golang", "goroutine", "module", "文档", "教程"],
+          "fallback": true
+        }
+      ]
+    },
+    "aws": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://docs.amazonaws.cn/",
+          "title": "AWS 中国区文档",
+          "covers": ["aws", "amazon", "中国区", "ec2", "s3", "iam", "cli"],
+          "fallback": true
+        }
+      ]
+    },
+    "python": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://docs.python.org/zh-cn/3/",
+          "title": "Python 中文文档",
+          "covers": ["python", "asyncio", "库", "library", "教程", "文档"],
+          "fallback": true
+        }
+      ]
+    },
+    "kubernetes": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://kubernetes.io/zh-cn/docs/home/",
+          "title": "Kubernetes 中文文档",
+          "covers": ["kubernetes", "k8s", "集群", "pod", "deployment", "service", "容器"],
+          "fallback": true
+        }
+      ]
+    },
+    "mdn": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://developer.mozilla.org/zh-CN/docs/Web",
+          "title": "MDN Web 中文文档",
+          "covers": ["javascript", "css", "html", "web", "api", "promise", "dom"],
+          "fallback": true
+        }
+      ]
+    },
+    "react": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://zh-hans.react.dev/learn",
+          "title": "React 中文文档",
+          "covers": ["react", "hook", "state", "组件", "jsx", "props"],
+          "fallback": true
+        }
+      ]
+    },
+    "git": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://git-scm.com/book/zh/v2",
+          "title": "Pro Git 中文版",
+          "covers": ["git", "rebase", "merge", "branch", "commit", "分支", "版本控制"],
+          "fallback": true
+        }
+      ]
+    },
+    "php": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://www.php.net/manual/zh/index.php",
+          "title": "PHP 中文手册",
+          "covers": ["php", "函数", "数组", "类型", "array", "字符串"],
+          "fallback": true
+        }
+      ]
+    },
+    "django": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/zh-hans/stable/",
+          "title": "Django 中文文档",
+          "covers": ["django", "模型", "视图", "orm", "migration", "模板"],
+          "fallback": true
+        }
+      ]
+    },
+    "dotnet": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/zh-cn/dotnet/",
+          "title": ".NET 中文文档",
+          "covers": ["dotnet", ".net", "c#", "asp.net", "cli", "运行时"],
+          "fallback": true
+        }
+      ]
+    },
+    "powershell": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/zh-cn/powershell/",
+          "title": "PowerShell 中文文档",
+          "covers": ["powershell", "cmdlet", "脚本", "module", "管道"],
+          "fallback": true
+        }
+      ]
+    },
+    "vite": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://cn.vitejs.dev/guide/",
+          "title": "Vite 官方中文文档",
+          "covers": ["vite", "build", "dev server", "plugin", "config", "hmr", "构建"],
+          "fallback": true
+        }
+      ]
+    },
+    "vitest": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://cn.vitest.dev/guide/",
+          "title": "Vitest 中文指南",
+          "covers": ["vitest", "test", "mock", "coverage", "config", "测试"],
+          "fallback": true
+        }
+      ]
+    },
+    "pnpm": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://pnpm.io/zh/",
+          "title": "pnpm 中文文档",
+          "covers": ["pnpm", "workspace", "install", "store", "symlink", "依赖"],
+          "fallback": true
+        }
+      ]
+    },
+    "github": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://docs.github.com/zh",
+          "title": "GitHub 中文文档",
+          "covers": ["github", "actions", "workflow", "pull request", "token", "api"],
+          "fallback": true
+        }
+      ]
+    },
+    "fastapi": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://fastapi.tiangolo.com/zh/",
+          "title": "FastAPI 中文文档",
+          "covers": ["fastapi", "pydantic", "async", "依赖注入", "openapi", "路由"],
+          "fallback": true
+        }
+      ]
+    },
+    "bing": {
+      "region": "cn",
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/zh-cn/lifecycle/announcements/bing-search-api-retirement",
+          "title": "必应搜索 API 停用公告（中文）",
+          "covers": ["bing", "search api", "retirement", "shutdown", "2025", "停用"],
+          "fallback": true
+        }
+      ]
+    }
+  }
+}
