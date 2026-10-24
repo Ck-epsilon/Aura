@@ -131,7 +131,7 @@ export const FLAT_ADDRESS_KEYS = ['target', 'lines', 'start_line', 'end_line', '
 /**
  * `targets` 元素（单目标参数）的合法键。
  *
- * 与顶层工具键**分开**：`targets` 本身、批量级的 `include_transaction` 都不是元素参数；
+ * 与顶层工具键**分开**：`targets` 本身不是元素参数；
  * 放进元素里只会被静默丢掉。三面（CLI / MCP / DSH）共用这一份，未知键一律
  * `ARGS_UNKNOWN_KEY`，不再只校验顶层。
  */

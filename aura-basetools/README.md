@@ -44,9 +44,9 @@ MCP 客户端只写一段配置（agent 自己就能加）：
 `offset`（0-based）+ `limit`（行数）分页形状，与 `lines` 互斥。
 
 **0.10.1 起新增整文件写**：CLI `aura basetools write --file <路径> --content <文本|@文件>`、
-MCP `aura_basetools_write`。新建与覆写都走 `edit` 同一条工作区锁、事务日志与落盘回读校验；覆写保留
+MCP `aura_basetools_write`。新建与覆写都走 `edit` 同一条工作区锁、原子写与落盘回读校验；覆写保留
 已有 BOM，并把 content 的换行适配成文件已有风格，**有无尾换行也精确保留**。
-`--no-overwrite` 拒绝覆盖，`--dry-run` / `--plan` 只规划，`--transaction` 可 `undo`。
+`--no-overwrite` 拒绝覆盖，`--dry-run` / `--plan` 只规划。
 整份写仍比 `edit` 粗：能改局部就不要整份写。
 
 **0.10.2 起 `old` 可配 `replace_all`**（CLI `--replace-all`、MCP/DSH `replace_all: true`）：
@@ -79,12 +79,12 @@ exact 命中的那一段、拒绝带首/尾换行的 `old`；`targets` 元素上
 `require_observation`，以及非法元素值的参数面拒绝（不再吐 Node 栈或先建事务）。
 
 **0.12.0 起对外工具标识统一为 `aura_basetools_*`**：MCP / DSH 工具名为
-`aura_basetools_read`、`aura_basetools_edit`、`aura_basetools_write`、
-`aura_basetools_undo`、`aura_basetools_transactions`。包名与 bin 名不变。
-历史会话日志仍含旧名；分析件同时认旧名与新名。
+`aura_basetools_read`、`aura_basetools_edit`、`aura_basetools_write`。包名与 bin 名不变。
+历史会话日志仍含旧名；分析件同时认旧名与新名。0.14.0 移除了公开
+`aura_basetools_undo` / `aura_basetools_transactions`（采用率 0）。
 
 **0.13.0 起 CLI 也进入 `basetools` 命名空间**：统一写成 `aura basetools <verb>`
-（`read` / `edit` / `write` / `undo` / `transactions` / `mcp` / `doctor` / `capabilities`）。
+（`read` / `edit` / `write` / `mcp` / `doctor` / `capabilities`；0.14.0 移除 `undo` / `transactions`）。
 顶层旧动词不再作为别名执行，会返回 `CLI_NAMESPACE_REQUIRED` 并提示新写法；
 `aura --help` / `aura --version` 仍在顶层。MCP 配置的 args 改为 `["basetools", "mcp"]`。
 
@@ -167,25 +167,19 @@ layers 29 · regex-lex 51）与 `src/aura-{read,edit}/`（load 50/41 · align 12
 测试依赖 DSH 0.2.x 的 API 形状（`dsh-agent-preset` 包名、`@deepseek-ai/dsh-hook-protocol` 不再随宿主发布 ⇒ 套件内用钉住的 0.0.1-rc.1 解码器副本，见 `THIRD-PARTY-NOTICES.md`）。
 
 
-## 写事务（journal / undo）
+## 写事务（内部回滚，无公开 undo）
 
-每次 `edit` 在第一次写之前把原始字节记到 `~/.aura/transactions/<workspace>/<id>/`；写成功后标记 committed，写失败则按 `afterVersion` 校验后回滚已落地的文件。
+0.14.0 移除公开 `undo` / `transactions`（642 个会话中 0 次使用）。事务日志仍是**内部实现**：
+每次 `edit` 在第一次写之前把原始字节记到 `~/.aura/transactions/<workspace>/<id>/`，
+写成功标记 committed，写失败则按 `afterVersion` 校验后回滚已落地的文件。
 
 ```bash
-aura basetools edit --file a.js --lines 10 --replace 'const x = 1' --transaction
-aura basetools edit --targets '[{"file_path":"a.js","hunks":[...]},{"file_path":"b.js","hunks":[...]}]' --transaction
-aura basetools write --file new.js --content @template.js --transaction   # 整份新建/覆写也进事务
-aura basetools transactions
-aura basetools undo                      # 最近一次 committed
-aura basetools undo --id <id>            # 指定事务
-aura basetools undo --id <id> --force    # 文件在事务后又被改过也强制恢复
+# 不再有 --transaction / undo / transactions；失败回滚仍然自动发生
+aura basetools edit --file a.js --lines 10 --replace 'const x = 1'
 ```
 
-- 默认 `edit` **不把 transaction id 放进回执**（保持 CLI/MCP 输出稳定）；需要 id 时加 `--transaction`（MCP 用 `include_transaction: true`）。
 - 多目标写：一个目标写失败，已落地的目标会被事务回滚；回执按**最终磁盘**重建
-  （`applied:0` / `landed:false` / `landed_paths:[]` / `rolled_back:true`），
-  `rollback` 字段不依赖 `--transaction`。回滚有冲突时标 `recovery_required`。
-- undo 默认拒绝覆盖“事务后又被外部改过”的文件（`TRANSACTION_STALE`）；`--force` 才强制。
+  （`applied:0` / `landed:false` / `landed_paths:[]` / `rolled_back:true`）。回滚有冲突时标 `recovery_required`。
 - 同一工作区的并发编辑由 `~/.aura/locks/<workspace>.lock` 串行化；`AURA_NO_LOCK=1` 可关闭，`AURA_LOCK_TIMEOUT_MS` / `AURA_LOCK_STALE_MS` 可调。
 - `AURA_CACHE_DIR` 同时覆盖观测缓存、事务日志和锁目录。
 

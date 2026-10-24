@@ -4,7 +4,7 @@
  * 覆盖：
  *   A 新建：真正建盘、回执 operation=create、dry-run 不建盘、事务可撤销（撤销后文件消失）
  *   B 覆写：整份替换、BOM 与文件既有行尾保留、有无尾换行精确、no-overwrite、dry-run、
- *     事务 + undo 逐字节恢复、`--content @file`
+ *     `--content @file`（0.14.0 移除公开事务/undo）
  *   C MCP：aura_basetools_write 出现在 tools/list，create/overwrite/no_overwrite/dry_run/坏参数都走同一引擎
  *   D 能力清单：commands 与 tools 都包含 write
  *
@@ -55,7 +55,7 @@ process.on('exit', () => {
 })
 
 // ── A 新建 ────────────────────────────────────────────────────────────────
-say('A 新建：整份建盘，dry-run 不建盘，事务可撤销')
+say('A 新建：整份建盘，dry-run 不建盘')
 {
   const created = json(run(['basetools', 'write', '--file', 'created.txt', '--content', 'alpha\nbeta\n']))
   check(created.ok === true && created.result?.operation === 'create', 'A1 新建回执 operation=create', JSON.stringify(created).slice(0, 160))
@@ -65,13 +65,6 @@ say('A 新建：整份建盘，dry-run 不建盘，事务可撤销')
   const dry = json(run(['basetools', 'write', '--file', 'dry-new.txt', '--content', 'x', '--dry-run']))
   check(dry.ok === true && dry.result?.operation === 'create' && dry.result?.dryRun === true && dry.result?.bytes === 1, 'A4 新建 dry-run 回执给 create/bytes，但不落盘', JSON.stringify(dry).slice(0, 160))
   check(fs.existsSync(file('dry-new.txt')) === false, 'A5 新建 dry-run 之后文件仍不存在')
-
-  const tx = json(run(['basetools', 'write', '--file', 'tx-created.txt', '--content', 'gone\n', '--transaction']))
-  const txId = tx.result?.transaction?.id
-  check(tx.ok === true && typeof txId === 'string' && tx.result.transaction.status === 'committed', 'A6 --transaction 返回 committed 事务', JSON.stringify(tx.result?.transaction))
-  const undone = json(run(['basetools', 'undo', '--id', txId]))
-  check(undone.ok === true && undone.status === 'undone', 'A7 undo 成功', JSON.stringify(undone).slice(0, 160))
-  check(fs.existsSync(file('tx-created.txt')) === false, 'A8 撤销“新建”后文件消失（不留下空文件）')
 
   const missingFile = json(run(['basetools', 'write', '--content', 'x']))
   const missingContent = json(run(['basetools', 'write', '--file', 'x.txt']))
@@ -118,14 +111,6 @@ say('B 覆写：整份替换，BOM / 既有行尾 / 尾换行精确')
   check(fs.readFileSync(file('kept.txt')).equals(beforeDry), 'B10 被拒绝的 no-overwrite 没动磁盘')
   const newNoOverwrite = json(run(['basetools', 'write', '--file', 'brand-new.txt', '--content', 'ok\n', '--no-overwrite']))
   check(newNoOverwrite.ok === true, 'B11 no-overwrite 对不存在的文件照常创建')
-
-  fs.writeFileSync(file('tx-restore.txt'), Buffer.concat([BOM, Buffer.from('orig\r\nbytes\r\n', 'utf8')]))
-  prime('tx-restore.txt')
-  const original = fs.readFileSync(file('tx-restore.txt'))
-  const tx = json(run(['basetools', 'write', '--file', 'tx-restore.txt', '--content', 'changed\n', '--transaction']))
-  check(!fs.readFileSync(file('tx-restore.txt')).equals(original), 'B12 覆写真的改了盘')
-  const undone = json(run(['basetools', 'undo', '--id', tx.result?.transaction?.id]))
-  check(undone.ok === true && fs.readFileSync(file('tx-restore.txt')).equals(original), 'B13 undo 逐字节恢复覆写前的原文（含 BOM/CRLF）')
 
   fs.writeFileSync(file('content-source.txt'), 'from @file\nsecond line\n')
   const atFile = json(run(['basetools', 'write', '--file', 'from-at.txt', '--content', '@' + file('content-source.txt')]))
@@ -225,7 +210,7 @@ say('C MCP：aura_basetools_write 声明面与调用面')
 
   const tools = byId.get(2)?.result?.tools ?? []
   const writeTool = tools.find((tool) => tool.name === 'aura_basetools_write')
-  check(tools.length === 5 && writeTool !== undefined, `C1 tools/list 五个工具且含 aura_basetools_write（${tools.map((tool) => tool.name).join(',')}）`)
+  check(tools.length === 3 && writeTool !== undefined, `C1 tools/list 三个工具且含 aura_basetools_write（${tools.map((tool) => tool.name).join(',')}）`)
   check(JSON.stringify(writeTool?.inputSchema?.required) === JSON.stringify(['file_path', 'content']), 'C2 aura_basetools_write schema 必填 file_path + content', JSON.stringify(writeTool?.inputSchema?.required))
   check(envOf(3).ok === true && envOf(3).result?.operation === 'create', 'C3 经 MCP 新建成功', JSON.stringify(envOf(3)).slice(0, 160))
   check(fs.readFileSync(file('mcp-created.txt'), 'utf8') === 'mcp\ncreate\n', 'C4 MCP 新建的内容真的落盘')

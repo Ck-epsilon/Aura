@@ -6,8 +6,6 @@
  *   aura basetools edit  --file F (--hunks '<json>' | --hunks-file P) [--dry-run] [--create <文本|@文件>]
  *   aura basetools read  --targets '[...]|@spec.json'                    一次读多个目标（与 --file 互斥）
  *   aura basetools edit  --targets '[...]|@spec.json'                    一次改多个文件（与 --file 互斥；任一规划失败 ⇒ 零写入）
- *   aura basetools undo [--id <事务 id>] [--force]                      撤销最近一次/指定写事务
- *   aura basetools transactions                                         列出当前工作区写事务
  *   aura basetools mcp
  *   aura --help | --version
  *
@@ -27,8 +25,6 @@ import {
   // 多目标（fs-contract-v2）的引擎绑定：与单目标同一处（`lib/ops.mjs`），bin 里不另找引擎。
   readManyWith,
   editManyEnvelope,
-  undoEnvelope,
-  transactionsEnvelope,
   capabilitiesEnvelope,
   writeEnvelope,
   assertReadTargets,
@@ -74,7 +70,7 @@ let command = argv[0]
  * 有了这份名单，“下一个是已知布尔旗标”才当没带值，**其它以 `--` 开头的东西都当值**。
  * 代价是名单要维护；收益是那个静默丢值的路径从根上消失，而不是靠叫用户改写法。
  */
-const BOOLEAN_FLAGS = new Set(['pretty', 'dry-run', 'plan', 'transaction', 'force', 'no-overwrite', 'replace-all', 'require-observation', 'allow-unobserved', 'json'])
+const BOOLEAN_FLAGS = new Set(['pretty', 'dry-run', 'plan', 'no-overwrite', 'replace-all', 'require-observation', 'allow-unobserved', 'json'])
 const isBooleanFlag = (token) => typeof token === 'string' && BOOLEAN_FLAGS.has(token.replace(/^--/, ''))
 
 /**
@@ -91,14 +87,12 @@ const COMMAND_FLAGS = {
   },
   edit: {
     value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol'],
-    bool: ['pretty', 'dry-run', 'plan', 'transaction', 'replace-all', 'require-observation'],
+    bool: ['pretty', 'dry-run', 'plan', 'replace-all', 'require-observation'],
   },
   write: {
     value: ['cwd', 'file', 'content', 'eol'],
-    bool: ['pretty', 'dry-run', 'plan', 'transaction', 'no-overwrite', 'allow-unobserved'],
+    bool: ['pretty', 'dry-run', 'plan', 'no-overwrite', 'allow-unobserved'],
   },
-  undo: { value: ['cwd', 'id'], bool: ['pretty', 'force'] },
-  transactions: { value: ['cwd'], bool: ['pretty'] },
   doctor: { value: ['cwd'], bool: ['pretty', 'json'] },
   capabilities: { value: ['cwd'], bool: ['pretty'] },
   mcp: { value: ['cwd'], bool: ['pretty'] },
@@ -184,7 +178,7 @@ const USAGE = [
   '   aura basetools edit  --file <路径> --handle <h…> --position before|after --replace <文本>  # 在区间边界插入，区间本身不动',
   "              （--line / --position 是从属键：只有与 --handle 同时给才成立，单独给不构成一次编辑）",
   '  aura basetools mcp                    启动 MCP stdio 服务',
-  '  aura basetools write --file <路径> --content <文本|@文件> [--no-overwrite] [--dry-run|--plan] [--transaction] [--allow-unobserved] [--eol auto|preserve|lf|crlf]',
+  '  aura basetools write --file <路径> --content <文本|@文件> [--no-overwrite] [--dry-run|--plan] [--allow-unobserved] [--eol auto|preserve|lf|crlf]',
   '             （覆写默认要求先读过这一版；--allow-unobserved 才允许盲写）',
   '  aura basetools doctor [--json]        自检：Node/版本/MCP 握手/缓存与锁目录可写',
   '  aura basetools capabilities [--pretty] 能力清单：读模式/地址档/语言/限制（JSON）',
@@ -311,7 +305,7 @@ if (command === '--version' || command === '-v') emit({ ok: true, version: VERSI
  * 旧顶层动词只给**迁移提示**，不再作为别名执行——保留别名等于保留未来的撞名。
  * 只提示、不执行：`aura basetools read` 不会偷偷改文件。
  */
-const MOVED_COMMANDS = new Set(['read', 'outline', 'edit', 'write', 'undo', 'transactions', 'mcp', 'doctor', 'capabilities'])
+const MOVED_COMMANDS = new Set(['read', 'outline', 'edit', 'write', 'mcp', 'doctor', 'capabilities'])
 if (!namespaced && MOVED_COMMANDS.has(command)) {
   emit(
     {
@@ -356,24 +350,10 @@ if (command === 'write') {
     content,
     dryRun: has('dry-run') || has('plan'),
     noOverwrite: has('no-overwrite'),
-    includeTransaction: has('transaction'),
     allowUnobserved: has('allow-unobserved'),
     ...(typeof eol === 'string' ? { eol } : {}),
   })
   emit(env, env.ok ? 0 : 2)
-}
-
-if (command === 'undo') {
-  const env = await undoEnvelope(provider, {
-    id: typeof flag('id') === 'string' ? flag('id') : undefined,
-    force: has('force'),
-  })
-  emit(env, env.ok ? 0 : 2)
-}
-
-if (command === 'transactions') {
-  const env = transactionsEnvelope(provider)
-  emit(env, 0)
 }
 
 if (command === 'doctor') {
@@ -492,7 +472,6 @@ if (command === 'edit') {
     const env = await editManyEnvelope(provider, {
       targets: spec.targets,
       dryRun: has('dry-run') || has('plan') || spec.dryRun,
-      includeTransaction: has('transaction'),
       ...(has('require-observation') ? { requireObservation: true } : {}),
     })
     emit(env, env.ok ? 0 : 2)
@@ -605,7 +584,6 @@ if (command === 'edit') {
     hunks: hunks ?? [],
     dryRun: has('dry-run') || has('plan'),
     create,
-    includeTransaction: has('transaction'),
     ...(has('require-observation') ? { requireObservation: true } : {}),
   })
   emit(env, env.ok ? 0 : 2)

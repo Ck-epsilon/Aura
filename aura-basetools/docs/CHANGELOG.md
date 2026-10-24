@@ -14,6 +14,9 @@
   `target` / `lines` / `line_cue` / `anchor` / `old` / `handle`。定位层第 0 层、
   `intentAddressConflicts`、`PATCH_INTENT_CONFLICT` 一并删除；CLI / MCP / DSH schema /
   README / agent-guide 同步。套件从 89 降到 88。
+- 移除公开 `undo` / `transactions`：642 个会话中采用率为 **0**。MCP 工具 5 → 3，CLI 删除
+  `basetools undo` / `basetools transactions`、`--transaction`、`include_transaction`；
+  事务日志保留为**内部失败回滚**，不再提供对外撤销面。
 - `task-bench` 的 TypeScript / Erlang 场景改用 `target`，基准 id 同步为 `ts-target` / `erl-target`。
 - 保留 0.13.3 的发布内容可信化、并发安全闸与流式探针。
 

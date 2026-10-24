@@ -13,7 +13,7 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createNodeFsProvider, DEFAULT_MAX_TEXT_BYTES } from './fs-provider.mjs'
 import { withWorkspaceLock } from './workspace-lock.mjs'
-import { createTransaction, listTransactions, undoTransaction } from './transaction-store.mjs'
+import { createTransaction } from './transaction-store.mjs'
 import { createDiskStore } from './observation-store.mjs'
 
 /**
@@ -93,8 +93,8 @@ export function capabilitiesEnvelope() {
         addressKinds: [...new Set([...engineArgs.FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
         options: ['replace_all', 'require_observation'],
         writeSafety: {
-          cli: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'byte-verify'],
-          mcp: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'byte-verify'],
+          cli: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
+          mcp: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
           dsh: ['stale-region-gate', 'byte-verify'],
         },
       },
@@ -103,14 +103,14 @@ export function capabilitiesEnvelope() {
         operations: ['create', 'overwrite'],
         options: ['eol'],
         writeSafety: {
-          cli: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          mcp: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          // DSH 壳没有事务/undo/工作区锁；它经过引擎的区域闸、严格新鲜度与回读校验。
+          cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
+          mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
+          // DSH 壳没有工作区锁；它经过引擎的区域闸、严格新鲜度与回读校验。
           dsh: ['stale-region-gate', 'observation-gate', 'byte-verify'],
         },
       },
     ],
-    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools undo', 'basetools transactions', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
+    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
     langs,
     langsCount: langs.length,
     limits: {
@@ -489,12 +489,9 @@ export async function editEnvelope(provider, request) {
   // 事务需要工作区根与真实文件系统；测试/嵌入式 provider 没有 root 时保持原来的引擎行为。
   if (provider.root === undefined) return editEnvelopeInner(provider, request)
   /**
-   * 预演不建事务：否则 `--dry-run --transaction` 会提交一条 0 文件的 committed 事务，
-   * 把 `aura undo`（最近一次 committed）顶掉——用户以为撤销了真实编辑，实际 restored:0。
-   * 预演也不写盘，不需要工作区锁。
+   * 预演不建事务、不写盘，也不需要工作区锁；0.14.0 起事务日志只用于失败回滚。
    */
   if (request.dryRun === true) return editEnvelopeInner(provider, request)
-  const includeTransaction = request.includeTransaction === true
   try {
     return await withWorkspaceLock(provider.root, async () => {
       const tx = createTransaction(provider.root, 'aura_basetools_edit')
@@ -508,10 +505,10 @@ export async function editEnvelope(provider, request) {
           error.rollback = rollback
           throw error
         }
-        return includeTransaction ? { ...env, result: { ...env.result, transaction: tx.summary() } } : env
+        return env
       }
-      const rollback = await tx.rollback(provider)
-      return includeTransaction ? { ...env, transaction: tx.summary(), rollback } : env
+      await tx.rollback(provider)
+      return env
     })
   } catch (error) {
     return transactionError(error)
@@ -523,7 +520,6 @@ export async function editManyEnvelope(provider, request) {
   if (provider.root === undefined) return editManyEnvelopeInner(provider, request)
   // 与单目标同一条：预演不建事务、不写盘，不能顶掉真正的最近 committed 事务。
   if (request.dryRun === true) return editManyEnvelopeInner(provider, request)
-  const includeTransaction = request.includeTransaction === true
   try {
     return await withWorkspaceLock(provider.root, async () => {
       const tx = createTransaction(provider.root, 'aura_basetools_edit')
@@ -538,14 +534,13 @@ export async function editManyEnvelope(provider, request) {
             error.rollback = rollback
             throw error
           }
-          return includeTransaction ? { ...batch, transaction: tx.summary() } : batch
+          return batch
         }
         const rollback = await tx.rollback(provider)
         const finalBatch = writePath.rebuildAfterRollback(batch, rollback)
         return {
           ...finalBatch,
           ok: false,
-          ...(includeTransaction ? { transaction: tx.summary() } : {}),
         }
       } catch (error) {
         const rollback = await tx.rollback(provider)
@@ -579,7 +574,6 @@ function compactWriteReceipt(env, content) {
       dryRun,
       ...(result.write_verify === undefined ? {} : { write_verify: result.write_verify }),
       ...(result.unverified_region === true ? { unverified_region: true } : {}),
-      ...(result.transaction === undefined ? {} : { transaction: result.transaction }),
     },
   }
 }
@@ -600,7 +594,7 @@ function compactWriteReceipt(env, content) {
  * `preserve` 按 content 原样写（与内置 Write 的“给什么写什么”对齐），`lf` / `crlf` 强制统一。
  * 新建文件永远按 content 原样写；显式传非 `auto` 的 eol 会被拒绝（不做静默忽略）。
  */
-export async function writeEnvelope(provider, { file, content, dryRun = false, noOverwrite = false, includeTransaction = false, allowUnobserved = false, eol = 'auto' } = {}) {
+export async function writeEnvelope(provider, { file, content, dryRun = false, noOverwrite = false, allowUnobserved = false, eol = 'auto' } = {}) {
   if (typeof file !== 'string' || file.length === 0) {
     return { ok: false, error: 'write needs a file path', code: 'WRITE_BAD_ARGS' }
   }
@@ -627,7 +621,7 @@ export async function writeEnvelope(provider, { file, content, dryRun = false, n
       if (dryRun) {
         return { ok: true, result: { path: displayPath, operation: 'create', bytes: Buffer.byteLength(content, 'utf8'), dryRun: true } }
       }
-      return compactWriteReceipt(await editEnvelope(provider, { file, create: content, includeTransaction }), content)
+      return compactWriteReceipt(await editEnvelope(provider, { file, create: content }), content)
     }
     return compactWriteReceipt(
       await editEnvelope(provider, {
@@ -635,7 +629,6 @@ export async function writeEnvelope(provider, { file, content, dryRun = false, n
         wholeFile: content,
         eol,
         dryRun,
-        includeTransaction,
         requireObservation: allowUnobserved !== true,
         skipStaleGate: allowUnobserved === true,
         toolName: 'aura_basetools_write',
@@ -645,18 +638,4 @@ export async function writeEnvelope(provider, { file, content, dryRun = false, n
   } catch (error) {
     return transactionError(error)
   }
-}
-
-export async function undoEnvelope(provider, { id, force } = {}) {  try {
-    return {
-      ok: true,
-      ...(await withWorkspaceLock(provider.root, () => undoTransaction(provider.root, provider, { id, force: force === true }))),
-    }
-  } catch (error) {
-    return transactionError(error)
-  }
-}
-
-export function transactionsEnvelope(provider) {
-  return { ok: true, transactions: listTransactions(provider.root) }
 }

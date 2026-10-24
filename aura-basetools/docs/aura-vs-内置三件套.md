@@ -12,10 +12,10 @@
 > `Read` / `Edit` / `Write`。ZCode 内置 `Edit` 实测**保留 BOM 与 CRLF**，并会把多行 `replace` 的
 > LF 适配成文件已有的 CRLF；不要把下面“内置 edit 丢 BOM / 整份 CRLF→LF”的结论套到 ZCode 内置工具上。
 > aura 0.10.0 已用 `eol: auto` 对齐 ZCode 的换行行为；0.10.1 的 `aura_basetools_write` 已覆盖整份新建/覆写
-> （BOM 与文件既有行尾保留、事务/undo、no-overwrite），0.10.2 的 `replace_all` 覆盖批量替换。
+> （BOM 与文件既有行尾保留、失败自动回滚、no-overwrite），0.10.2 的 `replace_all` 覆盖批量替换。
 > ZCode 内置工具仍独有的只剩读图，以及 **edit 默认的 read-before-edit**（aura 的
-> `require_observation` 是 opt-in；`aura_basetools_write` 覆写默认已对齐）。aura 另提供符号/意图/句柄寻址、
-> 事务/undo、多目标、区域级陈旧闸门与“出现次数变了就拒”的 replace_all 闸。
+> `require_observation` 是 opt-in；`aura_basetools_write` 覆写默认已对齐）。aura 另提供符号/句柄寻址、
+> 失败自动回滚、多目标、区域级陈旧闸门与“出现次数变了就拒”的 replace_all 闸。
 
 ---
 
@@ -149,7 +149,7 @@ MCP 面与 CLI 面同形。实测在这套工具上钉住的坏输入矩阵（6/
 | 找代码 / 看接口 / 定位符号 | `aura_basetools_read`（`map`/`digest`/`around`/`search`） | 4% 上下文拿到符号目录，不用整份读 |
 | 改已有文本文件 | `aura_basetools_edit` | 逐字节、区域闸门、回读校验、原子多 hunk |
 | 看一眼上次读之后变了什么 | `aura_basetools_read --mode changed` | 内置没有差异模式 |
-| **整份重写 / 生成新文件** | **`aura_basetools_write`** | 0.10.1 起与内置 `write` 对齐：整份新建/覆写、BOM 与既有行尾保留、落盘回读、事务/undo、`no_overwrite`；0.10.3 起覆写默认要求先读过这一版（`PATCH_UNOBSERVED`），`allow_unobserved` 才盲写；0.10.4 的 `eol: preserve` 可按 content 逐字节写 |
+| **整份重写 / 生成新文件** | **`aura_basetools_write`** | 0.10.1 起与内置 `write` 对齐：整份新建/覆写、BOM 与既有行尾保留、落盘回读、失败自动回滚、`no_overwrite`；0.10.3 起覆写默认要求先读过这一版（`PATCH_UNOBSERVED`），`allow_unobserved` 才盲写；0.10.4 的 `eol: preserve` 可按 content 逐字节写 |
 | **读图** | **内置 `read_image`** | aura 没有替代品 —— 所以**不要停用 `tool-fs`**，那会净损失能力 |
 | 要原始字节窗口 / 超过一次回复的大窗口 | 内置 `read` | aura 有内容预算，超了会截 |
 | 单 `\r`（老 Mac）行尾的文件 | 内置工具 | aura 明确拒绝并给替代方案（行号是跨层共享判据） |
@@ -242,7 +242,7 @@ node $aura basetools edit --file "$d\bom.aura.js" --hunks '[{"anchor":"const b =
 > （符号名 / 行号 / 唯一词 / 记忆原文）并**逐字节保真**（BOM 与每行行尾都不动）、改完**回读校验**、
 > 你要改的区域在你读之后被别人动过时**结构化拒绝并告诉你重读哪几行**，多 hunk 一次原子落盘。
 > 内置 `read` / `write` / `edit` 补缺口：**读图**仍只有内置工具有（`read_image` 无替代品）；
-> 整份新建/覆写由 `aura_basetools_write` 覆盖（事务/undo、BOM 与行尾保留、`no_overwrite`），
+> 整份新建/覆写由 `aura_basetools_write` 覆盖（失败自动回滚、BOM 与行尾保留、`no_overwrite`），
 > 批量替换由 `aura_basetools_edit` 的 `old` + `replace_all` 覆盖（次数变化会拒绝）。
 > 已知边界：单 `\r` 行尾不支持；二进制不写；>256 KiB 只记令牌不存全文（读后又被外部改动时
 > 闸门放行并标注 `unverified_region`）。

@@ -5,12 +5,10 @@
  * 为什么是它：Codex / Claude Code / Cursor / Zed 这些 agent 都吃 MCP —— 一次写壳，到处能用，
  * 且**不要求对方装 DSH**（本文件只依赖 node:fs 与本包的引擎）。
  *
- * 暴露五个工具：
+ * 暴露三个工具：
  *   aura_basetools_read          七种取景（map/digest/full/around/lines/search/changed）+ 版本令牌
  *   aura_basetools_edit          四层寻址 + expect + dry_run；逐字节写回 + 陈旧区域闸门 + 落盘后回读校验
- *   aura_basetools_write         整份写入（对应内置 Write）：新建或整文件替换，同走事务与回读校验
- *   aura_basetools_undo          撤销最近一次/指定写事务（默认拒绝覆盖后续编辑）
- *   aura_basetools_transactions  列出当前工作区写事务
+ *   aura_basetools_write         整份写入（对应内置 Write）：新建或整文件替换，同走原子写与回读校验
  *
  * 接法（写进各家的 MCP 配置即可）：
  *   codex:        codex mcp add aura -- npx -y --package aura-basetools aura basetools mcp
@@ -32,8 +30,6 @@ import {
   // 多目标（fs-contract-v2）的引擎绑定：与单目标同一处（`lib/ops.mjs`），bin 里不另找引擎。
   readManyWith,
   editManyEnvelope,
-  undoEnvelope,
-  transactionsEnvelope,
   assertReadTargets,
   assertEditTargets,
   assertTargetShape,
@@ -200,7 +196,6 @@ const TOOLS = [
         file_path: { type: 'string' },
         hunks: { type: 'array', items: HUNK_SCHEMA },
         dry_run: { type: 'boolean', description: '只定位不落盘' },
-        include_transaction: { type: 'boolean', description: '在回执里返回 transaction id（默认不返回，保持输出稳定）' },
         require_observation: {
           type: 'boolean',
           description: '严格新鲜度：要求这一版文件在本会话里被读过（或由本工具写过）；否则 PATCH_UNOBSERVED。create 不受影响；dry_run 同样执行这条判决。',
@@ -225,7 +220,7 @@ const TOOLS = [
   {
     name: 'aura_basetools_write',
     description:
-      'Write a whole UTF-8 text file at once (create or overwrite), matching a plain Write tool. Preserves an existing file\'s BOM and line endings, goes through the same transaction/undo path as aura_basetools_edit, and reads the file back to verify bytes. Prefer aura_basetools_edit for partial changes.',
+      'Write a whole UTF-8 text file at once (create or overwrite), matching a plain Write tool. Preserves an existing file\'s BOM and line endings, goes through the same atomic write path as aura_basetools_edit, and reads the file back to verify bytes. Prefer aura_basetools_edit for partial changes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -242,27 +237,9 @@ const TOOLS = [
           enum: ['auto', 'preserve', 'lf', 'crlf'],
           description: '覆写时的换行风格：auto（默认）适配文件已有风格；preserve 按 content 原样写；lf/crlf 强制。新建文件始终按 content 原样写（非 auto 会被拒绝）。',
         },
-        include_transaction: { type: 'boolean', description: '在回执里返回 transaction id（默认不返回）' },
       },
       required: ['file_path', 'content'],
     },
-  },
-  {
-    name: 'aura_basetools_undo',
-    description:
-      'Undo the latest committed write transaction, or the transaction with the given id. Refuses if a file changed after the transaction; pass force=true to override. Restores the exact bytes captured before the write.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', description: '事务 id；省略则撤销最近一条 committed 事务' },
-        force: { type: 'boolean', description: '即使文件在事务后又被改过也强制恢复' },
-      },
-    },
-  },
-  {
-    name: 'aura_basetools_transactions',
-    description: 'List write transactions for the current workspace (id, status, file count, time).',
-    inputSchema: { type: 'object', properties: {} },
   },
 ]
 
@@ -346,7 +323,6 @@ async function editTargetsCall(provider, args) {
   return await editManyEnvelope(provider, {
     targets,
     dryRun: args.dry_run === true,
-    includeTransaction: args.include_transaction === true,
     ...(args.require_observation === true ? { requireObservation: true } : {}),
   })
 }
@@ -431,7 +407,6 @@ async function callTool(provider, name, args = {}) {
       hunks: Array.isArray(args.hunks) ? args.hunks : [],
       dryRun: args.dry_run === true,
       create: creating ? args.create : undefined,
-      includeTransaction: args.include_transaction === true,
       ...(args.require_observation === true ? { requireObservation: true } : {}),
     })
   }
@@ -441,13 +416,10 @@ async function callTool(provider, name, args = {}) {
       content: args.content,
       dryRun: args.dry_run === true,
       noOverwrite: args.no_overwrite === true,
-      includeTransaction: args.include_transaction === true,
       allowUnobserved: args.allow_unobserved === true,
       ...(typeof args.eol === 'string' ? { eol: args.eol } : {}),
     })
   }
-  if (name === 'aura_basetools_undo') return await undoEnvelope(provider, { id: args.id, force: args.force === true })
-  if (name === 'aura_basetools_transactions') return transactionsEnvelope(provider)
   return { ok: false, error: `unknown tool ${JSON.stringify(name)}`, code: 'UNKNOWN_TOOL' }
 }
 

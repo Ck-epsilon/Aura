@@ -44,7 +44,7 @@ check('A4e aura_basetools_write 在 DSH 面也宣称观察闸/区域闸/回读�
 check('A5 命令含 doctor', cap.commands.includes('basetools doctor'), cap.commands.join(','))
 check('A5b 命令含 capabilities（运行时命令与构建清单同源）', cap.commands.includes('basetools capabilities'), cap.commands.join(','))
 check('A5d 命令含 write（整份写入与内置 Write 对齐）', cap.commands.includes('basetools write'), cap.commands.join(','))
-check('A5c writeSafety 按入口分：dsh 不宣称 transaction/undo/lock', Array.isArray(edit?.writeSafety?.dsh) && edit.writeSafety.dsh.includes('stale-region-gate') && !edit.writeSafety.dsh.includes('transaction') && !edit.writeSafety.dsh.includes('undo') && !edit.writeSafety.dsh.includes('workspace-lock') && edit.writeSafety.cli.includes('transaction'), JSON.stringify(edit?.writeSafety))
+check('A5c 0.14.0：CLI/MCP 不再宣称 transaction/undo，只保留 lock/闸/回读', Array.isArray(edit?.writeSafety?.dsh) && edit.writeSafety.dsh.includes('stale-region-gate') && !edit.writeSafety.dsh.includes('workspace-lock') && !edit.writeSafety.cli.includes('transaction') && !edit.writeSafety.cli.includes('undo') && edit.writeSafety.cli.includes('workspace-lock'), JSON.stringify(edit?.writeSafety))
 
 say('')
 say('=== B. 语言表与限制 ===')

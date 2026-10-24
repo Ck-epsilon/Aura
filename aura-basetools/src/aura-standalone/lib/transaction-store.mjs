@@ -1,17 +1,16 @@
 /**
- * transaction-store.mjs —— 写事务日志、回滚与 undo。
+ * transaction-store.mjs —— 写事务日志与**失败回滚**（内部实现，不再暴露 undo/transactions 工具）。
  *
  * 一次写事务在 `~/.aura/transactions/<workspace-key>/<id>/` 下留下：
  *   · `meta.json` —— 事务状态与每个文件的原始 mode/版本/备份名；
  *   · `originals/<n>.bin` —— 写前原始字节（逐字节，含 BOM/行尾）。
  *
  * 事务的生命周期：
- *   pending → committed（写成功，可 undo）
+ *   pending → committed（写成功；日志仅用于内部回滚，不再提供 undo）
  *           → rolled_back（写失败，已恢复原字节）
  *           → recovery_required（写失败且恢复也失败；meta 里留着可手工恢复的路径）
- *   committed → undone（undo 成功）
  *
- * 回滚/undo 前会比一次 `afterVersion`：文件在事务之后又被别人改过就拒绝覆盖（`--force` 才强制）。
+ * 回滚前会比一次 `afterVersion`：文件在事务之后又被别人改过就拒绝覆盖。
  * 这不是安全边界；它只保证遵守本协议的进程不会静默覆盖并发写。
  */
 import fs from 'node:fs'
@@ -262,21 +261,6 @@ function readAllMeta(root) {
   return out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
 }
 
-/** 取最近一条可 undo 的 committed 事务。 */
-export function latestCommitted(root) {
-  return readAllMeta(root).find((meta) => meta.status === 'committed') ?? null
-}
-
-export function listTransactions(root) {
-  return readAllMeta(root).map((meta) => ({
-    id: meta.id,
-    tool: meta.tool,
-    createdAt: meta.createdAt,
-    status: meta.status,
-    files: Array.isArray(meta.files) ? meta.files.length : 0,
-    dir: meta.dir,
-  }))
-}
 
 function prune(root, keep = KEEP) {
   const metas = readAllMeta(root).filter((meta) => meta.status !== 'pending')
@@ -285,66 +269,3 @@ function prune(root, keep = KEEP) {
   }
 }
 
-/**
- * 撤销一条 committed 事务。
- *
- * 任何文件在当前时间点的版本与事务提交后的版本不一致 ⇒ 默认拒绝，避免覆盖后续编辑；
- * `force: true` 才强制恢复旧字节。
- */
-export async function undoTransaction(root, provider, options = {}) {
-  const metas = readAllMeta(root)
-  const meta = options.id ? metas.find((m) => m.id === options.id) : metas.find((m) => m.status === 'committed')
-  if (meta === undefined) {
-    throw Object.assign(new Error(options.id ? `transaction not found: ${options.id}` : 'no committed transaction to undo'), {
-      code: 'TRANSACTION_NOT_FOUND',
-    })
-  }
-  if (meta.status !== 'committed') {
-    throw Object.assign(new Error(`transaction ${meta.id} is ${meta.status}, not committed`), {
-      code: 'TRANSACTION_NOT_UNDOABLE',
-      status: meta.status,
-    })
-  }
-  const force = options.force === true
-  /**
-   * 先做一次**只读预检**：任何文件在事务后又被改过 ⇒ 整个 undo 拒绝。
-   * 旧顺序会先把还能恢复的文件写回去，再发现某个文件冲突——那就是一次部分 undo；
-   * 对一个以“不会静默改错”为卖点的工具，部分恢复比拒绝更坏。
-   */
-  const plans = []
-  const conflicts = []
-  for (const entry of meta.files) {
-    if (!entry.written) continue
-    let current
-    try { current = provider.stat(entry.path) } catch { current = undefined }
-    if (!force && entry.afterVersion !== null && current?.version !== entry.afterVersion) {
-      conflicts.push({ path: entry.path, reason: 'changed since this transaction', expected: entry.afterVersion, actual: current?.version ?? null })
-    }
-    plans.push(entry)
-  }
-  if (conflicts.length > 0) {
-    throw Object.assign(new Error(`transaction ${meta.id} cannot be undone: ${conflicts.length} file(s) changed after it`), {
-      code: 'TRANSACTION_STALE',
-      transaction: meta.id,
-      conflicts,
-    })
-  }
-  let restored = 0
-  for (const entry of plans) {
-    try {
-      if (entry.existed) {
-        writeBytesAtomic(entry.realPath, fs.readFileSync(path.join(meta.dir, entry.backup)), entry.mode ?? 0o600)
-      } else {
-        fs.rmSync(entry.realPath, { force: true })
-      }
-      restored += 1
-    } catch (error) {
-      conflicts.push({ path: entry.path, reason: String(error?.message ?? error) })
-    }
-  }
-  meta.status = conflicts.length === 0 ? 'undone' : 'recovery_required'
-  meta.undoneAt = new Date().toISOString()
-  meta.undoConflicts = conflicts
-  saveMeta(meta)
-  return { transaction: meta.id, status: meta.status, restored, conflicts, dir: meta.dir }
-}

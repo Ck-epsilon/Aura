@@ -53,12 +53,13 @@ export function buildCapabilities() {
         addressKinds: [...new Set([...FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
         options: ['replace_all', 'require_observation'],
         /**
-         * 写安全能力按**入口**分：CLI/MCP 的 envelope 才有事务/undo/锁；
+         * 写安全能力按**入口**分：CLI/MCP 的 envelope 才有工作区锁；
          * DSH 壳只经过引擎的陈旧闸门与回读校验，不能跟着宣称同一组能力。
+         * 0.14.0 移除了公开 undo/transactions；事务日志仅内部失败回滚。
          */
         writeSafety: {
-          cli: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'byte-verify'],
-          mcp: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'byte-verify'],
+          cli: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
+          mcp: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
           dsh: ['stale-region-gate', 'byte-verify'],
         },
       },
@@ -67,14 +68,14 @@ export function buildCapabilities() {
         operations: ['create', 'overwrite'],
         options: ['eol'],
         writeSafety: {
-          cli: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          mcp: ['transaction', 'undo', 'workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          // DSH 壳没有事务/undo/工作区锁；它经过引擎的区域闸、严格新鲜度与回读校验。
+          cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
+          mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
+          // DSH 壳没有工作区锁；它经过引擎的区域闸、严格新鲜度与回读校验。
           dsh: ['stale-region-gate', 'observation-gate', 'byte-verify'],
         },
       },
     ],
-    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools undo', 'basetools transactions', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
+    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
     langs: Object.keys(LANGS).sort(),
     langsCount: Object.keys(LANGS).length,
     limits: {

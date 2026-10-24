@@ -64,9 +64,8 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
   对齐内置 `Write` 时用它）；`lf` / `crlf` 强制。新建文件始终原样写，显式非 `auto` 会拒绝。
 - `no_overwrite: true`（CLI `--no-overwrite`）：文件已存在就拒绝（`WRITE_EXISTS`），不覆盖。
 - `dry_run: true`（CLI `--dry-run` / `--plan`）：不落盘；覆写预演不回 `bytes`，因为它可能被行尾适配改写。
-- 与 `edit` 共用事务/锁/回读：`include_transaction`（CLI `--transaction`）拿到的 id 可以 `undo`；
-  撤销“新建”会把文件删除。
-- 回执是紧凑形状：`result.{path, operation: create|write, bytes, dryRun, write_verify, transaction?}`，
+- 与 `edit` 共用工作区锁与落盘回读；0.14.0 起没有公开事务 id / `undo` / `transactions`。
+- 回执是紧凑形状：`result.{path, operation: create|write, bytes, dryRun, write_verify}`，
   不带整份 `applied` 文本。
 
 ### 2.2 批量替换：`old` + `replace_all`
@@ -107,25 +106,21 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
 | `LOCATOR_LINE_SHARED` | 目标符号所在行还有别的同级符号 | 用 `old` 唯一片段 / `handle`，或整份写 |
 | `LOCATOR_LONE_CR` | 文件是 lone CR 行尾，行号模型不可信 | 用 `old` 片段 / `handle`，或 `aura_basetools_write` 整份写 |
 | `LOCATOR_CUE_AMBIGUOUS` | 线索出现多次 | 加 `near`，或换更长的片段 |
-| `PATCH_INTENT_CONFLICT` | 同时给了两个地址 | 只留一个（`near`/`expect`/`replace` 可以留） |
-| `LOCATOR_INTENT_AMBIGUOUS` | 模糊意图收敛不到一处 | 用候选里的 `target=name#n`，或加 `near` |
-| `TRANSACTION_STALE` | undo 会覆盖事务后的外部改动 | 先确认；要强制才 `--force` |
 | `WORKSPACE_LOCKED` | 同工作区另一个写事务持锁 | 等锁超时后重试；不要删锁文件 |
 
 失败回执一律 `applied: []`、正文说“nothing was written”；磁盘没动。不要用“看文件变没变”
 来猜成败——看 `outcome`。
 
-## 5. 写事务与回滚
+## 5. 并发与内部回滚
 
-- 需要可回滚：`--transaction`（MCP `include_transaction: true`），回执带事务 id。
-- 回滚：`aura basetools undo`（最近一次 committed）或 `--id <id>`；`--force` 才覆盖事务后的外部改动。
-- 列出：`aura basetools transactions`。
+- 0.14.0 移除了公开 `--transaction` / `undo` / `transactions`（642 个会话中 0 次使用）。
+- 写失败仍会自动回滚已落地的目标；事务日志是内部实现，不需要调用方操作。
 - 同一工作区的并发写由锁串行化；`AURA_NO_LOCK=1` 只用于明确知道没有并发者的场景。
 
 ## 6. 诊断
 
 装完先跑 `aura basetools doctor --json`：Node/版本/MCP 握手/缓存与锁目录。MCP 侧可用 `aura_basetools_read` /
-`aura_basetools_edit` / `aura_basetools_write` / `aura_basetools_undo` / `aura_basetools_transactions` 五个工具自检。
+`aura_basetools_edit` / `aura_basetools_write` 三个工具自检。
 DSH 面提供 `aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write` 三个工具（没有事务/undo 入口）。
 
 ## 7. 硬约束（不要交易）

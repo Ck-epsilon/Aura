@@ -385,7 +385,7 @@ say('F MCP：initialize / tools/list / tools/call')
   })()
   if (manifest !== null) check(byId.get(1)?.result?.serverInfo?.version === manifest.version, `serverInfo.version 跟包一致（${manifest.version}）`, String(byId.get(1)?.result?.serverInfo?.version))
   const tools = byId.get(2)?.result?.tools ?? []
-  check(tools.length === 5 && tools.some((t) => t.name === 'aura_basetools_read') && tools.some((t) => t.name === 'aura_basetools_edit') && tools.some((t) => t.name === 'aura_basetools_write') && tools.some((t) => t.name === 'aura_basetools_undo') && tools.some((t) => t.name === 'aura_basetools_transactions'), `tools/list 五个工具（${tools.map((t) => t.name).join(',')}`)
+  check(tools.length === 3 && tools.some((t) => t.name === 'aura_basetools_read') && tools.some((t) => t.name === 'aura_basetools_edit') && tools.some((t) => t.name === 'aura_basetools_write'), `tools/list 三个工具（${tools.map((t) => t.name).join(',')}`)
   const readEnv = JSON.parse(byId.get(3)?.result?.content?.[0]?.text ?? '{}')
   check(readEnv.ok === true && Array.isArray(readEnv.symbols ?? []), 'aura_basetools_read 经 MCP 可用', JSON.stringify(readEnv).slice(0, 120))
   const editEnv = JSON.parse(byId.get(4)?.result?.content?.[0]?.text ?? '{}')
@@ -1537,49 +1537,9 @@ say('N provider：mode / symlink / hardlink / range / 上限 / cache')
   }
 }
 
-say('O 写事务：journal / undo / 多目标回滚')
+say('O 写失败回滚与锁（0.14.0 已移除公开 undo/transactions）')
 {
-  const txFile = path.join(tmp, 'tx-single.txt')
-  const txOriginal = 'one\ntwo\n'
-  fs.writeFileSync(txFile, txOriginal)
-  const txEdit = json(run(['basetools', 'edit', '--file', txFile, '--lines', '1', '--replace', 'ONE', '--transaction']))
-  check(txEdit.ok === true && typeof txEdit.result?.transaction?.id === 'string', 'O1 单目标编辑返回 transaction id', JSON.stringify(txEdit.result?.transaction ?? txEdit.code))
-  check(fs.readFileSync(txFile, 'utf8') === 'ONE\ntwo\n', 'O1 编辑已落盘')
-  const txId = txEdit.result?.transaction?.id
-  const txUndo = json(run(['basetools', 'undo', '--id', String(txId)]))
-  check(txUndo.ok === true && txUndo.status === 'undone', 'O2 undo 成功', JSON.stringify(txUndo))
-  check(fs.readFileSync(txFile, 'utf8') === txOriginal, 'O2 undo 恢复原始字节')
-
-  const a = path.join(tmp, 'tx-a.txt')
-  const b = path.join(tmp, 'tx-b.txt')
-  fs.writeFileSync(a, 'alpha\n')
-  fs.writeFileSync(b, 'beta\n')
-  const targets = [
-    { file_path: a, hunks: [{ lines: [1, 1], replace: 'ALPHA' }] },
-    { file_path: b, hunks: [{ lines: [1, 1], replace: 'BETA' }] },
-  ]
-  const multi = json(run(['basetools', 'edit', '--targets', JSON.stringify(targets), '--transaction']))
-  check(multi.ok === true && typeof multi.transaction?.id === 'string', 'O3 多目标编辑返回 transaction id', JSON.stringify(multi.transaction ?? multi.code))
-  check(fs.readFileSync(a, 'utf8') === 'ALPHA\n' && fs.readFileSync(b, 'utf8') === 'BETA\n', 'O3 两个文件都已落盘')
-  const multiUndo = json(run(['basetools', 'undo', '--id', String(multi.transaction?.id)]))
-  check(multiUndo.ok === true && multiUndo.restored === 2, 'O4 多目标 undo 恢复两个文件', JSON.stringify(multiUndo))
-  check(fs.readFileSync(a, 'utf8') === 'alpha\n' && fs.readFileSync(b, 'utf8') === 'beta\n', 'O4 两个文件都回到原始字节')
-
-  const list = json(run(['basetools', 'transactions']))
-  check(list.ok === true && Array.isArray(list.transactions) && list.transactions.length > 0, 'O5 transactions 列出当前工作区事务')
-
-  // 事务后又被改过 ⇒ 默认拒绝 undo，force 才覆盖
-  const guardFile = path.join(tmp, 'tx-guard.txt')
-  fs.writeFileSync(guardFile, 'v0\n')
-  const guardEdit = json(run(['basetools', 'edit', '--file', guardFile, '--lines', '1', '--replace', 'v1', '--transaction']))
-  const guardId = guardEdit.result?.transaction?.id
-  fs.writeFileSync(guardFile, 'external\n')
-  const blocked = json(run(['basetools', 'undo', '--id', String(guardId)]))
-  check(blocked.ok === false && blocked.code === 'TRANSACTION_STALE', 'O6 事务后文件被外部改过 ⇒ undo 默认拒绝', JSON.stringify({ code: blocked.code, error: blocked.error }))
-  const forced = json(run(['basetools', 'undo', '--id', String(guardId), '--force']))
-  check(forced.ok === true && fs.readFileSync(guardFile, 'utf8') === 'v0\n', 'O6 force 后仍可恢复')
-
-  // O7 多目标：一个成功、一个写失败 ⇒ 成功那个也必须回滚
+  // O7 多目标：一个成功、一个写失败 ⇒ 成功那个也必须回滚（内部事务日志仍保留）
   const okFile = path.join(tmp, 'tx-rollback-ok.txt')
   const hardBase = path.join(tmp, 'tx-rollback-hard-base.txt')
   const hardFile = path.join(tmp, 'tx-rollback-hard.txt')
@@ -1594,31 +1554,13 @@ say('O 写事务：journal / undo / 多目标回滚')
       { file_path: okFile, hunks: [{ lines: [1, 1], replace: 'ALPHA' }] },
       { file_path: hardFile, hunks: [{ lines: [1, 1], replace: 'BETA' }] },
     ]
-    const rollback = json(run(['basetools', 'edit', '--targets', JSON.stringify(rollbackTargets), '--transaction']))
-    check(rollback.ok === false && rollback.transaction?.status === 'rolled_back', 'O7 多目标部分失败 ⇒ transaction rolled_back', JSON.stringify({ ok: rollback.ok, tx: rollback.transaction, rollback: rollback.rollback }))
+    const rollback = json(run(['basetools', 'edit', '--targets', JSON.stringify(rollbackTargets)]))
+    check(rollback.ok === false && rollback.rollback?.status === 'rolled_back' && rollback.rolled_back === true, 'O7 多目标部分失败 ⇒ 自动回滚', JSON.stringify({ ok: rollback.ok, rollback: rollback.rollback }))
     check(rollback.rollback?.restored === 1 && fs.readFileSync(okFile, 'utf8') === 'alpha\n', 'O7 已落地的那个文件被恢复')
     check(fs.readFileSync(hardBase, 'utf8') === 'beta\n' && fs.readFileSync(hardFile, 'utf8') === 'beta\n', 'O7 硬链接目标未被改动')
-    // 回执必须等于**回滚后的最终磁盘状态**，不能继续报 landed/applied。
     check(rollback.applied === 0 && rollback.landed_paths?.length === 0 && rollback.unchanged === true, 'O7 回滚后 applied=0 / landed_paths=[] / unchanged=true', JSON.stringify({ applied: rollback.applied, landed_paths: rollback.landed_paths, unchanged: rollback.unchanged }))
     check(rollback.rolled_back === true && rollback.edits?.filter((e) => e.outcome === 'rolled_back').every((e) => e.landed === false), 'O7 逐项 outcome=rolled_back 且 landed=false', JSON.stringify(rollback.edits?.map((e) => ({ outcome: e.outcome, landed: e.landed }))))
     check(!/applied [1-9]|landed [1-9]/.test(rollback.summary ?? ''), 'O7 汇总行不再出现 applied N / landed N', rollback.summary)
-
-    // 不带 --transaction 也必须能看出“已回滚”：回执事实不依赖是否索要事务 id。
-    // 用一组**新文件**：上一轮回滚后观测账本里还留着“写下去的那版”，同一文件立刻重试会先被
-    // 区域闸拦下（那是另一条保护，别把它混进回执断言）。
-    const okFile2 = path.join(tmp, 'tx-rollback-ok2.txt')
-    const hardBase2 = path.join(tmp, 'tx-rollback-hard-base2.txt')
-    const hardFile2 = path.join(tmp, 'tx-rollback-hard2.txt')
-    fs.writeFileSync(okFile2, 'alpha\n')
-    fs.writeFileSync(hardBase2, 'beta\n')
-    fs.linkSync(hardBase2, hardFile2)
-    const rollbackTargets2 = [
-      { file_path: okFile2, hunks: [{ lines: [1, 1], replace: 'ALPHA' }] },
-      { file_path: hardFile2, hunks: [{ lines: [1, 1], replace: 'BETA' }] },
-    ]
-    const rollbackNoTx = json(run(['basetools', 'edit', '--targets', JSON.stringify(rollbackTargets2)]))
-    check(rollbackNoTx.ok === false && rollbackNoTx.rollback?.status === 'rolled_back' && rollbackNoTx.rolled_back === true, 'O7 include_transaction=false 仍返回 rollback/rolled_back', JSON.stringify({ rollback: rollbackNoTx.rollback, rolled_back: rollbackNoTx.rolled_back }))
-    check(rollbackNoTx.applied === 0 && rollbackNoTx.landed_paths?.length === 0 && fs.readFileSync(okFile2, 'utf8') === 'alpha\n', 'O7 不索要事务 id 时回执仍与最终磁盘一致', JSON.stringify({ applied: rollbackNoTx.applied, landed_paths: rollbackNoTx.landed_paths }))
   }
 
   // O8 锁：同一工作区已有写事务时，第二个编辑必须超时拒绝

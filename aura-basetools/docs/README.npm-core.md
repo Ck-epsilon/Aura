@@ -31,8 +31,6 @@ aura --version
 aura basetools read  --file src/app.ts --mode map
 aura basetools edit  --file src/app.ts --hunks '[{"target":"main","replace":"..."}]'
 aura basetools write --file generated.ts --content @body.ts
-aura basetools undo
-aura basetools transactions
 aura basetools mcp
 ```
 
@@ -77,10 +75,10 @@ The server exposes:
 | Tool | Purpose |
 |---|---|
 | `aura_basetools_read` | Intent-based views: `map`, `digest`, `full`, `around`, `lines`, `search`, `changed`, `auto` |
-| `aura_basetools_edit` | Anchored multi-hunk edits; `old` + `replace_all`; optional transaction |
+| `aura_basetools_edit` | Anchored multi-hunk edits; `old` + `replace_all` |
 | `aura_basetools_write` | Whole-file create/overwrite with read-before-write and read-back verification |
-| `aura_basetools_undo` | Undo the latest or a named write transaction |
-| `aura_basetools_transactions` | List write transactions for the current workspace |
+
+0.14.0 removed the public `undo` / `transactions` tools (0 uses in 642 sessions); failure rollback remains internal and automatic.
 
 The older tool names (`aura_read`, `aura_edit`, `aura_write`, ...) are no longer exposed by MCP or DSH.
 
@@ -128,7 +126,7 @@ MIT.
 `aura-basetools` 是一个 Node.js（>=18）包，运行时零依赖，提供：
 
 - **CLI**：`aura basetools <verb>`
-- **MCP 服务**：stdio 上的五个工具
+- **MCP 服务**：stdio 上的三个工具
 - **不依赖 DSH**：DeepSeek Harness 适配器是独立的可选包 `aura-basetools-dsh`
 
 它不是通用文件管理器：只处理 UTF-8 文本，保留字节级格式；如果被寻址区域在“授权读取”之后被改动，编辑会被拒绝。
@@ -146,8 +144,6 @@ aura --version
 aura basetools read  --file src/app.ts --mode map
 aura basetools edit  --file src/app.ts --hunks '[{"target":"main","replace":"..."}]'
 aura basetools write --file generated.ts --content @body.ts
-aura basetools undo
-aura basetools transactions
 aura basetools mcp
 ```
 
@@ -192,10 +188,10 @@ npx -y --package aura-basetools aura basetools mcp
 | 工具 | 作用 |
 |---|---|
 | `aura_basetools_read` | `map` / `digest` / `full` / `around` / `lines` / `search` / `changed` / `auto` |
-| `aura_basetools_edit` | 多 hunk 锚点编辑；`old` + `replace_all`；可选事务 |
+| `aura_basetools_edit` | 多 hunk 锚点编辑；`old` + `replace_all` |
 | `aura_basetools_write` | 整文件新建/覆写；覆写默认要求先读，写后回读校验 |
-| `aura_basetools_undo` | 撤销最近一次或指定写事务 |
-| `aura_basetools_transactions` | 列出当前工作区写事务 |
+
+0.14.0 移除了公开 `undo` / `transactions`（642 个会话中 0 次使用）；失败回滚仍是内部自动行为。
 
 旧工具名（`aura_read`、`aura_edit`、`aura_write` 等）不再由 MCP/DSH 暴露。
 
