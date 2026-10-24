@@ -1,10 +1,10 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**0.19.0（已发布；安装只走 npm）**
-> 发布提交：monorepo `733d38a`；tag `aura-basetools-v0.19.0`
+> 当前版本：**0.20.0（已发布；安装只走 npm）**
+> 发布提交：monorepo `da055a0`；tag `aura-basetools-v0.20.0`
 > 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
-> npm：`aura-basetools@0.19.0`、`aura-basetools-dsh@0.19.0` 已发布
-> GitHub Release：`aura-basetools-v0.19.0`
+> npm：`aura-basetools@0.20.0`、`aura-basetools-dsh@0.20.0` 已发布
+> GitHub Release：`aura-basetools-v0.20.0`
 
 ---
 
@@ -56,6 +56,8 @@ aura basetools capabilities
 
 ## 3. 最近完成的关键变更
 
+- **0.20.0（已发布）**：MCP `initialize.instructions`（优先 aura + tx）；DSH/Codex/ZCode/Hermes 旧工具名清理；
+  Windows 观测缓存 rename 重试（6 并发不再丢条目）。GitHub Actions run `40091182890` 四平台全绿。
 - **0.19.0（已发布）**：三平台全量闸对齐。`.gitattributes` 固定 LF（除故意 CRLF 夹具）；源码探针归一 CRLF；
   大小写敏感 FS / POSIX inode 复用 / 8.3 短路径 / 慢 runner 地板标定逐项修正。
   GitHub Actions run `40082103753`：Windows / Ubuntu / macOS 15 / macOS 26 **四格全绿**。
@@ -102,7 +104,7 @@ aura basetools capabilities
 
 ## 4. 验证状态
 
-最近一次全量闸（0.19.0，三平台 runner 对齐后）：
+最近一次全量闸（0.20.0，MCP instructions + 并发观测修复后）：
 
 ```bash
 node build/make-bundle.mjs --pack
@@ -124,7 +126,7 @@ node build/release-check.mjs    # exit 0
 
 其他事实：
 
-- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.19.0`（已发布）。
+- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.20.0`（已发布）。
 - 闸内实跑套件 90 件；`src↔dist` 24 个运行时文件逐字节一致。
 - `installed-package` 在本机有 0.13.1 安装时跑 19/19；没有安装时显示 `⏭`（跳过），不再记 ✅。
 - CI 工作流配置了 Linux + Node 22 全量闸和 Node 18/20 冒烟；**本机是 Windows，Linux runner 尚未实际执行过**。
@@ -137,7 +139,7 @@ node build/release-check.mjs    # exit 0
 - **图片读取不在范围内**：`read_image` 仍只能用内置工具。
 - **DSH 需要重启宿主**：工具模块在宿主启动时导入，改名后必须重启才会加载新名字。
 - **MCP 客户端需要重新拉取 `tools/list`**：旧工具名不再存在。
-- **已发布**：npm `aura-basetools@0.19.0` / `aura-basetools-dsh@0.19.0` 与 GitHub Release `aura-basetools-v0.19.0`；0.19.0 三平台全绿，0.18.0 并发合并，0.17.0 MCP 事务，0.16.0 跨调用事务，0.15.0 写后验证；不再做使用率减法。0.14.0 只删了采用率为 0 的 `intent` 与公开 `undo`/`transactions`；`handle`(1)/`multi-read`(8)/`changed`(15)/`digest`(37)/`around`(106)/`edit --create`(78) 保留。
+- **已发布**：npm `aura-basetools@0.20.0` / `aura-basetools-dsh@0.20.0` 与 GitHub Release `aura-basetools-v0.20.0`；0.20.0 加 MCP instructions 与客户端清理，0.19.0 三平台全绿，0.18.0 并发合并，0.17.0 MCP 事务，0.16.0 跨调用事务，0.15.0 写后验证；不再做使用率减法。0.14.0 只删了采用率为 0 的 `intent` 与公开 `undo`/`transactions`；`handle`(1)/`multi-read`(8)/`changed`(15)/`digest`(37)/`around`(106)/`edit --create`(78) 保留。
 - **安装只走 npm（0.13.2）**：自定义 `install.mjs`、交付 zip、manifest 与升级/回滚命令已移除；`~/.aura/pkg` 旧安装不再由本项目维护，改用 `npm i -g aura-basetools`。
 - **历史分析件**：`probes/`、`failure-corpus.json`、旧版本 CHANGELOG 与
   `docs/aura-tools-0.*.md` 中的旧工具名是历史数据，不应批量改写；需要读取历史日志的分析件

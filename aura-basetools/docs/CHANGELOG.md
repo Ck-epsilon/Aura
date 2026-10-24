@@ -14,7 +14,10 @@
   这是 MCP 标准的服务器侧提示位，客户端采用与否取决于客户端。
 - 清理 DSH/Codex/ZCode/Hermes 的旧工具名：`aura_basetools_undo` / `transactions` 改为
   `aura_basetools_tx`，CLI 示例补 `tx begin|commit|rollback|status`（外部配置，不进 npm 包）。
+- Windows 并发观测丢失：`observations.json` rename 遇 EPERM/EBUSY 重试；6 并发读不再丢条目。
 - 0.19.0 的 runner 对齐不变。
+- 已发布：npm `aura-basetools@0.20.0` / `aura-basetools-dsh@0.20.0`；GitHub Release
+  `aura-basetools-v0.20.0`（源码提交 monorepo `da055a0`）。
 
 ## 0.19.0：Windows/Ubuntu runner 对齐
 
