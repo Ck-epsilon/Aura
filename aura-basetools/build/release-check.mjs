@@ -1011,7 +1011,9 @@ const CENSUS_EXEMPT = [
   //   · `fixtures/` —— 冻结基准数据（故意的旧快照，不该跟着源演进）。
   //   · `node_modules/`（任意深度）—— 第三方。
   //   · `docs/archive/` —— **退休件存放处**（C2 加；逐条说明见下面的 `SKIP_NESTED`）。
-  const SKIP_TOP = new Set(['dist', 'fixtures'])
+  //   · `eval/`     —— **独立测评集**（`eval/independent`）：黑盒评测已发布 npm 包，不是产品内
+  //                   套件；它会 npm install/联网、故意不登记进发布闸（否则离线 gate 不可复跑）。
+  const SKIP_TOP = new Set(['dist', 'fixtures', 'eval'])
   // C2（2026-10-16）：`docs/archive/**` = **退休件存放处**（规矩见 `docs/archive/README.md`）。显式跳过，
   // 与上面三个根同一个机制，逐个交代：
   //   · 谁扫：本项（§⑩ 普查）扫仓根 `/**`，按相对路径把 `docs/archive` 这一级整个跳过；

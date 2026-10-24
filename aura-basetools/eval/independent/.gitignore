@@ -1,0 +1,2 @@
+# Isolated install target for the published package under test (created by run.mjs).
+.vendor/
