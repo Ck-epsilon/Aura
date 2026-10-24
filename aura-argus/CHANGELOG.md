@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.1 — 2026-10-24
+
+### Fixed
+
+- 3.0.0 的 README 仍有两处“旧别名保留”、一处“MCP 仍支持 multi/followLinks/fast/decompose”；修正为“已删除”，并同步 npm 包内文档。
+- 纯文档修正；`npm test` 136/136，无行为变化。
+
 ## 3.0.0 — 2026-10-24
 
 ### Breaking

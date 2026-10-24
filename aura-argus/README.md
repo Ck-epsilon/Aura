@@ -35,8 +35,8 @@ AuraArgus 是一个本地运行的检索工具，给 agent、脚本或你自己�
 ### 从 zip 直接运行（不需要 npm install）
 
 ```bash
-unzip aura-argus-3.0.0.zip
-cd aura-argus-3.0.0
+unzip aura-argus-3.0.1.zip
+cd aura-argus-3.0.1
 
 node src/cli.mjs aura_argus_search "SearXNG 对 429 的冷却时间是多少秒？" --json
 ```
@@ -284,7 +284,7 @@ MCP 工具：
 | `aura_argus_fetch` | URL → Markdown |
 | `aura_argus_sources` | 注册表覆盖 |
 
-所有工具返回 `structuredContent` + `outputSchema`，并带 read-only annotations；`aura_argus_search` 结果里的 `confidence` / `facets` / `timings` 可直接用于 agent 决策。`aura_argus_search` 还支持 `multi` / `followLinks` / `fast` / `deepIndex` / `decompose` / `mode` / `budgetMs` / `fallback`；`fast` 需先用 `aura-argus aura_argus_index` 建本地索引。MCP 支持 `notifications/cancelled` 取消进行中的调用；带 `_meta.progressToken` 时 `aura_argus_search_batch` 会发 `notifications/progress`。旧名 `search` / `search_batch` / `fetch` / `sources` 仍作为兼容别名。
+所有工具返回 `structuredContent` + `outputSchema`，并带 read-only annotations；`aura_argus_search` 结果里的 `confidence` / `facets` / `timings` 可直接用于 agent 决策。`aura_argus_search` 支持 `deepIndex` / `mode` / `budgetMs` / `fallback`；链接发现、拆句与多实体由 mode 内部决定。MCP 支持 `notifications/cancelled` 取消进行中的调用；带 `_meta.progressToken` 时 `aura_argus_search_batch` 会发 `notifications/progress`。旧名已删除。
 
 MCP 资源（不需要工具调用）：`argus://coverage`、`argus://health`、模板 `argus://entity/{id}`。
 
@@ -326,7 +326,7 @@ const result = await argus.aura_argus_search('Node.js 20 的 fs.readFile 怎么�
 const batch = await argus.aura_argus_search_batch(['q1', 'q2'], { concurrency: 2 });
 ```
 
-规范方法名是 `aura_argus_search` / `aura_argus_search_batch` / `aura_argus_fetch` / `aura_argus_sources` / `aura_argus_health`；`search` 等旧方法保留为别名。支持 token、超时、`AbortSignal` 取消；错误为 `ArgusClientError`（带 `code` / `status`）。详见 [docs/integrations/js-client.md](docs/integrations/js-client.md)。
+规范方法名是 `aura_argus_search` / `aura_argus_search_batch` / `aura_argus_fetch` / `aura_argus_sources` / `aura_argus_health`；旧方法已删除。支持 token、超时、`AbortSignal` 取消；错误为 `ArgusClientError`（带 `code` / `status`）。详见 [docs/integrations/js-client.md](docs/integrations/js-client.md)。
 
 ### 5. Node 库
 
@@ -338,7 +338,7 @@ const batch = await aura_argus_search_batch(['q1', 'q2'], { concurrency: 3 });
 const page = await aura_argus_fetch_document('https://docs.searxng.org/dev/search_api.html', { maxChars: 4000 });
 ```
 
-旧的 `search` / `searchBatch` / `fetchDocument` 导出继续保留。
+旧的 `search` / `searchBatch` / `fetchDocument` 导出已删除。
 
 ---
 
@@ -423,7 +423,7 @@ Node 内置 fetch 默认不读 `HTTP_PROXY` / `HTTPS_PROXY`。需要的话设置
 ## zip 里有什么
 
 ```
-aura-argus-3.0.0/
+aura-argus-3.0.1/
   README.md              ← 你正在看的这份
   LICENSE                MIT
   src/                   运行时代码 + registry.json
@@ -463,6 +463,7 @@ npm run bench:pk215 # 215 题五类覆盖评估（只跑 Aura，不调用 Tavily
 ## License
 
 MIT
+
 
 
 
