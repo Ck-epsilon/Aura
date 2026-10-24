@@ -59,11 +59,12 @@ function suite(name, relative, group = '套件') {
     return
   }
   const res = run(relative)
-  const summary = (res.stdout ?? '')
-    .trim()
-    .split('\n')
-    .filter((line) => line.includes('通过') || line.includes('失败'))
-    .pop()
+  const outputLines = (res.stdout ?? '').trim().split('\n').filter((line) => line.trim() !== '')
+  const summary = outputLines.filter((line) => line.includes('通过') || line.includes('失败')).pop()
+  // 失败时把子进程里有信息量的行带出来。否则 CI 上只能看到“N/M 通过”，
+  // 具体哪条断言红了还得本地复现；runner 平台调查正是被这一点卡住的。
+  const failedLines = outputLines.filter((line) => /✗|FAIL|not found|ENOENT|Error|错误/i.test(line))
+  const failTail = (failedLines.length > 0 ? failedLines : outputLines).slice(-3).map((line) => line.trim()).join(' | ')
   /**
    * 跳过 ≠ 通过。若干套件在缺 DSH peer / 缺 dist / 平台不允许硬链接时自报
    * `--- 0/0 通过（已跳过）---` 并以 exit 0 结束；旧版把它们记成 ✅。
@@ -76,7 +77,11 @@ function suite(name, relative, group = '套件') {
     group,
     name,
     status,
-    summary: skipped && isCritical ? `critical suite skipped: ${(summary ?? '').trim()}` : (summary ?? '').trim(),
+    summary: skipped && isCritical
+      ? `critical suite skipped: ${(summary ?? '').trim()}`
+      : status === 'fail'
+        ? `${(summary ?? '').trim()}${failTail ? ` | ${failTail}` : ''}`
+        : (summary ?? '').trim(),
     stderr: (res.stderr ?? '').trim().split('\n').slice(0, 2).join(' | '),
   })
 }
