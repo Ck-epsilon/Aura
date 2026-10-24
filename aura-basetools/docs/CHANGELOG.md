@@ -17,6 +17,8 @@
   "同一文件两种写法"分支；`atomic-publish` 在 POSIX 不再要求 inode 不复用（CAS 靠版本令牌）。
 - `stale-gate` N 跳过分支比较操作前快照，不再硬编码 LF。
 - 0.18.0 的并发合并保持不变。
+- 已发布：npm `aura-basetools@0.19.0` / `aura-basetools-dsh@0.19.0`；GitHub Release
+  `aura-basetools-v0.19.0`（源码提交 monorepo `733d38a`）。
 
 ## 0.18.0：并发合并
 
