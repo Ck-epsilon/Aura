@@ -13,9 +13,9 @@
  *   aura_basetools_transactions  列出当前工作区写事务
  *
  * 接法（写进各家的 MCP 配置即可）：
- *   codex:        codex mcp add aura -- npx -y --package aura-basetools aura mcp
- *   claude code:  claude mcp add aura -- npx -y --package aura-basetools aura mcp
- *   cursor/zed:   command = "npx", args = ["-y", "--package", "aura-basetools", "aura", "mcp"]
+ *   codex:        codex mcp add aura -- npx -y --package aura-basetools aura basetools mcp
+ *   claude code:  claude mcp add aura -- npx -y --package aura-basetools aura basetools mcp
+ *   cursor/zed:   command = "npx", args = ["-y", "--package", "aura-basetools", "aura", "basetools", "mcp"]
  *
  * 为什么必须带 `--package`：本包有两个 bin（`aura` / `aura-mcp`），**没有**一个叫
  * `aura-basetools`；npx 在"多个 bin 且没有与包名同名的"时候会拒绝猜，直接报
@@ -559,7 +559,7 @@ export async function serve() {
   await chain
 }
 
-// 直接运行本文件（`aura-mcp`，package.json 里声明的第二个 bin）也要起服务，与 `aura mcp` 等价。
+// 直接运行本文件（`aura-mcp`，package.json 里声明的第二个 bin）也要起服务，与 `aura basetools mcp` 等价。
 // 用 pathToFileURL 比手拼 file:// 靠得住（Windows 盘符就是那种手拼会踩的地方）。
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await serve()

@@ -38,3 +38,9 @@
     已改成 import 上游导出的 `replayNewContract`，与上游活读数逐格对账；不再由一件挂在一次性产物上的复算器承担。
   - 探针台账里的那条豁免 —— `build/release-check.mjs` 的 `CENSUS_EXEMPT` 里已改成一条**退休记录**注释
     （`// C2 改理由：…`），条目从豁免名单删掉：件不在了，清单不该再点它的名。
+
+### 2. `docs/服务化升级设计.md` —— 2026-10-24 退休（用户裁定：安装只走 npm）
+
+- **它原来问什么**：怎么把“一键安装”升级成可服务化的 `--upgrade` / `--rollback` / manifest 渠道。
+- **为什么退休**：0.13.2 移除自定义安装器、交付 zip 与自定义 manifest；npm 的全局路径、dist-tag 与 `@版本` 已覆盖稳定路径/渠道/回滚，离线用 `npm i -g ./aura-basetools-<版本>.tgz`。
+- **谁来接班**：`README.md` 的“安装（只走 npm）”段与 `docs/README.npm-core.md`；验证由 `build/split-package-test.mjs` 与 `build/post-publish-check.mjs` 负责。

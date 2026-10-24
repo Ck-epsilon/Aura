@@ -7,10 +7,10 @@
  * |----|--------|----------|
  * | 单元 | 这个函数对不对 | `read-test` / `struct-test` / `write-verify` …（最厚的一层）|
  * | 集成 | 几个部件接起来对不对 | `*-load-test`（mock ctx）、`range-args-test`（engine + 壳）|
- * | **验收** | **对外承诺的契约还在不在** | **本套件** + `install-test` |
+ * | **验收** | **对外承诺的契约还在不在** | **本套件** + `split-package` |
  * | 冒烟 | 最关键的那条路能不能起来 | `real-framework-smoke-test` / `installed-package-test` |
  * | 回归 | 修过的 bug 没回来 | 每个 bug 都附了一条断言（散在各套件里）|
- * | 端到端 | 用户从入口到结果整条路 | `cli-mcp-e2e-test` + `install-test` |
+ * | 端到端 | 用户从入口到结果整条路 | `cli-mcp-e2e-test` + `split-package` |
  *
  * ## 为什么需要它
  *
@@ -160,9 +160,10 @@ say('=== D. bin 名与 package.json 的声明一致 ===')
   // 包名前缀是历史遗留（改名前叫 patch），但版本与 files 面必须自洽
   check(typeof pkg.version === 'string' && /^\d+\.\d+\.\d+/.test(pkg.version), `版本是语义化版本（${pkg.version}）`)
   const files = pkg.files ?? []
-  for (const must of ['aura-read/', 'aura-edit/', 'locator-lab/', 'bin/', 'install.mjs']) {
+  for (const must of ['aura-read/', 'aura-edit/', 'locator-lab/', 'bin/']) {
     check(files.includes(must), `files 面含 ${must}（否则 npm 打包会漏掉它）`)
   }
+  check(!files.includes('install.mjs'), '安装器已移除：files 面不再包含 install.mjs')
 }
 
 say('')
@@ -236,14 +237,15 @@ say('=== G. MCP 接线指引里的 npx 必须能解析到 bin ===')
   /**
    * 本包有 `aura` / `aura-mcp` 两个 bin，**没有**一个叫 `aura-basetools`。npx 在"多个 bin
    * 且没有与包名同名的"时候会直接拒绝猜（实测 `could not determine executable to run`），
-   * 所以指引必须写成 `npx -y --package aura-basetools aura mcp`。
+   * 所以指引必须写成 `npx -y --package aura-basetools aura basetools mcp`（0.13.0 起顶层 mcp 被拒）。
    *
    * 这条不是文字洁癖：旧指引写的是 `npx -y aura-basetools mcp`，照着做的人会在启动
    * MCP 之前就失败，而 CLI 本身完全正常——是最容易归错因的一类。
    */
   const mcpDoc = read('src/aura-standalone/bin/aura-mcp.mjs')
   check(!/npx\s+-y\s+aura-basetools/.test(mcpDoc), '指引不再给出 npx 猜不到 bin 的形式')
-  check(mcpDoc.includes('npx -y --package aura-basetools aura mcp'), '指引给出的 npx 形式带 --package + 命令')
+  check(mcpDoc.includes('npx -y --package aura-basetools aura basetools mcp'), '指引给出的 npx 形式带 --package + basetools 命名空间')
+  check(!/\baura mcp\b/.test(mcpDoc), '指引不再给出顶层 `aura mcp`（0.13.0 起 CLI_NAMESPACE_REQUIRED）')
 }
 
 say('')

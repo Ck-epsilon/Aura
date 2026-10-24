@@ -1,9 +1,9 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**0.13.1**
-> 本次发布提交：`7e9f482`；GitHub 源码快照：`9ce490d`
+> 工作区版本：**0.13.2（未发布；安装只走 npm）**
+> 上一发布：0.13.1（`7e9f482`；GitHub 源码快照 `9ce490d`）
 > 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
-> npm：`aura-basetools@0.13.1`、`aura-basetools-dsh@0.13.1` 已发布
+> npm：`aura-basetools@0.13.1`、`aura-basetools-dsh@0.13.1` 已发布；0.13.2 待发布
 > GitHub Release：`aura-basetools-v0.13.1`
 
 ---
@@ -12,7 +12,8 @@
 
 `aura-basetools` 已具备可直接替代内置文本 `Read` / `Edit` / `Write` 的读写能力：三个入口
 （MCP / DSH / CLI）共用同一份字节保真引擎，文本读写、整份写、`replace_all`、严格新鲜度、
-事务/undo、并发观测缓存和回滚回执都已落地并有回归测试。
+事务/undo、并发观测缓存和回滚回执都已落地并有回归测试。安装只走 npm
+（`npx` / `npm i -g` / `dsh plugin`）；自定义安装器与交付 zip 已在 0.13.2 移除。
 
 ---
 
@@ -59,6 +60,8 @@ aura basetools capabilities
 
 ## 3. 最近完成的关键变更
 
+- **0.13.2（未发布）**：安装只走 npm。移除 `install.mjs`、双击壳、交付 zip、自定义 manifest 与
+  升级/回滚命令；`npx ... aura mcp` 旧指引修正为 `aura basetools mcp`。
 - **2026-10-24（0.13.0 后，未发版）**：`target` 整行区间的剩余越界形状。
   - 行内**非符号**内容（`import` / 指令 / 尾随调用 / 嵌套声明）以前仍会被整行替换吃掉；
     现在 `LOCATOR_LINE_SHARED` 拒绝并给出 `shared:{line,side,text}` 证据。
@@ -84,7 +87,7 @@ aura basetools capabilities
 
 ## 4. 验证状态
 
-最近一次全量闸（0.13.0）：
+最近一次全量闸（0.13.2，安装器移除后）：
 
 ```bash
 node build/make-bundle.mjs --pack
@@ -95,26 +98,24 @@ node build/release-check.mjs    # exit 0
 
 | 套件 | 结果 |
 |---|---|
-| `standalone` | 228 / 0 |
+| 套件 | 结果 |
+|---|---|
+| `standalone` | 229 / 0 |
 | `write` | 66 / 66 |
 | `range-bytes` | 218 / 218 |
 | `multi-read` | 64 / 64 |
-| `real-framework` | 29 / 29 |
-| `argument-surface` | 18 / 18 |
-| `public-surface` | 41 / 41 |
-| `single-line-target` | 12 / 12 |
-| `observation-concurrency` | 9 / 9 |
-| `ci-contract` | 17 / 17 |
+| `public-surface` | 42 / 42 |
 | `split-package` | 75 / 75 |
-| `upgrade` | 94 / 94 |
+| `post-publish` | 24 / 24 |
 | `failure-replay` | 15 / 15 |
 
 其他事实：
 
-- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.13.0`。
-- `installed-package` 在没有可安装产物时会显示 `⏭`（跳过），不再记 ✅。
-- CI 工作流已配置 Linux + Node 22 全量闸和 Node 18/20 冒烟；**本机是 Windows，
-  Linux runner 尚未实际执行过**。
+- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.13.2`（未发布）。
+- 闸内实跑套件 89 件；`src↔dist` 24 个运行时文件逐字节一致。
+- `installed-package` 在本机有 0.13.1 安装时跑 19/19；没有安装时显示 `⏭`（跳过），不再记 ✅。
+- CI 工作流配置了 Linux + Node 22 全量闸和 Node 18/20 冒烟；**本机是 Windows，Linux runner 尚未实际执行过**。
+  （实际运行的 monorepo workflow 目前只跑 3 个 OS 的子集；这是已知缺口。）
 
 ---
 
@@ -123,9 +124,8 @@ node build/release-check.mjs    # exit 0
 - **图片读取不在范围内**：`read_image` 仍只能用内置工具。
 - **DSH 需要重启宿主**：工具模块在宿主启动时导入，改名后必须重启才会加载新名字。
 - **MCP 客户端需要重新拉取 `tools/list`**：旧工具名不再存在。
-- **已发布**：npm `aura-basetools@0.13.1` / `aura-basetools-dsh@0.13.1` 与 GitHub Release `aura-basetools-v0.13.1` 已发布；全局 `aura`、DSH profile、Codex、ZCode、Hermes 均指向官方 npm 0.13.1。
-- **DSH / MCP 客户端需要重启或重新拉取 `tools/list`**：旧工具名不再存在。
-- **本地旧安装已移除**：`~/.aura/pkg/node_modules/aura-tools` 已备份后删除；旧 hook 路径已改到 `aura-basetools-dsh/dsh/argv-shell.mjs`。
+- **已发布**：npm `aura-basetools@0.13.1` / `aura-basetools-dsh@0.13.1` 与 GitHub Release `aura-basetools-v0.13.1` 已发布；全局 `aura`、DSH profile、Codex、ZCode、Hermes 均指向官方 npm 0.13.1。0.13.2 待发布。
+- **安装只走 npm（0.13.2）**：自定义 `install.mjs`、交付 zip、manifest 与升级/回滚命令已移除；`~/.aura/pkg` 旧安装不再由本项目维护，改用 `npm i -g aura-basetools`。
 - **历史分析件**：`probes/`、`failure-corpus.json`、旧版本 CHANGELOG 与
   `docs/aura-tools-0.*.md` 中的旧工具名是历史数据，不应批量改写；需要读取历史日志的分析件
   应同时识别旧名与新名。
@@ -135,7 +135,7 @@ node build/release-check.mjs    # exit 0
 
 - **npm 发布产物**：`dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 严格扫描为 **0 个绝对路径**。
 - **仓库源码中的历史证据**：仍有 34 处 / 14 个文件包含 `C:\Users\...`、`E:\workspaces\...`、`/Users/...` 或 `file:///...`，集中在 `docs/待办.md`、`probes/`、`failure-corpus.json`、`fixtures/README.md`、旧版 README 与旧分析记录。
-- 这些是冻结的历史证据/旧安装说明，不进入 npm 包；按“不改历史语料”的规则保留。若要求整个仓库零绝对路径，需要单独清理并重钉历史夹具，不能把它当成 0.13.1 的发布产物检查。
+- 这些是冻结的历史证据/旧安装说明，不进入 npm 包；按“不改历史语料”的规则保留。若要求整个仓库零绝对路径，需要单独清理并重钉历史夹具，不能把它当成当前版本的发布产物检查。
 
 ---
 

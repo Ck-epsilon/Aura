@@ -214,7 +214,6 @@ MCP 面与 CLI 面同形。实测在这套工具上钉住的坏输入矩阵（6/
 | `locator-lab/encoding-fidelity.mjs` | 32/32（编码/BOM/EOL） |
 | `locator-lab/aura-read-schema-test.mjs` | 56/56 |
 | `aura-standalone/test/standalone-test.mjs`（包内自带） | 42/42（含 MCP 坏输入矩阵） |
-| `build/install-test.mjs` | 28/28（一键安装器） |
 
 ---
 

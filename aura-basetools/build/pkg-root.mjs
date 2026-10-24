@@ -13,9 +13,8 @@
  *   pkgPath('src', 'locator-lab')          // <包根>/src/locator-lab
  *   pkgPath('fixtures', 'frozen-…')        // <包根>/fixtures/frozen-…
  *
- * `dist/` 的**产物目录名**（`dist/<包名>`）仍由 `build/make-bundle.mjs` 决定，
- * 需要它的套件从 `build/install.mjs` 的 `PKG_NAME` 读（那边是同一个名字的单源），
- * 不要在本文件里再抄一份。
+ * `dist/` 的**产物目录名**（`dist/<包名>`）仍由 `build/make-bundle.mjs` 决定；
+ * 需要它的套件直接读 `dist/aura-basetools/package.json`，不要在本文件里再抄一份。
  */
 import fs from 'node:fs'
 import path from 'node:path'

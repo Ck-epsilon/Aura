@@ -109,53 +109,46 @@
 
 | 接入方式 | 命令 / 配置 |
 | --- | --- |
-| DeepSeek Harness 插件 | `dsh plugin --profile <profile> add ./aura-basetools-<版本>.tgz` |
-| MCP 服务（Codex / Claude Code / Cursor / 任何 MCP 客户端） | `codex mcp add aura -- aura basetools mcp`、`claude mcp add aura -- aura basetools mcp`，或写入 `mcpServers` |
-| 命令行 | `aura basetools read --file <路径> --mode map`、`aura basetools edit --file <路径> --hunks '<JSON>'` |
-| 一键安装器 | 双击 `一键安装.cmd`（Windows）/ `一键安装.command`（macOS），或 `node aura-basetools/install.mjs --yes` |
+| DeepSeek Harness 插件 | `dsh plugin --profile <profile> add aura-basetools-dsh` |
+| MCP 服务（Codex / Claude Code / Cursor / 任何 MCP 客户端） | `npx -y --package aura-basetools aura basetools mcp`，或写入 `mcpServers` |
+| 命令行 | `npm i -g aura-basetools`，然后 `aura basetools read --file <路径> --mode map` |
 
 ---
 
 ## 五、交付、安装、回滚、合规
 
-**交付形态**：一个压缩包（约 230 KB）。解压后：
+**交付形态**：两个 npm 包（`aura-basetools` / `aura-basetools-dsh`），不再有交付 zip。安装三条命令：
 
-- **人**：双击 `一键安装.cmd` / `一键安装.command`
-- **交给 AI 助手**：把文件夹给它，说"运行 `node aura-basetools/install.mjs --yes --json`"
-- **手工/CI**：`npm i -g ./aura-basetools-<版本>.tgz`（或用 `.tgz` 直接做 DSH 插件）
+- **MCP**：`npx -y --package aura-basetools aura basetools mcp`（零安装；客户端写 `mcpServers`）
+- **CLI**：`npm i -g aura-basetools`（离线：`npm i -g ./aura-basetools-<版本>.tgz`）
+- **DSH**：`dsh plugin --profile <profile> add aura-basetools-dsh`
 
-**安装器会自动完成**：复制到用户目录 → 生成 `aura` / `aura-mcp` 两个命令 → 把 MCP 服务注册进
-**检测到的**客户端（Codex / Claude Code / Cursor）→ **跑一次真实自检**（命令行取景 + MCP 握手，
-核心工具都在才算通过）。
+稳定路径、渠道与回滚由 npm 提供：`npm i -g aura-basetools@<旧版本>` 即回滚。
 
 **安全与可逆**：
 
 | 项目 | 说明 |
 | --- | --- |
-| 写入范围 | 只写用户目录下的安装位置与**被改的配置文件**；不碰系统目录 |
-| 配置改动 | 每个被改的配置文件先备份为 `<文件>.bak-aura-<时间戳>` |
-| 他人配置 | 若同名条目已存在且不是本安装器写的，**一律不动**，并在输出里说明 |
-| 回滚 | `node aura-basetools/install.mjs --uninstall`：只撤它自己加的东西，逐条可查 |
-| 预演 | `--dry-run`：先打印"将要做哪些改动"，不落盘 |
-| 联网 | **运行时不发起任何网络请求**（安装器仅在你显式传入 URL 时下载安装包） |
+| 写入范围 | 只写你指定的文件，以及 `~/.aura` 下的观测/事务/锁；不碰系统目录 |
+| 配置改动 | 工具本身不改客户端配置；MCP 配置由你或 agent 写入 |
+| 回滚 | `npm i -g aura-basetools@<旧版本>`；DSH 用 `dsh plugin ... remove` |
+| 联网 | **运行时不发起任何网络请求**（安装只走 npm） |
 | 遥测 | **无**。不上报任何使用数据 |
 | 本地数据 | 仅一个本地观测缓存（默认 `~/.aura`，可用环境变量改到临时目录或只读环境） |
 | 许可 | MIT |
 
 **兼容性**：纯 Node 实现（≥18，无原生依赖、无平台分支差异），Windows / macOS / Linux 同一套命令。
-Windows 已在真机完整验证（安装、注册、回读校验、卸载复原）；macOS 首次建议用命令行安装
-（`node aura-basetools/install.mjs --yes`）并在真机确认，之后再用双击方式分发；macOS 首次运行若遇
-Gatekeeper 提示，右键 →「打开」即可。
+Windows 已在真机完整验证；macOS / Linux 的 npm 安装与 CLI 子集由 CI 覆盖，完整闸尚未在真机跑过。
+安装/卸载由 npm 负责：`npm i -g aura-basetools` / `npm uninstall -g aura-basetools`。
 
 ---
 
 ## 六、质量证据（可复核）
 
-- **全量发布闸（87 个套件：单元/集成/验收/冒烟/端到端 + 三套靶场 + 包内验收 + 安装器 +
-  拆包安装 + 性能/任务基准）全部通过**；逐件读数以 `node build/release-check.mjs` 的输出为准，
-  不在本文手抄会过期的数字。
-- **独立验证而非自证**：安装包用第三方解压器解压核对文件清单与内容；压缩包内的权限位、
-  安装后各客户端配置的合并结果、以及"装两次 → 卸载 → 配置逐字节复原"，都用外部工具复核过。
+- **全量发布闸**（单元/集成/验收/冒烟/端到端 + 三套靶场 + 包内验收 + 拆包安装 + 性能/任务基准）
+  全部通过；逐件读数以 `node build/release-check.mjs` 的输出为准，不在本文手抄会过期的数字。
+- **独立验证而非自证**：两个 npm tgz 离线装进临时项目后真跑 CLI/MCP；发布物与本地构建逐文件对账；
+  不靠"安装器自称成功"。
 - **对照实验可复跑**：§二的每一个数字都能在贵方机器上重跑一遍（方法见附录 A）。
 
 ---
@@ -177,10 +170,11 @@ Gatekeeper 提示，右键 →「打开」即可。
 
 ## 八、建议的引入方式（三步，风险可控）
 
-1. **预演**：在目标机器上跑 `node aura-basetools/install.mjs --dry-run`，先看它准备改哪些文件。
+1. **安装**：`npm i -g aura-basetools`（MCP 用 `npx -y --package aura-basetools aura basetools mcp`），
+   跑 `aura basetools doctor --json` 自检。
 2. **试点**：选一个仓库，让 AI 助手改文件时优先用 Aura（团队提示词里加一句分工说明），
    同时保留原生工具。观察一周的两项指标：**提交 diff 是否变干净**、**并发/冲突导致的返工是否减少**。
-3. **固化**：把分工写进团队提示词与代码规范；需要时用 `--uninstall` 一键回退。
+3. **固化**：把分工写进团队提示词与代码规范；需要回退时用 `npm i -g aura-basetools@<旧版本>`。
 
 **验收清单（交给贵方工程师）**
 

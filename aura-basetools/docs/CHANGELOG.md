@@ -8,6 +8,15 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.13.2（未发布）：安装只走 npm，移除自定义安装器
+
+- **安装面只剩 npm**：MCP 用 `npx -y --package aura-basetools aura basetools mcp`，CLI 用
+  `npm i -g aura-basetools`，DSH 用 `dsh plugin --profile <名字> add aura-basetools-dsh`。
+- **移除 `install.mjs`、双击壳（`一键安装.cmd` / `.command`）、交付 zip、自定义 manifest、
+  升级/回滚命令**：稳定路径、渠道与回滚由 npm 的全局路径、dist-tag 与 `@版本` 完成；
+  离线用 `npm i -g ./aura-basetools-<版本>.tgz`。
+- README、客户版说明、STATUS 同步；`npx ... aura mcp` 的旧指引修正为 `aura basetools mcp`。
+
 ## 0.13.1：`target` 行区间不再越过声明边界
 
 - `target` 的行区间判据从“同作用域兄弟符号”收紧到**声明字节边界**：行内 `import`、尾随调用、嵌套声明、C 家族多行声明头不再被整行替换静默吃掉。

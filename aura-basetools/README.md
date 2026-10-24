@@ -10,6 +10,24 @@
 
 DSH 插件 · MCP 服务（Codex / Claude Code / Cursor）· CLI 三条入口共用同一份引擎。
 
+## 安装（只走 npm）
+
+```bash
+npx -y --package aura-basetools aura basetools mcp   # MCP：零安装
+npm i -g aura-basetools                              # CLI
+dsh plugin --profile web add aura-basetools-dsh      # DSH 插件
+```
+
+MCP 客户端只写一段配置（agent 自己就能加）：
+
+```json
+{"mcpServers":{"aura":{"command":"npx","args":["-y","--package","aura-basetools","aura","basetools","mcp"]}}}
+```
+
+离线：`npm i -g ./aura-basetools-<版本>.tgz`；回滚：`npm i -g aura-basetools@<旧版本>`。
+自定义安装器与交付 zip 已在 0.13.2 移除——稳定路径/升级/客户端注册由 npm 与 agent 自己完成。
+
+
 **0.8.0 起 `aura_basetools_edit` 多一层 `intent`**：给一段模糊意图（符号名片段 / 短语 / 近似原文），
 引擎按固定次序（精确符号 → 符号子串 → 文本锚点）收敛成精确区间；歧义时拒绝并给候选，
 回执的 `tier` 写明实际走的是哪一档（`intent~symbol` / `intent~text~<档>`）。
@@ -92,18 +110,15 @@ src/aura-read/         DSH 工具壳（aura_basetools_read）
 src/aura-edit/         DSH 工具壳（aura_basetools_edit）
 src/locator-lab/       引擎：框架无关、不许用 node:fs（结构 / 读 / 锚点 / 写路径）
 src/aura-standalone/   独立面：CLI + MCP + node:fs 提供方 + 落盘观测缓存 + 自带验收
-build/make-bundle.mjs  打包：dist/aura-basetools/ + .tgz + 交付包 zip + 一页说明；
-                       --pack 时还会顺手派生 dist/npm/ 的两个 npm 包（一条命令 = 完整产物）
+build/make-bundle.mjs  构建：dist/aura-basetools/（拆包中间产物）；
+                       --pack 时派生 dist/npm/ 的两个 npm 包与 capabilities.json
 build/bundle-layout.mjs 包内运行时文件的**唯一清单**：打包按它复制，发布闸按它比对 src↔dist
 build/make-split-packages.mjs 从组合产物派生 aura-basetools（核心）/ aura-basetools-dsh（DSH 适配器）
 build/split-package-test.mjs  拆包的**安装级**验收：离线装两个 tgz，从装出来的那份跑 CLI/MCP/npx，
                               并核对适配器按包名解析核心（入 release-check + CI）
-build/install.mjs      一键安装器（双击 / agent 一条命令；幂等、可卸载、装完真自检）
-build/install-test.mjs 安装器的机械验收（假 HOME 里真装真卸真卸载，52 项）
-build/zip.mjs          自带模式位的 ZIP 写入器（macOS 双击 .command 要 0755，系统压缩工具不写）
 build/range-all.mjs    一条命令跑完三套靶场（格式矩阵 / 字节形态 / 参数形态）并汇总
 build/release-check.mjs 发布前的**全量测试闸**：全量套件（单元/集成/验收/冒烟/端到端；件数以闸输出为准）
-                       + 三套靶场 + 包内验收 + 安装器 + 服务化升级 + 拆包安装级验收 + src↔dist 一致性
+                       + 三套靶场 + 包内验收 + 拆包安装级验收 + src↔dist 一致性
                        + 发布清单 + 版本一致性 + DSH 就绪（不启动宿主也能查的部分）
 dsh/*.yml              DSH 补丁夹具（验证用，非 live）
 probes/adoption-stats.mjs  采用率统计（按会话算覆盖率；读 ~/.dsh/sessions，只读）
@@ -123,10 +138,8 @@ docs/测试分层.md         六类测试各问什么、本仓由谁回答、每
 docs/agent-guide.md      给调用方的决策表：读模式/地址选择/回执/失败恢复/事务
                         （“哪几类没有”就是“哪几种 bug 看不见”）
 docs/aura-客户版-优势说明.md 对外（客户/评估者）版优势说明：收益优先、含交付/回滚/合规/验收清单
-                            构建时会以 aura-basetools-<版本>-优势说明.md 的名义放进交付包
 docs/aura-vs-内置三件套.md 内部工程版对照说明（字节证据、源码行号、采用数据、复跑命令）
-docs/服务化升级设计.md      从“一键安装”到“可升级”：方案对比、稳定路径 + 原子交换 + 自动回滚、
-                           --version/--doctor/--upgrade/--rollback 接口、失败矩阵、升级验收标准
+docs/archive/服务化升级设计.md  已废弃：自定义安装器已移除（0.13.2），保留为历史设计记录
 docs/待办.md              持久待办：现状/影响/怎么做/前提风险/验收（T1 = 把 DSH 接线钉到已发布产物）
 docs/aura-tools-0.*.md     逐版本版本说明（0.2.0 → 0.6.1；0.5.0 = 服务化升级 + 语言表 44→62；
                            0.5.1 = nim/zig；0.5.2 = 新原语 $rest → hrl；0.5.3 = 新守卫 topLevel → hs，
@@ -140,16 +153,14 @@ dist/                  产出（派生物，随时可重建；npm 双包在 dist
 ## 构建与验收
 
 ```bash
-node build/make-bundle.mjs --pack                  # 重建 dist/（含交付包 zip 与 dist/npm 双包）
+node build/make-bundle.mjs --pack                  # 重建 dist/（组合产物 + dist/npm 双包）
 node build/split-package-test.mjs                  # 拆包安装级验收：两个 tgz 装起来真能用
-node build/install-test.mjs                        # 安装器验收（含 --version / --doctor）：52/52 才算过
 node build/range-all.mjs                           # 三套靶场全跑（持续打用）
 node build/release-check.mjs                       # 发布前必跑：全量测试闸（一项不过就不算通过）
 node build/task-bench.mjs                          # 任务级基准：8 个读+改任务对照基线（SLO 闸）
 node build/post-publish-check.mjs                  # 发布物验证 + dist/release-scorecard.json（--registry 用于发布后）
 node build/perf-gate.mjs                           # 性能包线：1k/10k/100k 行冷/热读 + 10k 编辑（绝对上限 + 规模比值）
 node build/capabilities.mjs --write                # 能力清单 dist/capabilities.json（make-bundle --pack 会自动跑）
-node build/upgrade-test.mjs                        # 服务化升级验收（升级/回滚/断电安全）
 node dist/aura-basetools/test/standalone-test.mjs  # 包内自带验收：测"要发出去的那一份"
 ```
 
@@ -197,8 +208,9 @@ aura basetools undo --id <id> --force    # 文件在事务后又被改过也强�
 ## 发布
 
 ```bash
-node build/make-bundle.mjs --pack       # 重建 dist/aura-basetools/ 并打 .tgz
-cd dist/aura-basetools && npm publish   # 先 npm login
+node build/make-bundle.mjs --pack       # 重建 dist/（含 dist/npm 两个包）
+cd dist/npm/aura-basetools && npm publish       # 先 npm login
+cd ../aura-basetools-dsh && npm publish
 ```
 
 可选 `AURA_REPO_URL` / `AURA_AUTHOR` 环境变量决定生成的 `repository` / `author` 字段；不设则不写（也不写假值）。
@@ -224,14 +236,13 @@ node probes/which-tools.mjs                        # 逐会话列出用过哪些
 
 ## 发出去的东西
 
-`dist/aura-basetools-<版本>-交付包.zip`。收件人解压后：
+两个 npm 包（`dist/npm/`）：
 
-- **人**：双击 `一键安装.cmd`（Windows）/ `一键安装.command`（macOS）
-- **agent**：`node aura-basetools/install.mjs --yes --json`
-- **手工**：`npm i -g ./aura-basetools-<版本>.tgz && codex mcp add aura -- aura basetools mcp`
-- **DSH**：`dsh plugin --profile <名字> add ./aura-basetools-<版本>.tgz`
+- **MCP**：`npx -y --package aura-basetools aura basetools mcp`（零安装；客户端写 `mcpServers` 一段即可）
+- **CLI**：`npm i -g aura-basetools`（离线用 `npm i -g ./aura-basetools-<版本>.tgz`）
+- **DSH**：`dsh plugin --profile <名字> add aura-basetools-dsh`
 
-撤销：`node aura-basetools/install.mjs --uninstall`。
+卸载：`npm uninstall -g aura-basetools`；DSH 用 `dsh plugin --profile <名字> remove aura-basetools-dsh`。
 
 装完先跑 `aura basetools doctor`（机器读 `--json`）：Node/版本/MCP 握手/缓存与锁目录，任一失败 exit 2。
 查本机能力用 `aura basetools capabilities --pretty`（读模式/地址档/语言/限制，全部来自引擎常量）。

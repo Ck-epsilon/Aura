@@ -4,7 +4,7 @@
  *   dist/npm/aura-basetools       纯核心：CLI + MCP + 引擎，无 DSH 依赖
  *   dist/npm/aura-basetools-dsh   DSH 适配器：两个壳 + patch，依赖核心
  *
- * 组合产物 `dist/aura-basetools` 仍保留给一键安装/旧交付包；npm 官方源只发这两个包。
+ * 组合产物 `dist/aura-basetools` 是拆包的中间产物；npm 官方源只发这两个包。
  * 这样“不用 DSH 也行”不再靠 optional peer 的约定，而是安装形态本身。
  */
 import fs from 'node:fs'

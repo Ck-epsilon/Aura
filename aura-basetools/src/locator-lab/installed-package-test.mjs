@@ -44,7 +44,7 @@ const statePath = path.join(prefix, 'install.json')
 if (!fs.existsSync(path.join(installDir, 'package.json'))) {
   say('')
   say(`⚠️  跳过 installed-package：装出来的包不存在（${installDir}）。`)
-  say('    这不等于通过——它只说明本机还没装（`node install.mjs --yes` 装一次即可）。')
+  say('    这不等于通过——它只说明本机还没装（`npm i -g aura-basetools` 装一次即可）。')
   say('')
   say('--- 0/0 通过（已跳过）---')
   process.exit(0)
@@ -59,7 +59,7 @@ say('=== A. 每个库模块都能从它的真实位置被 import ===')
   /**
    * 判据是 **import()**，不是 fs.existsSync——后者是这一格曾经的假绿（“文件在”≠“能加载”）。
    *
-   * **但入口文件不能 import**：`bin/*.mjs` 与 `install.mjs` 的顶层是“被执行”的代码
+   * **但入口文件不能 import**：`bin/*.mjs` 与旧交付包的 `install.mjs` 的顶层是“被执行”的代码
    * （无参数时打用法并 `process.exit(0)`）。第一版把它们也 import 了一遍，
    * 结果**把本测试进程自己跑死了**——段 A 之后的断言一条都没执行，而输出看起来只是
    * “A 段没印结果”（看上去像打印问题）。入口是**该被跑**的，由段 C 用子进程验证。
@@ -245,7 +245,7 @@ say('=== E. 装出来的包与被测源码树是同一份字节 ===')
     say(`· 提示：装出来的包与当前源码树不同：${differs.join(', ')}`)
     // 不写版本号：这条提示曾经写死 `aura-tools-0.5.3.tgz`，而它的读者正是“两者已经不同”的时候——
     // 那时版本号必然已经变了。指向**目录**既不需要版本，也照样能装。
-    say('  （正常状态：装的是发布版，开发树已往前走了。要让两者同步：node dist/aura-basetools/install.mjs --from dist/aura-basetools --yes）')
+    say('  （正常状态：装的是发布版，开发树已往前走了。要让两者同步：npm i -g aura-basetools）')
     check(true, '已如实区分“装出来的那份”与“源码树”：不把它们当成同一份')
   }
 }

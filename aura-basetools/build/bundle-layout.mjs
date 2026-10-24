@@ -57,9 +57,6 @@ export const STANDALONE = [
   ['aura-standalone/test', 'test'],
 ]
 
-/** 一键安装器：跟包一起发（`node install.mjs`），它自己带平台分支，因此走 installer 档守卫。 */
-export const INSTALLER = ['build/install.mjs', 'install.mjs']
-
 /**
  * 独立面目录里哪些文件进包。
  *
@@ -87,7 +84,6 @@ export function runtimePairs() {
     }
   }
   for (const rel of HOOK_SHELL) pairs.push([rel, rel])
-  pairs.push([INSTALLER[0], INSTALLER[1]])
   return pairs
 }
 

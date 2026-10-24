@@ -4,12 +4,11 @@
  *
  *   node build/release-check.mjs            # 人看
  *   node build/release-check.mjs --json     # 机器看
- *   node build/release-check.mjs --skip-upgrade   # 升级套件还没建好时的过渡（发布时不许跳）
  *
  * 为什么要有它：发布前"应该跑什么"如果靠人记，漏一项就是一次事故（本轮已经吃过一次：
  * 改了源没重建 dist，于是同一个版本号下有两份不同字节）。这里把清单**固定**下来：
- *   ① 套件（闸内逐件实跑）② 三套靶场 ③ 包内自带验收 ④ 一键安装器 ⑤ 服务化升级（+独立审计探针）
- *   ⑥ src↔dist 一致性 ⑥b **拆包**（两个 npm 包装起来真能用）⑦ 发布清单新鲜度 ⑧ 版本一致性 ⑨ DSH 就绪 ⑩ **普查完整性**（C32）
+ *   ① 套件（闸内逐件实跑）② 三套靶场 ③ 包内自带验收 ④ src↔dist 一致性
+ *   ⑤ **拆包**（两个 npm 包装起来真能用）⑥ 版本一致性 ⑦ DSH 就绪 ⑧ **普查完整性**（C32）
  *
  * 它只汇总与判定，不替任何套件做判断：每个套件自己打印汇总行并以退出码表态。
  * 明确不在检查范围的一件事：**DSH 工具面要重启宿主才生效**（那是人的动作，不是构建产物的问题）。
@@ -32,13 +31,11 @@ import { runtimePairs } from './bundle-layout.mjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const json = process.argv.includes('--json')
-const skipUpgrade = process.argv.includes('--skip-upgrade')
 
 const rows = []
-/** C37：**闸内实跑过的每一个套件文件**（不管它是从 `SUITES` 那一条循环来的，还是 §④/§⑤ 单独调的）。
+/** C37：**闸内实跑过的每一个套件文件**（`SUITES` 循环与 §③/⑤ 单独调用的都算）。
  *  §⑩ 的普查拿它当“枚举名单”—— 这样“登记了”就不再是一份人手抄的第二张表，而是**闸真的跑过它**
- *  这件事本身；把 `build/install-test.mjs` 这类单独调用的套件也算进来，才不会有“明明在跑、
- *  普查却说你没登记”的假红。 */
+ *  这件事本身。 */
 const ranSuites = []
 /**
  * 这些套件在闸内**必须真的跑出断言**。它们跳过时按失败计（`⏭` 仍显示，但闸红）；
@@ -502,23 +499,7 @@ for (const [name, relative] of SUITES) suite(name, relative)
   }
 }
 
-// ④ 一键安装器
-suite('install', 'build/install-test.mjs')
-
-// ⑤ 服务化升级（发布时必须有；过渡期可以 --skip-upgrade）
-if (skipUpgrade) {
-  // C37：跳过的两件**照样登记进枚举名单**（ranSuites）—— 普查问的是"这两个文件归谁管"，
-  // 而不是"这一趟跑没跑"；不登记的话，`--skip-upgrade` 会把两件真套件报成"未登记"的假红。
-  ranSuites.push('build/upgrade-test.mjs', 'build/audit-upgrade-probe.mjs')
-  rows.push({ group: '升级', name: 'upgrade', status: 'skipped', summary: '(--skip-upgrade)' })
-} else {
-  suite('upgrade', 'build/upgrade-test.mjs')
-  // ⑤b **独立**审计探针（审计方写的，不由实现者提供）：专打 upgrade-test 容易漏的破坏性场景
-  //（换名前/后中断、坏包必须被预检挡住、死代理端口下离线升级）。两份都要绿才算这一项过。
-  suite('upgrade/审计探针', 'build/audit-upgrade-probe.mjs')
-}
-
-// ⑥ src ↔ dist 一致性：包里的每个运行时文件都必须与 src 逐字节相同（本轮吃过它的亏）
+// ④ src ↔ dist 一致性：包里的每个运行时文件都必须与 src 逐字节相同（本轮吃过它的亏）
 //
 // 清单从 `bundle-layout.mjs` 的 `runtimePairs()` 派生，**不再手抄**。手抄的那一版漏了 5 个
 // 已经发出去的文件（`handle-core.mjs`、`transaction-store.mjs`、`workspace-lock.mjs`、
@@ -546,39 +527,7 @@ if (skipUpgrade) {
 // 从装出来的那份跑 CLI / MCP / npx，并核对适配器的 import 全部解析到核心包。
 suite('split-package', 'build/split-package-test.mjs', '拆包')
 
-// ⑦ 发布清单新鲜度：`dist/manifest.json` 里的 sha256 必须等于旁边那份 .tgz 的真实哈希
-//
-// 为什么单列一项：清单是**服务化安装的版本发现入口**，而它的判据就是 sha256。
-// 清单旧了不会报错，只会让 `--upgrade` 在“校验”一步被拒——那个报错看起来像“包坏了”，
-// 不像“清单没跟上重建”。所以拿它跟产物比一次，比完才敢说它能用。
-{
-  const manifestPath = path.join(root, 'dist', 'manifest.json')
-  if (!fs.existsSync(manifestPath)) {
-    rows.push({ group: '一致性', name: '发布清单', status: 'fail', summary: 'dist/manifest.json 不存在（跑 node build/make-bundle.mjs --pack）' })
-  } else {
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-    const entry = manifest?.channels?.stable
-    const tgzPath = entry === undefined ? null : path.join(root, 'dist', path.basename(String(entry.url)))
-    const problems = []
-    if (manifest?.tool !== 'aura-basetools') problems.push(`tool=${JSON.stringify(manifest?.tool)}（应为 aura-basetools）`)
-    if (entry === undefined) problems.push('没有 channels.stable')
-    if (entry !== undefined && !fs.existsSync(tgzPath)) problems.push(`url 指向的包体不在 dist/：${entry.url}`)
-    if (entry !== undefined && fs.existsSync(tgzPath)) {
-      const real = crypto.createHash('sha256').update(fs.readFileSync(tgzPath)).digest('hex')
-      if (real !== entry.sha256) problems.push(`sha256 与 ${path.basename(tgzPath)} 不符（清单 ${String(entry.sha256).slice(0, 12)}… vs 实际 ${real.slice(0, 12)}…）`)
-    }
-    const version = JSON.parse(fs.readFileSync(path.join(root, 'dist/aura-basetools/package.json'), 'utf8')).version
-    if (entry !== undefined && entry.version !== version) problems.push(`清单版本 ${entry.version} ≠ 包版本 ${version}`)
-    rows.push({
-      group: '一致性',
-      name: '发布清单',
-      status: problems.length === 0 ? 'ok' : 'fail',
-      summary: problems.length === 0 ? `stable ${entry.version}，sha256 与产物一致` : problems.join('；'),
-    })
-  }
-}
-
-// ⑧a 源侧版本位点：这一份清单是**唯一**的，`make-bundle.mjs` 的 `SHELLS` 必须与它同集合。
+// ⑦ 源侧版本位点：这一份清单是**唯一**的，`make-bundle.mjs` 的 `SHELLS` 必须与它同集合。
 //
 // C43 为什么单列这一条：上面⑧只比三处，而三处里的 `dist/aura-basetools/package.json` 是
 // `build/make-bundle.mjs` **生成**的（它按 `SHELLS` 读两个壳的 package.json，把版本抄进
@@ -629,7 +578,7 @@ suite('split-package', 'build/split-package-test.mjs', '拆包')
   })
 }
 
-// ⑧ 版本一致性：两个壳的 package.json、包内 package.json、交付物文件名，必须同一个版本
+// ⑧ 版本一致性：两个壳的 package.json 与包内 package.json 必须同一个版本
 {
   const read = (p) => (fs.existsSync(path.join(root, p)) ? JSON.parse(fs.readFileSync(path.join(root, p), 'utf8')).version : null)
   const versions = {
@@ -638,12 +587,11 @@ suite('split-package', 'build/split-package-test.mjs', '拆包')
     'dist/aura-basetools': read('dist/aura-basetools/package.json'),
   }
   const unique = [...new Set(Object.values(versions))]
-  const artifacts = fs.existsSync(path.join(root, 'dist')) ? fs.readdirSync(path.join(root, 'dist')).filter((n) => n.includes(unique[0] ?? '\u0000')) : []
   rows.push({
     group: '一致性',
     name: '版本',
     status: unique.length === 1 && unique[0] !== null ? 'ok' : 'fail',
-    summary: `${JSON.stringify(versions)}；同名交付物 ${artifacts.length} 个`,
+    summary: JSON.stringify(versions),
   })
 }
 
@@ -905,10 +853,7 @@ const CENSUS_EXEMPT = [
   ['probes/rework-rate.mjs', 'MT4 **编辑返工量具**（钉住“一次就改好”这组读数）：读会话日志量①(会话,回合,文件)三元组的一次成功率②返工次数与有返工的三元组占比③失败后自我修正率④返工是否落到同一文件；两层成功判据（`isError=false` 与“从回执正文分出真落盘”）各占一格，并自报样本范围与时间窗。不是回归线：① 读数挂在**活语料**上（现扫 ~/.dsh/sessions，随日志增长而变）；② 判据全是自洽/口径/分层判据（记账三段闭合、人群口径自检、合成回执四类分四个不同的桶），一条绝对条数都没写死；③ 与参考读数（aura_basetools_edit 占 20%、平均 1.67 hunk）的对照只印不判。判定力：退出码挂钩全部判据（0 绿 / 1 红 / 2 用法错）'],
   ['probes/shadow-probe2.mjs', '影子调用计数：读会话日志打印调用计数表，无退出码'],
   ['probes/success-regression.mjs', '成功集回归量具：语料要现扫会话日志（~/.dsh/sessions 下的 zstd 流，600MB 级、几分钟）并随日志增长而变 ⇒ 判据挂在活状态上，不是可复现回归线（本波读数 Z = 0）'],
-  // ── build/：C37（另外 3 件 install-test / upgrade-test / audit-upgrade-probe 不在 `SUITES` 那
-  //    份字面量里，而是 §④/§⑤ 单独调 `suite()`、照样登记进 `ranSuites`；件数以闸输出「闸内实跑
-  //    套件 N 件」那一行为准）──
-  ['build/install.mjs', '安装器**产物本体**：§④ install-test.mjs 驱动它、§⑥ 拿它与 dist 那一份逐字节比对。它自己的 checkUpdate( / ✗ / 汇总行是"装完自检"的打印（命中 S1 的是函数名 checkUpdate，不是判据调用），不是回归判据'],
+  // ── build/：C37（件数以闸输出「闸内实跑套件 N 件」那一行为准）──
   ['build/capabilities.mjs', '能力清单生成器：从源码导出常量并写 dist/capabilities.json；判据在 capabilities-test.mjs，生成器自身不判定。'],
   ['build/release-check.mjs', '闸本体：§①–§⑩ 就是它在跑。自我登记会递归（它跑自己），所以它只能在这里被点名'],
   ['build/range-all.mjs', '三套靶场的汇总器（有自己的退出码）：§② 已经**直跑**它，它的三行读数就在本闸的「靶场」组里。登记进 SUITES 等于每次让三套靶场多跑一遍', { ranAs: '靶场' }],
@@ -1102,8 +1047,7 @@ const CENSUS_EXEMPT = [
     const shapes = shapesOf(fs.readFileSync(file, 'utf8'))
     if (shapes.length > 0) hits.set(relativeOf(file), shapes)
   }
-  // C37：枚举名单 = `ranSuites`（闸内**真的跑过**的套件文件），而不是 `SUITES` 那一份子集 ——
-  // §④/§⑤ 单独调 `suite()` 的三件（install-test / upgrade-test / audit-upgrade-probe）也在里面。
+  // C37：枚举名单 = `ranSuites`（闸内**真的跑过**的套件文件），而不是 `SUITES` 那一份子集。
   const enumerated = new Set(ranSuites)
   const exempt = new Map(CENSUS_EXEMPT.map(([relativeFile, reason, wire]) => [relativeFile, { reason, ranAs: wire?.ranAs }]))
   // 两个方向各查一次（**两个数都印出来**）：
