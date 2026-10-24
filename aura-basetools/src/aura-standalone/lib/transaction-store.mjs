@@ -14,6 +14,7 @@
  * 这不是安全边界；它只保证遵守本协议的进程不会静默覆盖并发写。
  */
 import fs from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -108,6 +109,8 @@ function fileSummary(entry) {
     written: entry.written,
     afterVersion: entry.afterVersion ?? null,
     backup: entry.backup ?? null,
+    writtenBackup: entry.writtenBackup ?? null,
+    rollbackBackup: entry.rollbackBackup ?? null,
   }
 }
 
@@ -117,6 +120,53 @@ function fileSummary(entry) {
  * @param root - 工作区根
  * @param tool - 产生它的工具名（仅记录）
  */
+function utf8Text(buf) {
+  const text = buf.toString('utf8')
+  if (!Buffer.from(text, 'utf8').equals(buf)) return null
+  if (text.includes('\u0000')) return null
+  return text
+}
+
+/**
+ * 2-way fast path + `git merge-file` 的三方合并。
+ *
+ * 文字层合并，不碰二进制；一方没变时直接取另一方，避免为无关文件启动 git。
+ * Git 不可用或冲突时返回 conflict，调用方拒绝提交，不写任何文件。
+ */
+function mergeText(baseBuf, oursBuf, theirsBuf, tmpDir) {
+  const base = utf8Text(baseBuf)
+  const ours = utf8Text(oursBuf)
+  const theirs = utf8Text(theirsBuf)
+  if (base === null || ours === null || theirs === null) return { ok: false, reason: 'not-utf8' }
+  if (ours === base) return { ok: true, bytes: theirsBuf }
+  if (theirs === base) return { ok: true, bytes: oursBuf }
+  ensureDir(tmpDir)
+  const stem = `${process.pid}-${crypto.randomBytes(4).toString('hex')}`
+  const baseFile = path.join(tmpDir, `${stem}.base`)
+  const oursFile = path.join(tmpDir, `${stem}.ours`)
+  const theirsFile = path.join(tmpDir, `${stem}.theirs`)
+  try {
+    fs.writeFileSync(baseFile, baseBuf)
+    fs.writeFileSync(oursFile, oursBuf)
+    fs.writeFileSync(theirsFile, theirsBuf)
+    const res = spawnSync('git', ['merge-file', '-p', '--diff3', oursFile, baseFile, theirsFile], {
+      encoding: null,
+      maxBuffer: 16 * 1024 * 1024,
+      windowsHide: true,
+    })
+    if (res.error?.code === 'ENOENT') return { ok: false, reason: 'git-unavailable' }
+    if (res.status === 0) return { ok: true, bytes: Buffer.from(res.stdout) }
+    if (res.status === 1) {
+      return { ok: false, reason: 'overlap', conflictText: Buffer.from(res.stdout).toString('utf8').slice(0, 4000) }
+    }
+    return { ok: false, reason: 'git-error', exitCode: res.status, stderr: String(res.stderr ?? '').slice(0, 500) }
+  } finally {
+    for (const file of [baseFile, oursFile, theirsFile]) {
+      try { fs.rmSync(file, { force: true }) } catch { /* 临时文件清不掉不影响判定 */ }
+    }
+  }
+}
+
 function makeTransaction(root, meta, dir) {
   const entries = new Map()
   for (let i = 0; i < meta.files.length; i += 1) {
@@ -177,15 +227,76 @@ function makeTransaction(root, meta, dir) {
         const result = await provider.writeText(target, content, expected)
         entry.written = true
         entry.afterVersion = result?.version ?? null
+        const writtenPath = path.join('written', `${entry.metaIndex}.bin`)
+        writeBytesAtomic(path.join(dir, writtenPath), fs.readFileSync(entry.realPath), 0o600)
+        entry.writtenBackup = writtenPath
         const summary = meta.files[entry.metaIndex]
         if (summary !== undefined) {
           summary.written = true
           summary.afterVersion = entry.afterVersion
+          summary.writtenBackup = entry.writtenBackup
         }
         saveMeta(meta)
         return result
       }
       return proxy
+    },
+    /**
+     * 提交前的并发合并：事务写过的文件若被外部改过，尝试把我们的 diff 三方合并到当前内容。
+     * **先规划所有文件，全部可合并才写；任一冲突 ⇒ 零写入**，返回 conflicts 供调用方拒绝。
+     */
+    mergeOnCommit(provider) {
+      const plans = []
+      const conflicts = []
+      for (const entry of entries.values()) {
+        if (!entry.written) continue
+        let current
+        try { current = provider.stat(entry.path) } catch { current = undefined }
+        if (entry.afterVersion !== null && current?.version === entry.afterVersion) continue
+        if (!entry.writtenBackup || !entry.backup) {
+          conflicts.push({ path: entry.path, reason: 'no-merge-base' })
+          continue
+        }
+        let baseBytes
+        let oursBytes
+        let theirsBytes
+        try {
+          baseBytes = fs.readFileSync(path.join(dir, entry.backup))
+          oursBytes = fs.readFileSync(path.join(dir, entry.writtenBackup))
+          theirsBytes = fs.readFileSync(entry.realPath)
+        } catch (error) {
+          conflicts.push({ path: entry.path, reason: String(error?.message ?? error) })
+          continue
+        }
+        const merged = mergeText(baseBytes, oursBytes, theirsBytes, path.join(dir, 'merge-tmp'))
+        if (!merged.ok) {
+          conflicts.push({ path: entry.path, reason: merged.reason, ...(merged.conflictText === undefined ? {} : { conflictText: merged.conflictText }), ...(merged.exitCode === undefined ? {} : { exitCode: merged.exitCode }) })
+          continue
+        }
+        plans.push({ entry, theirsBytes, bytes: merged.bytes })
+      }
+      if (conflicts.length > 0) return { merged: [], conflicts }
+      const merged = []
+      for (const plan of plans) {
+        const { entry } = plan
+        const rollbackBackup = path.join('rollback', `${entry.metaIndex}.bin`)
+        writeBytesAtomic(path.join(dir, rollbackBackup), plan.theirsBytes, 0o600)
+        entry.rollbackBackup = rollbackBackup
+        writeBytesAtomic(entry.realPath, plan.bytes, entry.mode ?? 0o600)
+        const writtenBackup = path.join('written', `${entry.metaIndex}.bin`)
+        writeBytesAtomic(path.join(dir, writtenBackup), plan.bytes, 0o600)
+        entry.writtenBackup = writtenBackup
+        entry.afterVersion = provider.stat(entry.path)?.version ?? null
+        const summary = meta.files[entry.metaIndex]
+        if (summary !== undefined) {
+          summary.afterVersion = entry.afterVersion
+          summary.writtenBackup = entry.writtenBackup
+          summary.rollbackBackup = entry.rollbackBackup
+        }
+        merged.push({ path: entry.path, merged: true })
+      }
+      if (merged.length > 0) saveMeta(meta)
+      return { merged, conflicts: [] }
     },
     /** 交叉调用提交前的乐观校验：事务写过的文件必须仍停在 afterVersion。 */
     assertFresh(provider) {
@@ -227,7 +338,8 @@ function makeTransaction(root, meta, dir) {
         }
         try {
           if (entry.existed) {
-            writeBytesAtomic(entry.realPath, fs.readFileSync(path.join(dir, entry.backup)), entry.mode ?? 0o600)
+            const backup = entry.rollbackBackup ?? entry.backup
+            writeBytesAtomic(entry.realPath, fs.readFileSync(path.join(dir, backup)), entry.mode ?? 0o600)
           } else {
             fs.rmSync(entry.realPath, { force: true })
           }

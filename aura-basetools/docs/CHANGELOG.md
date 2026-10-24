@@ -8,6 +8,14 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.18.0：并发合并
+
+- `tx commit` 遇到外部改动时，先做三方合并：非重叠行改动用 `git merge-file` 合并；
+  同一区域冲突 / 非 UTF-8 / Git 不可用 ⇒ `TX_CONFLICT`，**一个字节都不写**。
+- 合并后 verify 失败 ⇒ 回滚到“外部当前内容”，不会把外部改动一起抹掉。
+- `tx-session` 24 项（含 MCP 与并发合并段）。
+- 0.17.0 的 MCP 事务面不变。
+
 ## 0.17.0：MCP 事务面
 
 - MCP 新增 `aura_basetools_tx`（`begin` / `commit` / `rollback` / `status`）。

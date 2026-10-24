@@ -728,13 +728,13 @@ export async function commitTransactionEnvelope(provider, { id, verify } = {}) {
   try {
     return await withWorkspaceLock(provider.root, async () => {
       const tx = openTransaction(provider.root, id)
-      const conflicts = tx.assertFresh(provider)
-      if (conflicts.length > 0) {
+      const merge = tx.mergeOnCommit(provider)
+      if (merge.conflicts.length > 0) {
         return {
           ok: false,
-          code: 'TX_STALE',
-          error: `transaction ${id} has ${conflicts.length} file(s) changed since the transaction wrote them`,
-          conflicts,
+          code: 'TX_CONFLICT',
+          error: `transaction ${id} has ${merge.conflicts.length} file(s) that cannot be merged; nothing was written`,
+          conflicts: merge.conflicts,
           transaction: tx.summary(),
         }
       }
@@ -754,7 +754,7 @@ export async function commitTransactionEnvelope(provider, { id, verify } = {}) {
         }
       }
       tx.commit()
-      return { ok: true, transaction: tx.summary(), ...(verification === undefined ? {} : { verification }) }
+      return { ok: true, transaction: tx.summary(), merges: merge.merged, ...(verification === undefined ? {} : { verification }) }
     })
   } catch (error) {
     return transactionError(error)

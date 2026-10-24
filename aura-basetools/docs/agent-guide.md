@@ -119,7 +119,8 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
 - 写失败仍会自动回滚已落地的目标；事务日志是内部实现，不需要调用方操作。
 - 同一工作区的并发写由锁串行化；`AURA_NO_LOCK=1` 只用于明确知道没有并发者的场景。
 - **跨调用事务**：`tx begin` → 多次 `edit/write --tx <id>` → `tx commit --id <id> [--verify]`；
-  失败/外部改动/verify 失败都可 `tx rollback --id <id>`。commit 前比对 afterVersion，冲突码 `TX_STALE`。
+  失败/外部改动/verify 失败都可 `tx rollback --id <id>`。commit 前做 afterVersion 校验与三方合并；
+  非重叠外部改动自动合并，重叠/不可合并为 `TX_CONFLICT`（零写入）。
   MCP 用 `aura_basetools_tx`（action=begin/commit/rollback/status）与 edit/write 的 `transaction`。
 
 ## 6. 诊断

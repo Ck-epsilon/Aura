@@ -85,7 +85,7 @@ console.log('=== D. 提交前外部改动 ⇒ TX_STALE，不覆盖 ===')
   json(run(['basetools', 'edit', '--file', path.join(tmp, 'e.txt'), '--lines', '1', '--replace', 'E', '--tx', id]))
   fs.writeFileSync(path.join(tmp, 'e.txt'), 'external\n')
   const stale = json(run(['basetools', 'tx', 'commit', '--id', id]))
-  check('D1 commit 拒绝 TX_STALE', stale?.ok === false && stale.code === 'TX_STALE', JSON.stringify(stale).slice(0, 180))
+  check('D1 commit 拒绝无法合并的外部改动（TX_CONFLICT）', stale?.ok === false && stale.code === 'TX_CONFLICT', JSON.stringify(stale).slice(0, 180))
   check('D2 外部内容没有被覆盖', fs.readFileSync(path.join(tmp, 'e.txt'), 'utf8') === 'external\n')
 }
 
@@ -130,6 +130,42 @@ console.log('=== E. MCP：tx begin / edit.transaction / tx commit ===')
   check('E2 MCP edit.transaction 成功', edited?.ok === true && edited.transaction?.id === id, JSON.stringify(edited).slice(0, 180))
   check('E3 MCP tx commit 成功', committed?.ok === true && committed.transaction?.status === 'committed', JSON.stringify(committed).slice(0, 180))
   check('E4 文件已提交', fs.readFileSync(path.join(tmp, 'mcp.txt'), 'utf8') === 'M\n', JSON.stringify(fs.readFileSync(path.join(tmp, 'mcp.txt'), 'utf8')))
+}
+
+console.log('')
+console.log('=== F. 并发合并：非重叠改动合并，重叠冲突拒绝 ===')
+{
+  const git = spawnSync('git', ['--version'], { encoding: 'utf8' })
+  if (git.status !== 0) {
+    console.log('  ⏭ Git 不可用，跳过 merge-file 路径（提交会返回 TX_CONFLICT，不会覆盖）')
+  } else {
+    fs.writeFileSync(path.join(tmp, 'merge.txt'), 'one\ntwo\nthree\n')
+    const begun = json(run(['basetools', 'tx', 'begin']))
+    const id = begun.transaction.id
+    json(run(['basetools', 'edit', '--file', path.join(tmp, 'merge.txt'), '--lines', '1', '--replace', 'ONE', '--tx', id]))
+    fs.writeFileSync(path.join(tmp, 'merge.txt'), 'one\ntwo\nTHREE\n')
+    const committed = json(run(['basetools', 'tx', 'commit', '--id', id]))
+    check('F1 非重叠改动合并成功', committed?.ok === true && committed.merges?.length === 1, JSON.stringify(committed).slice(0, 220))
+    check('F2 双方改动都在', fs.readFileSync(path.join(tmp, 'merge.txt'), 'utf8') === 'ONE\ntwo\nTHREE\n', JSON.stringify(fs.readFileSync(path.join(tmp, 'merge.txt'), 'utf8')))
+
+    fs.writeFileSync(path.join(tmp, 'conflict.txt'), 'alpha\nbeta\n')
+    const begun2 = json(run(['basetools', 'tx', 'begin']))
+    const id2 = begun2.transaction.id
+    json(run(['basetools', 'edit', '--file', path.join(tmp, 'conflict.txt'), '--lines', '1', '--replace', 'ALPHA', '--tx', id2]))
+    fs.writeFileSync(path.join(tmp, 'conflict.txt'), 'external\nbeta\n')
+    const conflicted = json(run(['basetools', 'tx', 'commit', '--id', id2]))
+    check('F3 同一区域冲突 ⇒ TX_CONFLICT', conflicted?.ok === false && conflicted.code === 'TX_CONFLICT', JSON.stringify(conflicted).slice(0, 220))
+    check('F4 冲突时不覆盖外部内容', fs.readFileSync(path.join(tmp, 'conflict.txt'), 'utf8') === 'external\nbeta\n')
+
+    fs.writeFileSync(path.join(tmp, 'rollback-merge.txt'), 'a\nb\nc\n')
+    const begun3 = json(run(['basetools', 'tx', 'begin']))
+    const id3 = begun3.transaction.id
+    json(run(['basetools', 'edit', '--file', path.join(tmp, 'rollback-merge.txt'), '--lines', '1', '--replace', 'A', '--tx', id3]))
+    fs.writeFileSync(path.join(tmp, 'rollback-merge.txt'), 'a\nb\nC\n')
+    const refused = json(run(['basetools', 'tx', 'commit', '--id', id3, '--verify', failCmd]))
+    check('F5 合并后 verify 失败 ⇒ 回滚', refused?.ok === false && refused.code === 'PATCH_VERIFY_FAILED', JSON.stringify(refused).slice(0, 200))
+    check('F6 回滚保留外部改动', fs.readFileSync(path.join(tmp, 'rollback-merge.txt'), 'utf8') === 'a\nb\nC\n', JSON.stringify(fs.readFileSync(path.join(tmp, 'rollback-merge.txt'), 'utf8')))
+  }
 }
 
 fs.rmSync(tmp, { recursive: true, force: true })
