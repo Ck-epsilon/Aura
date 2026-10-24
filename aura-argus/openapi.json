@@ -35,7 +35,7 @@
         }
       }
     },
-    "/sources": {
+    "/aura_argus/sources": {
       "get": {
         "operationId": "aura_argus_sources",
         "summary": "Registered entities and sources",
@@ -56,7 +56,7 @@
         }
       }
     },
-    "/search": {
+    "/aura_argus/search": {
       "get": {
         "operationId": "aura_argus_search_get",
         "summary": "Search one question",
@@ -182,7 +182,7 @@
         }
       }
     },
-    "/search/batch": {
+    "/aura_argus/search/batch": {
       "post": {
         "operationId": "aura_argus_search_batch",
         "summary": "Search up to 50 questions with bounded concurrency",
@@ -216,7 +216,7 @@
         }
       }
     },
-    "/fetch": {
+    "/aura_argus/fetch": {
       "get": {
         "operationId": "aura_argus_fetch_get",
         "summary": "Fetch one URL as Markdown",
@@ -1278,3 +1278,4 @@
     }
   }
 }
+

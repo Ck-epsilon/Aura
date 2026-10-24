@@ -49,30 +49,28 @@ test('client covers health, search, batch, fetch and bearer auth', async () => {
   const { docs, argus, dir, docsUrl } = await fixture();
   try {
     const client = createClient({ baseUrl: argus.url, timeoutMs: 15_000 });
-    const health = await client.health();
+    const health = await client.aura_argus_health();
     assert.equal(health.ok, true);
     assert.equal(health.name, 'aura-argus');
-    const canonicalHealth = await client.aura_argus_health();
-    assert.equal(canonicalHealth.ok, true);
 
-    const result = await client.search('fixtureclient deploy', { maxSources: 1, fallback: false });
+    const result = await client.aura_argus_search('fixtureclient deploy', { maxSources: 1, fallback: false });
     assert.equal(result.entity, 'fixtureclient');
     assert.ok(result.evidence.length > 0);
     assert.match(result.evidence[0].passages[0].citation, /#deploy-guide$/);
 
-    const batch = await client.searchBatch(['fixtureclient deploy', 'fixtureclient alpha'], {
+    const batch = await client.aura_argus_search_batch(['fixtureclient deploy', 'fixtureclient alpha'], {
       maxSources: 1,
       fallback: false,
     });
     assert.equal(batch.results.length, 2);
     assert.equal(batch.results[0].entity, 'fixtureclient');
 
-    const doc = await client.fetch(docsUrl);
+    const doc = await client.aura_argus_fetch(docsUrl);
     assert.match(doc.text, /Deploy guide/);
 
     const impatient = createClient({ baseUrl: argus.url, timeoutMs: 20 });
     await assert.rejects(
-      impatient.fetch(docsUrl.replace('/docs', '/slow')),
+      impatient.aura_argus_fetch(docsUrl.replace('/docs', '/slow')),
       (error) => error instanceof ArgusClientError && error.code === 'TIMEOUT',
     );
   } finally {
@@ -89,7 +87,7 @@ test('client surfaces HTTP errors with code and status', async () => {
     try {
       const client = createClient({ baseUrl: authed.url, token: 'wrong' });
       await assert.rejects(
-        client.sources(),
+        client.aura_argus_sources(),
         (error) => error instanceof ArgusClientError && error.status === 401 && error.code === 'UNAUTHORIZED',
       );
     } finally {

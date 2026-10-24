@@ -46,8 +46,8 @@ test('mcp handshake, tools/list, tools/call, unknown method', async () => {
   assert.ok(byId.get(2).result.tools.some((tool) => tool.name === 'aura_argus_fetch'));
   const searchTool = byId.get(2).result.tools.find((tool) => tool.name === 'aura_argus_search');
   assert.equal(searchTool.annotations.readOnlyHint, true);
-  assert.ok(searchTool.inputSchema.properties.multi);
-  assert.ok(searchTool.inputSchema.properties.followLinks);
+  assert.equal(searchTool.inputSchema.properties.multi, undefined);
+  assert.equal(searchTool.inputSchema.properties.followLinks, undefined);
   assert.ok(searchTool.outputSchema.required.includes('evidence'));
   const sources = JSON.parse(byId.get(3).result.content[0].text);
   assert.ok(sources.entities.length >= 10);

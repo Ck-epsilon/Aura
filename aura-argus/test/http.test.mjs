@@ -138,41 +138,38 @@ test('http server: health, auth, sources, fetch, 400 and 404', async () => {
   const fixture = await fixtureServer();
   const { server, url } = await startServer({ port: 0, host: '127.0.0.1', token: 'secret', allowPrivate: true });
   try {
-    const health = await fetch(`${url}/health`).then((r) => r.json());
+    const oldHealth = await fetch(`${url}/health`);
+    assert.equal(oldHealth.status, 410);
+    const health = await fetch(`${url}/aura_argus/health`).then((r) => r.json());
     assert.equal(health.ok, true);
     assert.equal(health.name, 'aura-argus');
     assert.ok(health.entities >= 10);
     assert.match(health.coverageVersion, /^[0-9a-f]{12}-/);
-    const aliasHealth = await fetch(`${url}/aura_argus/health`).then((r) => r.json());
-    assert.equal(aliasHealth.ok, true);
-    assert.equal(aliasHealth.name, 'aura-argus');
 
-    const unauthorized = await fetch(`${url}/sources`);
+    const unauthorized = await fetch(`${url}/aura_argus/sources`);
     assert.equal(unauthorized.status, 401);
 
-    const sources = await fetch(`${url}/sources`, { headers: { authorization: 'Bearer secret' } }).then((r) => r.json());
-    const aliasSources = await fetch(`${url}/aura_argus/sources`, { headers: { authorization: 'Bearer secret' } }).then((r) => r.json());
-    assert.equal(aliasSources.entities.length, sources.entities.length);
+    const sources = await fetch(`${url}/aura_argus/sources`, { headers: { authorization: 'Bearer secret' } }).then((r) => r.json());
     assert.ok(sources.entities.length >= 10);
     assert.ok(sources.entities.some((entity) => entity.origin === 'default'));
 
-    const fetched = await fetch(`${url}/fetch?url=${encodeURIComponent(`${fixture.base}/page`)}`, {
+    const fetched = await fetch(`${url}/aura_argus/fetch?url=${encodeURIComponent(`${fixture.base}/page`)}`, {
       headers: { authorization: 'Bearer secret' },
     }).then((r) => r.json());
     assert.equal(fetched.ok, true);
     assert.equal(fetched.title, 'Fixture Page');
 
-    const missingQuestion = await fetch(`${url}/search`, { headers: { authorization: 'Bearer secret' } });
+    const missingQuestion = await fetch(`${url}/aura_argus/search`, { headers: { authorization: 'Bearer secret' } });
     assert.equal(missingQuestion.status, 400);
 
-    const emptyBatch = await fetch(`${url}/search/batch`, {
+    const emptyBatch = await fetch(`${url}/aura_argus/search/batch`, {
       method: 'POST',
       headers: { authorization: 'Bearer secret', 'content-type': 'application/json' },
       body: '{}',
     });
     assert.equal(emptyBatch.status, 400);
 
-    const batch = await fetch(`${url}/search/batch`, {
+    const batch = await fetch(`${url}/aura_argus/search/batch`, {
       method: 'POST',
       headers: { authorization: 'Bearer secret', 'content-type': 'application/json' },
       body: JSON.stringify({ questions: ['量子计算机 A', '量子计算机 B'], fallback: false, cache: false }),
@@ -181,7 +178,7 @@ test('http server: health, auth, sources, fetch, 400 and 404', async () => {
     assert.equal(batch.results.length, 2);
     assert.deepEqual(batch.results.map((result) => result.mode), ['none', 'none']);
 
-    const notFound = await fetch(`${url}/nope`, { headers: { authorization: 'Bearer secret' } });
+    const notFound = await fetch(`${url}/aura_argus/nope`, { headers: { authorization: 'Bearer secret' } });
     assert.equal(notFound.status, 404);
   } finally {
     server.close();

@@ -1,6 +1,12 @@
 # 结果
 
-## 2.4.6（2026-10-24，当前）
+## 3.0.0（2026-10-24，当前）
+
+- 公开面收敛：CLI 只接受 `aura_argus_*`；HTTP 只接受 `/aura_argus/*`；Node/JS 只导出规范名；旧别名与旧路由删除。
+- 安装入口收敛为 MCP `aura_argus_mcp`；DSH adapter 降为可选。
+- `npm test` **136/136**；不新增功能。
+
+## 2.4.6（2026-10-24）
 
 - 尾延迟收口：单源 2.0 s、discovery 1.8 s 上限；`answerability` p95 **2443 ms**，gate pass。
 - `npm test` 136/136；`bench:agent` 75/77（0.974）；`verify` 220/220。

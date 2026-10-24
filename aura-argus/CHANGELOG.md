@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.0.0 — 2026-10-24
+
+### Breaking
+
+- CLI 只接受规范子命令 `aura_argus_*`；旧的 `search` / `fetch` / `sources` / `doctor` / `warm` / `gaps` / `index` / `serve` / `mcp` 别名删除。
+- HTTP 只接受 `/aura_argus/*`；旧的 `/health`、`/sources`、`/search`、`/search/batch`、`/fetch` 返回 `410 ROUTE_REMOVED`。
+- Node 库只导出 `aura_argus_*`；`search`、`searchBatch`、`fetchDocument` 兼容别名删除。JS client 只保留规范方法。
+- CLI/MCP 移除 `--multi`、`--follow-links`、`--max-follow-links`、`--fast`、`--decompose`、`--batch` 公开旋钮；链接发现、拆句、多实体由 `--mode fast|balanced|deep` 内部决定。
+- 安装面收敛为 MCP：`aura-argus aura_argus_mcp`；DSH native adapter 只保留为可选，不再作为默认安装路径。
+
+### Gates
+
+- `npm test`: **136/136**
+- 无新增功能；本版仅删别名/旧路由/旧旋钮。
+
 ## 2.4.6 — 2026-10-24
 
 ### Fixed

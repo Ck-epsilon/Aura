@@ -1,6 +1,7 @@
 // MCP stdio server：换行分隔的 JSON-RPC 2.0。stdout 只写协议消息。
 import readline from 'node:readline';
-import { search, searchBatch, fetchDocument, getCoverage, listEntities, version } from '../core.mjs';
+import { aura_argus_search as search, aura_argus_search_batch as searchBatch, aura_argus_fetch_document as fetchDocument, version } from '../core.mjs';
+import { getCoverage, listEntities } from './registry.mjs';
 import { API_NAMES } from './api-names.mjs';
 
 const PROTOCOL_FALLBACK = '2025-06-18';
@@ -56,13 +57,8 @@ function toolList() {
           site: { type: 'string', description: 'Restrict to one domain and fetch the top matching pages as evidence (e.g. docs.example.com).' },
           sites: { type: 'boolean', description: 'Include default/user site packs (default true). Set false for strict registry-only coverage.' },
           fallback: { type: ['boolean', 'string'], description: 'Explicit web fallback: true = when registry evidence is empty; "auto" = also when confidence is low or key facets are missing.' },
-          multi: { type: 'boolean', description: 'Route comparative questions to multiple entities and merge evidence (default: auto when 2+ entities and a comparison signal are present).' },
-          followLinks: { type: 'boolean', description: 'When key facets are missing, follow one same-host documentation link (default true).' },
-          maxFollowLinks: { type: 'integer', minimum: 0, maximum: 2, default: 1 },
-          fast: { type: 'boolean', description: 'Use the local section index when available; falls back to live retrieval if the index is missing or low-confidence. Build it with aura-argus index.' },
           deepIndex: { type: 'boolean', description: 'Use a deep local index (built with aura-argus index --deep) and return it when it fully answers the question.' },
           docVersion: { type: 'string', description: 'Prefer versioned official docs (e.g. 20, 3.11, 8.0, 16) when the entity has a version map.' },
-          decompose: { type: 'boolean', description: 'Split compound questions into clauses, retrieve in parallel, and merge evidence with clause provenance.' },
           mode: { type: 'string', enum: ['fast', 'balanced', 'deep'], description: 'Preset: fast=2 sources/no link following/index; balanced=defaults; deep=6 sources/2 followed links/decompose/no early stop.' },
           budgetMs: { type: 'integer', minimum: 0, maximum: 120000, description: 'Wall-clock budget. Returns partial:true with gathered evidence when exhausted.' },
         },
@@ -87,13 +83,8 @@ function toolList() {
           site: { type: 'string', description: 'Restrict every question to one domain.' },
           sites: { type: 'boolean', description: 'Include default/user site packs (default true).' },
           fallback: { type: ['boolean', 'string'], description: 'Explicit web fallback: true = when registry evidence is empty; "auto" = also when confidence is low or key facets are missing.' },
-          multi: { type: 'boolean', description: 'Allow multi-entity routing for comparative questions.' },
-          followLinks: { type: 'boolean', description: 'Allow one-hop documentation link following (default true).' },
-          maxFollowLinks: { type: 'integer', minimum: 0, maximum: 2, default: 1 },
-          fast: { type: 'boolean', description: 'Use the local section index when available; falls back to live retrieval if the index is missing or low-confidence.' },
           deepIndex: { type: 'boolean', description: 'Use a deep local index (built with aura-argus index --deep) and return it when it fully answers the question.' },
           docVersion: { type: 'string', description: 'Prefer versioned official docs (e.g. 20, 3.11, 8.0, 16) when the entity has a version map.' },
-          decompose: { type: 'boolean', description: 'Split compound questions into clauses, retrieve in parallel, and merge evidence with clause provenance.' },
           mode: { type: 'string', enum: ['fast', 'balanced', 'deep'], description: 'Preset: fast=2 sources/no link following/index; balanced=defaults; deep=6 sources/2 followed links/decompose/no early stop.' },
           budgetMs: { type: 'integer', minimum: 0, maximum: 120000, description: 'Wall-clock budget. Returns partial:true with gathered evidence when exhausted.' },
         },
@@ -158,13 +149,8 @@ const SEARCH_OPTIONS = (args) => ({
   site: args.site,
   sites: args.sites !== false,
   fallback: args.fallback ?? 'auto',
-  multi: args.multi,
-  followLinks: args.followLinks,
-  maxFollowLinks: args.maxFollowLinks,
-  fast: args.fast,
   deepIndex: args.deepIndex,
   docVersion: args.docVersion,
-  decompose: args.decompose,
   mode: args.mode,
   budgetMs: args.budgetMs,
 });

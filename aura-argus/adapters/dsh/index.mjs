@@ -1,6 +1,6 @@
 // DSH 适配器：把 AuraArgus 注册成 ctx.web 的 search / fetch provider。
 // 不依赖 DSH 的源码：只用到 ctx.web.registerSearchProvider / registerFetchProvider。
-import { search, fetchDocument, version } from '../../src/core.mjs';
+import { aura_argus_search as search, aura_argus_fetch_document as fetchDocument, version } from '../../src/core.mjs';
 
 export const name = 'aura-argus-dsh';
 export const inject = ['web'];

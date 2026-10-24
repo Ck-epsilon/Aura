@@ -35,8 +35,8 @@ AuraArgus 是一个本地运行的检索工具，给 agent、脚本或你自己�
 ### 从 zip 直接运行（不需要 npm install）
 
 ```bash
-unzip aura-argus-2.4.6.zip
-cd aura-argus-2.4.6
+unzip aura-argus-3.0.0.zip
+cd aura-argus-3.0.0
 
 node src/cli.mjs aura_argus_search "SearXNG 对 429 的冷却时间是多少秒？" --json
 ```
@@ -162,10 +162,7 @@ CLI 退出码：`0` 有证据、`2` 无证据、`3` 参数/URL 错误、`4` 抓�
 aura-argus aura_argus_search "问题" --json          # 证据包（机器读）
 aura-argus aura_argus_search "问题" --text          # 人眼可读
 aura-argus aura_argus_search "问题" --max-sources 3
-aura-argus aura_argus_search "问题" --multi         # 对比问题：多实体并行
-aura-argus aura_argus_search "问题" --follow-links  # 缺 facet 时跟一跳同站文档
-aura-argus aura_argus_search "问题" --decompose     # 复合问题拆句并行检索
-aura-argus aura_argus_search "问题" --fast          # 已知事实：本地索引命中
+aura-argus aura_argus_search "问题" --mode fast     # 快速：少源、本地索引优先
 aura-argus aura_argus_search "问题" --deep-index    # 使用 index --deep 建的深索引
 aura-argus aura_argus_search "问题" --mode deep      # fast / balanced / deep 预设
 aura-argus aura_argus_search "问题" --budget-ms 5000 # 墙钟预算；超时返回 partial 证据
@@ -195,7 +192,7 @@ echo '["q1","q2","q3"]' | aura-argus aura_argus_search_batch --concurrency 3 --j
 
 - 搜索结果磁盘缓存 15 分钟；页面持久缓存默认 6 小时，带 `ETag` / `Last-Modified`，跨进程复用。
 - `warm` 把常用实体主源预取进页缓存：首次查询仍然冷，后续查询直接命中。
-- **fast 模式**：`aura-argus aura_argus_index --top 20` 建本地 section 索引；`search --fast` 对“已知事实”查询（价格、端口、版本、上限、日期等）本地命中（约 2 ms），开放 how-to/对比/清单问题自动回退 live，避免漏掉 API 名。
+- **fast 模式**：`aura-argus aura_argus_index --top 20` 建本地 section 索引；`--mode fast` 对“已知事实”查询（价格、端口、版本、上限、日期等）本地命中（约 2 ms），开放 how-to/对比/清单问题自动回退 live，避免漏掉 API 名。
 - 索引默认 24 小时过期（`AURA_ARGUS_INDEX_TTL_MS`），存于本地 cache；`AURA_ARGUS_INDEX_DIR` 可改目录。
 - `index` 默认增量：新鲜索引直接复用；过期索引带 `ETag` / `Last-Modified` 只重抓变化的源，304 时复用旧 section。`--no-incremental` 强制全量重建。
 - 多问题用 `aura_argus_search_batch` / MCP `aura_argus_search_batch`；42 题冷启动批量比串行快 **2.99×**。
@@ -206,7 +203,7 @@ echo '["q1","q2","q3"]' | aura-argus aura_argus_search_batch --concurrency 3 --j
 ### 模式与预算（1.7）
 
 - `--mode fast`：2 个源、不跟链接、优先本地索引；`balanced`：默认（3 源、1 跳）；`deep`：6 源、2 跳、复合问题拆句、关闭早停。
-- 显式的 `--max-sources` / `--follow-links` / `--fast` 等仍覆盖预设。
+- 显式的 `--max-sources` 仍可覆盖预设；链接发现、拆句与多实体由模式内部决定。
 - `--budget-ms` 是整次检索的墙钟预算；预算耗尽时返回已抓到的证据并标记 `partial: true`、`budget.exhausted: true`，不会把整次调用抛成超时。
 - MCP `mode` / `budgetMs`，HTTP `mode` / `budgetMs` 与 CLI 等价。
 
@@ -426,7 +423,7 @@ Node 内置 fetch 默认不读 `HTTP_PROXY` / `HTTPS_PROXY`。需要的话设置
 ## zip 里有什么
 
 ```
-aura-argus-2.4.6/
+aura-argus-3.0.0/
   README.md              ← 你正在看的这份
   LICENSE                MIT
   src/                   运行时代码 + registry.json
@@ -466,6 +463,7 @@ npm run bench:pk215 # 215 题五类覆盖评估（只跑 Aura，不调用 Tavily
 ## License
 
 MIT
+
 
 
 

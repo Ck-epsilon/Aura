@@ -1,6 +1,7 @@
 // 本地 HTTP 服务：任何语言/agent 都能调用。默认只绑 127.0.0.1。
 import http from 'node:http';
-import { search, searchBatch, fetchDocument, getCoverage, listEntities, version } from '../core.mjs';
+import { aura_argus_search, aura_argus_search_batch, aura_argus_fetch_document, version } from '../core.mjs';
+import { getCoverage, listEntities } from './registry.mjs';
 import { toErrorPayload, ArgusError, CODES } from './errors.mjs';
 
 const MAX_BODY = 1_000_000;
@@ -51,8 +52,18 @@ export function createRequestHandler({ token = null, allowPrivate = false, sites
     }
 
     const url = new URL(req.url || '/', 'http://localhost');
-    // 规范名 /aura_argus/*；旧路径保持不变。
-    const route = url.pathname.replace(/^\/aura_argus(?=\/)/, '') || '/';
+    // Canonical surface only: /aura_argus/*. Old bare routes are gone.
+    const prefix = '/aura_argus';
+    if (url.pathname !== prefix && !url.pathname.startsWith(`${prefix}/`)) {
+      const legacy = new Set(['/health', '/sources', '/search', '/search/batch', '/fetch']);
+      if (legacy.has(url.pathname)) {
+        send(res, 410, { ok: false, error: { code: 'ROUTE_REMOVED', message: `use ${prefix}${url.pathname}` } });
+      } else {
+        send(res, 404, { ok: false, error: { code: 'NOT_FOUND', message: `no route for ${url.pathname}` } });
+      }
+      return;
+    }
+    const route = url.pathname.slice(prefix.length) || '/';
     const abort = new AbortController();
     res.on('close', () => { if (!res.writableEnded) abort.abort(new Error('client disconnected')); });
     if (route === '/health') {
@@ -81,13 +92,13 @@ export function createRequestHandler({ token = null, allowPrivate = false, sites
           name: 'aura-argus',
           version,
           endpoints: {
-            'GET /health': 'health + version',
-            'GET /sources': 'registered entities',
-            'GET /search?q=&maxSources=': 'evidence bundle (add sites=0 for registry-only)',
-          'POST /search': '{ "question": "...", "maxSources": 3, "site": "docs.example.com", "sites": true }',
-            'POST /search/batch': '{ "questions": ["..."], "concurrency": 3, "site": "docs.example.com", "sites": true }',
-            'GET /fetch?url=&maxChars=': 'clean page text',
-            'POST /fetch': '{ "url": "...", "maxChars": 20000 }',
+            'GET /aura_argus/health': 'health + version',
+            'GET /aura_argus/sources': 'registered entities',
+            'GET /aura_argus/search?q=&maxSources=': 'evidence bundle (add sites=0 for registry-only)',
+            'POST /aura_argus/search': '{ "question": "...", "maxSources": 3, "site": "docs.example.com", "sites": true }',
+            'POST /aura_argus/search/batch': '{ "questions": ["..."], "concurrency": 3, "site": "docs.example.com", "sites": true }',
+            'GET /aura_argus/fetch?url=&maxChars=': 'clean page text',
+            'POST /aura_argus/fetch': '{ "url": "...", "maxChars": 20000 }',
           },
         });
         return;
@@ -100,23 +111,18 @@ export function createRequestHandler({ token = null, allowPrivate = false, sites
       }
 
       if (route === '/search/batch') {
-        if (req.method !== 'POST') { send(res, 405, { ok: false, error: { code: 'METHOD_NOT_ALLOWED', message: 'use POST /search/batch' } }); return; }
+        if (req.method !== 'POST') { send(res, 405, { ok: false, error: { code: 'METHOD_NOT_ALLOWED', message: 'use POST /aura_argus/search/batch' } }); return; }
         const body = await readBody(req);
         if (!Array.isArray(body.questions) || body.questions.length === 0) throw new ArgusError(CODES.BAD_REQUEST, 'questions[] is required');
         if (body.questions.length > 50) throw new ArgusError(CODES.BAD_REQUEST, 'at most 50 questions per batch');
-        const results = await searchBatch(body.questions, {
+        const results = await aura_argus_search_batch(body.questions, {
           concurrency: Number(body.concurrency ?? 3),
           maxSources: Number(body.maxSources ?? 3),
           cache: body.cache !== false,
           fallback: body.fallback === false ? false : body.fallback === true ? true : 'auto',
           site: typeof body.site === 'string' ? body.site : undefined,
-          multi: body.multi,
-          followLinks: body.followLinks,
-          maxFollowLinks: body.maxFollowLinks,
-          fast: body.fast,
           deepIndex: body.deepIndex,
           docVersion: body.docVersion,
-          decompose: body.decompose,
           mode: body.mode,
           signal: abort.signal,
           budgetMs: Number(body.budgetMs ?? 45_000),
@@ -143,27 +149,17 @@ export function createRequestHandler({ token = null, allowPrivate = false, sites
               : 'auto';
         const site = typeof body.site === 'string' ? body.site : (url.searchParams.get('site') ?? undefined);
         const sitesOff = body.sites === false || url.searchParams.get('sites') === '0';
-        const multi = body.multi === false || url.searchParams.get('multi') === '0' ? false : body.multi === true || url.searchParams.get('multi') === '1' ? true : undefined;
-        const followLinks = body.followLinks === false || url.searchParams.get('followLinks') === '0' ? false : body.followLinks === true || url.searchParams.get('followLinks') === '1' ? true : undefined;
-        const maxFollowLinks = body.maxFollowLinks ?? url.searchParams.get('maxFollowLinks') ?? undefined;
-        const fast = body.fast === true || url.searchParams.get('fast') === '1';
         const deepIndex = body.deepIndex === true || url.searchParams.get('deepIndex') === '1';
         const docVersion = body.docVersion ?? url.searchParams.get('docVersion') ?? undefined;
-        const decompose = body.decompose === true || url.searchParams.get('decompose') === '1';
         const mode = body.mode ?? url.searchParams.get('mode') ?? undefined;
         const budgetMs = body.budgetMs ?? url.searchParams.get('budgetMs') ?? undefined;
-        const result = await search(question, {
+        const result = await aura_argus_search(question, {
           maxSources,
           cache: body.cache !== false,
           fallback,
           site,
-          multi,
-          followLinks,
-          maxFollowLinks: maxFollowLinks === undefined ? undefined : Number(maxFollowLinks),
-          fast,
           deepIndex,
           docVersion,
-          decompose,
           mode,
           budgetMs: budgetMs === undefined ? undefined : Number(budgetMs),
           signal: abort.signal,
@@ -179,7 +175,7 @@ export function createRequestHandler({ token = null, allowPrivate = false, sites
         const target = String(body.url ?? url.searchParams.get('url') ?? '').trim();
         if (!target) throw new ArgusError(CODES.BAD_REQUEST, 'url is required');
         const maxChars = Number(body.maxChars ?? url.searchParams.get('maxChars') ?? 20_000);
-        const result = await fetchDocument(target, { maxChars, allowPrivate, signal: abort.signal });
+        const result = await aura_argus_fetch_document(target, { maxChars, allowPrivate, signal: abort.signal });
         send(res, 200, { ok: true, ...result });
         return;
       }

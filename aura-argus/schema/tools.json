@@ -349,8 +349,9 @@
   },
   "mapping": {
     "cli": "aura-argus search \"<question>\" --json",
-    "mcp": "aura-argus mcp",
-    "http": "POST http://127.0.0.1:8787/search",
+    "mcp": "aura-argus aura_argus_mcp",
+    "http": "POST http://127.0.0.1:8787/aura_argus/search",
     "library": "import { search } from 'aura-argus'"
   }
 }
+

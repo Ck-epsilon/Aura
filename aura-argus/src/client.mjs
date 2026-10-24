@@ -75,30 +75,22 @@ export function createClient({
     }
   }
 
-  const client = {
-    baseUrl: base,
-    health: () => request('/health'),
-    sources: () => request('/sources'),
-    search: (question, options = {}) => {
-      const { signal, ...body } = options;
-      return request('/search', { method: 'POST', body: { question, ...body }, signal });
-    },
-    searchBatch: (questions, options = {}) => {
-      const { signal, ...body } = options;
-      return request('/search/batch', { method: 'POST', body: { questions, ...body }, signal });
-    },
-    fetch: (target, options = {}) => {
-      const { signal, ...body } = options;
-      return request('/fetch', { method: 'POST', body: { url: target, ...body }, signal });
-    },
-  };
   return {
-    ...client,
-    aura_argus_health: client.health,
-    aura_argus_sources: client.sources,
-    aura_argus_search: client.search,
-    aura_argus_search_batch: client.searchBatch,
-    aura_argus_fetch: client.fetch,
+    baseUrl: base,
+    aura_argus_health: () => request('/aura_argus/health'),
+    aura_argus_sources: () => request('/aura_argus/sources'),
+    aura_argus_search: (question, options = {}) => {
+      const { signal, ...body } = options;
+      return request('/aura_argus/search', { method: 'POST', body: { question, ...body }, signal });
+    },
+    aura_argus_search_batch: (questions, options = {}) => {
+      const { signal, ...body } = options;
+      return request('/aura_argus/search/batch', { method: 'POST', body: { questions, ...body }, signal });
+    },
+    aura_argus_fetch: (target, options = {}) => {
+      const { signal, ...body } = options;
+      return request('/aura_argus/fetch', { method: 'POST', body: { url: target, ...body }, signal });
+    },
   };
 }
 

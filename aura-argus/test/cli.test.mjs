@@ -20,9 +20,8 @@ test('canonical aura_argus CLI commands are accepted', () => {
   assert.match(help.stdout, /aura_argus_search/);
   assert.match(help.stdout, /aura_argus_mcp/);
 });
-
-test('legacy search/fetch commands remain aliases', () => {
-  const help = run(['help']);
-  assert.equal(help.status, 0);
-  assert.match(help.stdout, /Legacy aliases/);
+test('legacy search/fetch commands are removed', () => {
+  const legacy = run(['search', 'anything']);
+  assert.notEqual(legacy.status, 0);
+  assert.doesNotMatch(legacy.stdout, /Legacy aliases/);
 });

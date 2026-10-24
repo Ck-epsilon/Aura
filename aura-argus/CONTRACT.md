@@ -168,7 +168,7 @@ adapters; it fetches up to 4 result pages, keeps official evidence first, and ma
 ## MCP
 
 Tools: `aura_argus_search`, `aura_argus_search_batch`, `aura_argus_fetch`, `aura_argus_sources`.
-Legacy names `search`, `search_batch`, `fetch`, `sources` remain accepted as aliases.
+Canonical names only. Legacy aliases (`search`, `search_batch`, `fetch`, `sources`, bare `/search`, bare `/fetch`, bare `/sources`) were removed in 3.0.0; old HTTP routes return `410 ROUTE_REMOVED`.
 Results include `structuredContent` alongside text JSON; tools carry read-only annotations and
 `outputSchema`. `aura_argus_search_batch` emits `notifications/progress` when
 `_meta.progressToken` is supplied. `notifications/cancelled` aborts the matching in-flight call;
@@ -188,3 +188,4 @@ and `AbortSignal` cancellation.
 - `evidence` is relevant, not exhaustive.
 - Coverage is the registry + site packs; unregistered entities return `mode: "none"` unless a
   site scope or explicit fallback is used.
+

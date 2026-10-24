@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // AuraArgus CLI：search / fetch / sources / doctor / serve / mcp
-import { search, searchBatch, fetchDocument, getCoverage, listEntities, version, ArgusError, CODES, toErrorPayload } from './core.mjs';
+import { aura_argus_search, aura_argus_search_batch, aura_argus_fetch_document, version, ArgusError, CODES, toErrorPayload } from './core.mjs';
+import { getCoverage, listEntities } from './lib/registry.mjs';
 import { checkSources } from './lib/doctor.mjs';
 import { startServer } from './lib/server.mjs';
 import { runMcp } from './lib/mcp.mjs';
@@ -14,7 +15,7 @@ const USAGE = `aura-argus ${version}
 Usage:
   aura-argus aura_argus_search <question...> [--max-sources 3] [--json|--text] [--no-cache] [--fallback] [--site domain]
                    [--mode fast|balanced|deep] [--budget-ms 5000]
-                   [--multi|--no-multi] [--follow-links|--no-follow-links] [--max-follow-links 1] [--fast] [--deep-index] [--decompose] [--doc-version 20]
+                   [--deep-index] [--doc-version 20]
                    [--sites-file path] [--no-sites] [--allow-private] [--timeout ms]
   echo '["q1","q2"]' | aura-argus aura_argus_search_batch [--concurrency 3] [--json]
   aura-argus aura_argus_fetch <url> [--max-chars 20000] [--format markdown|text] [--json] [--allow-private]
@@ -26,31 +27,11 @@ Usage:
   aura-argus aura_argus_serve [--port 8787] [--host 127.0.0.1] [--token <t>] [--allow-private] [--sites-file path] [--no-sites]
   aura-argus aura_argus_mcp [--allow-private] [--sites-file path] [--no-sites]
 
-Legacy aliases: search, search --batch, fetch, sources, doctor, warm, gaps, index, serve, mcp.
 
 Exit codes:
   0 ok   2 no evidence   3 bad args   4 network/fetch failure   130 interrupted`;
 
 const COMMAND_ALIASES = {
-  aura_argus_search: 'aura_argus_search',
-  search: 'aura_argus_search',
-  aura_argus_search_batch: 'aura_argus_search_batch',
-  aura_argus_fetch: 'aura_argus_fetch',
-  fetch: 'aura_argus_fetch',
-  aura_argus_sources: 'aura_argus_sources',
-  sources: 'aura_argus_sources',
-  aura_argus_doctor: 'aura_argus_doctor',
-  doctor: 'aura_argus_doctor',
-  aura_argus_warm: 'aura_argus_warm',
-  warm: 'aura_argus_warm',
-  aura_argus_gaps: 'aura_argus_gaps',
-  gaps: 'aura_argus_gaps',
-  aura_argus_index: 'aura_argus_index',
-  index: 'aura_argus_index',
-  aura_argus_serve: 'aura_argus_serve',
-  serve: 'aura_argus_serve',
-  aura_argus_mcp: 'aura_argus_mcp',
-  mcp: 'aura_argus_mcp',
   aura_argus_version: 'version',
   version: 'version',
   aura_argus_help: 'help',
@@ -59,7 +40,7 @@ const COMMAND_ALIASES = {
 
 function parseArgs(argv) {
   const flags = {};
-  const boolean = new Set(['json', 'text', 'no-cache', 'no-fallback', 'fallback', 'explain', 'help', 'version', 'batch', 'allow-private', 'no-sites', 'multi', 'no-multi', 'follow-links', 'no-follow-links', 'fast', 'decompose', 'no-incremental', 'deep', 'deep-index', 'all']);
+  const boolean = new Set(['json', 'text', 'no-cache', 'no-fallback', 'fallback', 'explain', 'help', 'version', 'allow-private', 'no-sites', 'no-incremental', 'deep', 'deep-index', 'all']);
   const positional = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -97,11 +78,7 @@ function searchOptions(flags) {
     fallback: flags['no-fallback'] ? false : flags.fallback === true ? true : 'auto',
     site: typeof flags.site === 'string' ? flags.site : undefined,
     timeoutMs: Number(flags.timeout ?? 12_000),
-    multi: flags['no-multi'] ? false : flags.multi ? true : undefined,
-    maxFollowLinks: flags['max-follow-links'] !== undefined ? Number(flags['max-follow-links']) : undefined,
-    fast: Boolean(flags.fast),
     deepIndex: flags['deep-index'] === true,
-    decompose: Boolean(flags.decompose),
     mode: typeof flags.mode === 'string' ? flags.mode : undefined,
     budgetMs: flags['budget-ms'] !== undefined ? Number(flags['budget-ms']) : undefined,
     indexDir: typeof flags['index-dir'] === 'string' ? flags['index-dir'] : undefined,
@@ -146,7 +123,7 @@ async function main() {
   if (flags.help || canonical === 'help') { console.log(USAGE); return 0; }
 
   if (canonical === 'aura_argus_search' || canonical === 'aura_argus_search_batch') {
-    if (canonical === 'aura_argus_search_batch' || flags.batch) {
+    if (canonical === 'aura_argus_search_batch') {
       if (process.stdin.isTTY) { console.error('--batch expects a JSON array of questions on stdin'); return 3; }
       const raw = await readStdin();
       let parsed;
@@ -155,7 +132,7 @@ async function main() {
         .map((item) => (typeof item === 'string' ? item : item?.question ?? item?.q))
         .filter(Boolean);
       if (!questions.length) throw new ArgusError(CODES.BAD_REQUEST, 'batch has no questions');
-      const results = await searchBatch(questions, {
+      const results = await aura_argus_search_batch(questions, {
         concurrency: Number(flags.concurrency ?? 3),
         ...searchOptions(flags),
         budgetMs: Number(flags.budget ?? flags['budget-ms'] ?? 35_000),
@@ -168,7 +145,7 @@ async function main() {
     }
     const question = positional.join(' ').trim();
     if (!question) { console.error(USAGE); return 3; }
-    const result = await search(question, searchOptions(flags));
+    const result = await aura_argus_search(question, searchOptions(flags));
     if (flags.text) console.log(searchText(result));
     else jsonOut(result);
     if (result.error) return 4;
@@ -178,7 +155,7 @@ async function main() {
   if (canonical === 'aura_argus_fetch') {
     const target = positional[0];
     if (!target) { console.error(USAGE); return 3; }
-    const doc = await fetchDocument(target, {
+    const doc = await aura_argus_fetch_document(target, {
       maxChars: Number(flags['max-chars'] ?? 20_000),
       format: flags.format === 'text' ? 'text' : 'markdown',
       timeoutMs: Number(flags.timeout ?? 12_000),
