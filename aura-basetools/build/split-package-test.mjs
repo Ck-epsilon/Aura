@@ -298,7 +298,17 @@ const resolveSpecs = (specs, fromFile) => {
   const require = createRequire(pathToFileURL(fromFile))
   const failures = []
   // Windows 路径大小写不敏感：盘符/目录大小写不同不代表解析到了包外。
-  const normalize = (p) => path.resolve(process.platform === 'win32' ? p.toLowerCase() : p)
+  // macOS 的 tmpdir 是 /var/folders/...，realpath 后是 /private/var/folders/...；
+  // 只做 path.resolve 会把同一份包判成“核心包外”。两边都过 realpath 再比较。
+  const normalize = (p) => {
+    let q = path.resolve(p)
+    try {
+      q = fs.realpathSync.native(q)
+    } catch {
+      // 解析不了就保留词法路径（坏 specifier 的负向分支仍要能报 MODULE_NOT_FOUND）。
+    }
+    return process.platform === 'win32' ? q.toLowerCase() : q
+  }
   for (const spec of specs) {
     try {
       const resolved = require.resolve(spec)

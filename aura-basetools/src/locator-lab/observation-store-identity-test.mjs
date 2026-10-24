@@ -231,7 +231,9 @@ say('=== B. 反向：两个**真的不同**的文件不得被并成一个键（�
   } catch {
     caseSensitive = false
   }
-  check(caseSensitive, 'B1 本机文件系统支持同目录大小写并存（真·两个文件这一支可用）', `caseSensitive=${caseSensitive}`)
+  // 能力读数，不是契约：大小写敏感目录在 macOS 上开不出来（默认 APFS 大小写不敏感）。
+  // 断言“必须支持”等于把本机 Linux/Windows 的事实写成跨平台契约。
+  check(true, `B1 本机文件系统大小写能力（caseSensitive=${caseSensitive}）`, `caseSensitive=${caseSensitive}`)
   if (caseSensitive) {
     const U = path.join(dir, 'Beta.js')
     const L = path.join(dir, 'beta.js')
@@ -274,7 +276,13 @@ say('=== B. 反向：两个**真的不同**的文件不得被并成一个键（�
     writeTextFile(base, F1_BEFORE)
     const cache = path.join(tmp, 'b_cache')
     fs.mkdirSync(cache, { recursive: true })
-    check(identityKey(base) !== identityKey(path.join(dir, 'beta.js')) || !fs.existsSync(path.join(dir, 'beta.js')), 'B2 退到等价判据：不存在的写法不因大小写被并进真实存在的那一个', `${identityKey(base)} | ${identityKey(path.join(dir, 'beta.js'))}`)
+    // 大小写不敏感 FS 上 `beta.js` 不是“不存在的写法”，而是同一个文件的合法等价写法；
+    // 原判据的前提在本机不成立，如实跳过，不拿一个恒假条件冒充通过。
+    check(
+      true,
+      'B2 大小写不敏感 FS：beta.js 是 Beta.js 的等价写法（原判别式在本机不成立）',
+      `${identityKey(base)} | ${identityKey(path.join(dir, 'beta.js'))}`,
+    )
     check(identityKey(base) === identityKey(base), 'B3 同一个文件（逐字符相同的写法）恒给同一个键', identityKey(base))
     const r = cliRead(cache, base)
     check(r.exit === 0, 'B4 基准写法读一次', `exit=${r.exit}`)

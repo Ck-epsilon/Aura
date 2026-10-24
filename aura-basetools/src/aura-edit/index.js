@@ -1849,20 +1849,35 @@ function registerTools(ctx, sandbox) {
             exec.signal,
             policy,
           )
-          ctx.emit('fs/observed', target, { kind: 'present', version: created.version }, exec)
+          /**
+           * 创建前的 resolve 拿不到 realpath（文件还不存在），targetKey 只能是调用方写法；
+           * 文件落盘后必须**重新 resolve** 一次，拿盘上的真名记观测。macOS 的
+           * `/var/folders/...` 是 `/private/var/...` 的符号链接：不重算，创建记在 `/var`、
+           * 紧接着编辑拿 `/private/var` 查账，就会误报 unverified_region（stale-gate 段I）。
+           */
+          let settled = target
+          try {
+            settled = await ctx.fs.resolve(args.file_path, {
+              ...(cwd === undefined ? {} : { cwd }),
+              signal: exec.signal,
+            })
+          } catch {
+            // 重算失败不改变已落盘的事实；退回创建前的 target，至少行为与旧版一致。
+          }
+          ctx.emit('fs/observed', settled, { kind: 'present', version: created.version }, exec)
           // 建文件也是一次“写成功” ⇒ 同样回读校验（create 被偷偷改写的后果与编辑一样真）。
-          const createdVerification = await verifyWriteBack(ctx.fs, target, createContent, target.displayPath, exec.signal)
+          const createdVerification = await verifyWriteBack(ctx.fs, settled, createContent, settled.displayPath ?? target.displayPath, exec.signal)
           // 新建的内容也是“自己刚写过的内容” ⇒ 记成最新观测，随后编辑它不必带 unverified_region。
           // 记账同样取**提供方视角**：内容自带前导 U+FEFF 时，下一次 readText 会剥掉一个，
           // 存原样就会让随后的未断言编辑第 1 行被误拒（F1 就是这条）。
           const createdView = providerView(createContent)
           const createdByteOrderMark = createContent.startsWith(BYTE_ORDER_MARK)
           rememberRead(
-            target.displayPath,
+            settled.displayPath ?? target.displayPath,
             contentToken(createdView, createdByteOrderMark),
             createdView,
             createdByteOrderMark,
-            target.targetKey,
+            settled.targetKey ?? target.targetKey,
           )
           return {
             path: target.displayPath,

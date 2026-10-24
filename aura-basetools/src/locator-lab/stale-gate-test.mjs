@@ -559,6 +559,11 @@ for (const [label, spell] of SPELLINGS) {
 
 say('')
 say('=== N. 同一个文件的不同写法在账本里是同一个键（施工单段B）===')
+// POSIX 上 `\` 是合法文件名字符，不是分隔符；反斜线/正向斜线这两种 Windows 写法
+// 在 macOS/Linux 上不是“同一个文件的另一种写法”，不能拿来断言归一化。
+const N_SPELLINGS = SPELLINGS.filter(
+  ([label]) => process.platform === 'win32' || !['反斜线绝对写法', '正向斜线绝对写法'].includes(label),
+)
 {
   const dir = path.join(tmp, 'n_same_key')
   fs.mkdirSync(dir, { recursive: true })
@@ -573,10 +578,10 @@ say('=== N. 同一个文件的不同写法在账本里是同一个键（施工�
    * 别名索引按**证据**解，判据二／三就是它的可观测判据。
    */
   const shapeKeys = [
-    ...new Set(SPELLINGS.filter(([label]) => label !== '小写' && label !== '全大写').map(([, spell]) => ledgerPathKey(spell(dir)))),
+    ...new Set(N_SPELLINGS.filter(([label]) => label !== '小写' && label !== '全大写').map(([, spell]) => ledgerPathKey(spell(dir)))),
   ]
   check(shapeKeys.length === 1, 'N 写法差异（点斜线／冗余分隔符／反斜线／正斜线）经 ledgerPathKey 归为同一个键', JSON.stringify(shapeKeys))
-  const allKeys = [...new Set(SPELLINGS.map(([, spell]) => ledgerPathKey(spell(dir))))]
+  const allKeys = [...new Set(N_SPELLINGS.map(([, spell]) => ledgerPathKey(spell(dir))))]
   check(
     allKeys.length === 3,
     'N 词法键**保留大小写**（六种写法只汇成三组：小写／全大写／原名 —— 折叠只发生在带证据的解析那一步）',
