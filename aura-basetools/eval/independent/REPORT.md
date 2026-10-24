@@ -114,6 +114,10 @@
 2. **安全语义是行为而非文档**：陈旧闸（读后外部改被寻址区域 ⇒ 拒绝且磁盘字节不变，改其它位置则正常合并）、多目标「一个失败则零写入」、跨调用事务（commit/rollback/verify 失败回滚/非重叠外部改动三方合并/重叠 `TX_CONFLICT` 零写入）共 23/23 条用例全部按公开承诺表现。
 3. **朴素基线的差异是真实且可定位的，但不是「处处更强」**：7 组对照中 4 组出现字节差异；对「整文件读 + 精确字符串替换 + 整文件写」这种朴素做法，BOM/CRLF/无尾换行在**单行 ASCII 替换**下并不会被破坏（Node 的字符串往返本身就保这些字节）——差异出现在按行切分再 `join('\n')`、替换文本含换行、以及缺少陈旧闸/多目标原子性时。MCP 与 CLI 的结果字节一致。因此「aura 更强」的正确表述是：**它在这些破坏性写法上给了结构化的替代路径**，而不是「任何朴素写法都会坏」。
 
+## 与 DSH 默认 Read/Write/Edit provider 的对照
+
+另见 [`DSH-COMPARE.md`](DSH-COMPARE.md)：直接调用 `@deepseek-ai/dsh-fs-local` 的 `LocalFileSystem.readText/writeText/editText`，与 aura 0.19.0 CLI 在 10 组同输入上逐字节比较。结果是 3 组相同、7 组不同；差异集中在 BOM、混合行尾、覆写行尾、整文件陈旧闸粒度、多目标原子性。报告同时声明：这是 **provider 层** 对照，不是完整 DSH agent；差异不都等于“aura 更好”，其中行尾适配和陈旧粒度是语义选择。
+
 ---
 
-复跑：`node eval/independent/run.mjs`（首次会自动从 registry.npmjs.org 安装被测包到 `eval/independent/.vendor`）。机器可读结果见 `results.json`。
+复跑：`node eval/independent/run.mjs`（首次会自动从 registry.npmjs.org 安装被测包到 `eval/independent/.vendor`）。机器可读结果见 `results.json`。DSH 对照另跑 `node eval/independent/dsh-compare.mjs`（需要本机有 `@deepseek-ai/dsh` 安装）。

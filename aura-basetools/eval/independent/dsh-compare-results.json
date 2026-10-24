@@ -1,0 +1,568 @@
+{
+  "subject": "aura-basetools@0.19.0",
+  "native": {
+    "package": "@deepseek-ai/dsh-fs-local@0.2.1-rc.2",
+    "entry": "LocalFileSystem (readText/writeText/editText)",
+    "note": "Direct provider; the model-facing read/write/edit tools call these methods. Version token from a prior read is passed where the default observation policy would pass it."
+  },
+  "platform": "win32 x64",
+  "node": "v24.15.0",
+  "cases": [
+    {
+      "name": "edit-bom-crlf-token",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          111,
+          110,
+          101,
+          13,
+          10,
+          84,
+          87,
+          79,
+          13,
+          10,
+          116,
+          104,
+          114,
+          101,
+          101,
+          13,
+          10
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          239,
+          187,
+          191,
+          111,
+          110,
+          101,
+          13,
+          10,
+          84,
+          87,
+          79,
+          13,
+          10,
+          116,
+          104,
+          114,
+          101,
+          101,
+          13,
+          10
+        ]
+      },
+      "expected": {
+        "type": "Buffer",
+        "data": [
+          239,
+          187,
+          191,
+          111,
+          110,
+          101,
+          13,
+          10,
+          84,
+          87,
+          79,
+          13,
+          10,
+          116,
+          104,
+          114,
+          101,
+          101,
+          13,
+          10
+        ]
+      },
+      "same": false,
+      "nativeOk": false,
+      "auraOk": true
+    },
+    {
+      "name": "edit-bom-crlf-line",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          79,
+          78,
+          69,
+          13,
+          10,
+          116,
+          119,
+          111,
+          13,
+          10,
+          116,
+          104,
+          114,
+          101,
+          101,
+          13,
+          10
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          239,
+          187,
+          191,
+          79,
+          78,
+          69,
+          13,
+          10,
+          116,
+          119,
+          111,
+          13,
+          10,
+          116,
+          104,
+          114,
+          101,
+          101,
+          13,
+          10
+        ]
+      },
+      "expected": {
+        "type": "Buffer",
+        "data": [
+          239,
+          187,
+          191,
+          79,
+          78,
+          69,
+          13,
+          10,
+          116,
+          119,
+          111,
+          13,
+          10,
+          116,
+          104,
+          114,
+          101,
+          101,
+          13,
+          10
+        ]
+      },
+      "same": false,
+      "nativeOk": false,
+      "auraOk": true
+    },
+    {
+      "name": "edit-crlf-multiline",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          112,
+          49,
+          13,
+          10,
+          80,
+          50,
+          97,
+          13,
+          10,
+          80,
+          50,
+          98,
+          13,
+          10,
+          112,
+          51,
+          13,
+          10
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          112,
+          49,
+          13,
+          10,
+          80,
+          50,
+          97,
+          13,
+          10,
+          80,
+          50,
+          98,
+          13,
+          10,
+          112,
+          51,
+          13,
+          10
+        ]
+      },
+      "expected": {
+        "type": "Buffer",
+        "data": [
+          112,
+          49,
+          13,
+          10,
+          80,
+          50,
+          97,
+          13,
+          10,
+          80,
+          50,
+          98,
+          13,
+          10,
+          112,
+          51,
+          13,
+          10
+        ]
+      },
+      "same": true,
+      "nativeOk": true,
+      "auraOk": true
+    },
+    {
+      "name": "edit-no-final-newline",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          120,
+          10,
+          89
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          120,
+          10,
+          89
+        ]
+      },
+      "expected": {
+        "type": "Buffer",
+        "data": [
+          120,
+          10,
+          89
+        ]
+      },
+      "same": true,
+      "nativeOk": true,
+      "auraOk": true
+    },
+    {
+      "name": "edit-mixed-eol",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          97,
+          10,
+          98,
+          10,
+          67,
+          10,
+          100,
+          10
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          97,
+          10,
+          98,
+          13,
+          10,
+          67,
+          10,
+          100,
+          10
+        ]
+      },
+      "expected": {
+        "type": "Buffer",
+        "data": [
+          97,
+          10,
+          98,
+          13,
+          10,
+          67,
+          10,
+          100,
+          10
+        ]
+      },
+      "same": false,
+      "nativeOk": false,
+      "auraOk": true
+    },
+    {
+      "name": "overwrite-bom-preserved",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          111,
+          110,
+          101,
+          13,
+          10,
+          116,
+          119,
+          111,
+          13,
+          10
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          239,
+          187,
+          191,
+          111,
+          110,
+          101,
+          13,
+          10,
+          116,
+          119,
+          111,
+          13,
+          10
+        ]
+      },
+      "expected": {
+        "type": "Buffer",
+        "data": [
+          239,
+          187,
+          191,
+          111,
+          110,
+          101,
+          13,
+          10,
+          116,
+          119,
+          111,
+          13,
+          10
+        ]
+      },
+      "same": false,
+      "nativeOk": false,
+      "auraOk": true
+    },
+    {
+      "name": "overwrite-crlf-with-lf",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          97,
+          10,
+          98,
+          10
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          97,
+          13,
+          10,
+          98,
+          13,
+          10
+        ]
+      },
+      "expected": null,
+      "same": false,
+      "nativeOk": true,
+      "auraOk": true
+    },
+    {
+      "name": "stale-other-line",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          111,
+          110,
+          101,
+          10,
+          116,
+          119,
+          111,
+          10,
+          69,
+          88,
+          84,
+          69,
+          82,
+          78,
+          65,
+          76,
+          10
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          79,
+          78,
+          69,
+          10,
+          116,
+          119,
+          111,
+          10,
+          69,
+          88,
+          84,
+          69,
+          82,
+          78,
+          65,
+          76,
+          10
+        ]
+      },
+      "expected": null,
+      "same": false,
+      "nativeOk": true,
+      "auraOk": true,
+      "nativeError": "FS_STALE_VERSION",
+      "auraCode": "ok",
+      "nativeText": "one\ntwo\nEXTERNAL\n",
+      "auraText": "ONE\ntwo\nEXTERNAL\n"
+    },
+    {
+      "name": "stale-same-line",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          111,
+          110,
+          101,
+          10,
+          116,
+          119,
+          111,
+          45,
+          69,
+          88,
+          84,
+          69,
+          82,
+          78,
+          65,
+          76,
+          10,
+          116,
+          104,
+          114,
+          101,
+          101,
+          10
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          111,
+          110,
+          101,
+          10,
+          116,
+          119,
+          111,
+          45,
+          69,
+          88,
+          84,
+          69,
+          82,
+          78,
+          65,
+          76,
+          10,
+          116,
+          104,
+          114,
+          101,
+          101,
+          10
+        ]
+      },
+      "expected": null,
+      "same": true,
+      "nativeOk": true,
+      "auraOk": true,
+      "nativeError": "FS_STALE_VERSION",
+      "auraCode": "PATCH_STALE_REGION",
+      "nativeText": "one\ntwo-EXTERNAL\nthree\n",
+      "auraText": "one\ntwo-EXTERNAL\nthree\n"
+    },
+    {
+      "name": "multi-target-partial",
+      "native": {
+        "type": "Buffer",
+        "data": [
+          65,
+          57,
+          10,
+          97,
+          50,
+          10
+        ]
+      },
+      "aura": {
+        "type": "Buffer",
+        "data": [
+          65,
+          49,
+          10,
+          97,
+          50,
+          10
+        ]
+      },
+      "expected": {
+        "type": "Buffer",
+        "data": [
+          65,
+          49,
+          10,
+          97,
+          50,
+          10
+        ]
+      },
+      "same": false,
+      "nativeOk": true,
+      "auraOk": true,
+      "nativeText": "A9\na2\n",
+      "nativeCode": "FS_NOT_REGULAR_FILE",
+      "auraCode": "ok"
+    }
+  ]
+}
