@@ -20,6 +20,8 @@
 - CI：Windows Node 22 全量闸 + Ubuntu Node 18/20 冒烟；Linux 全量闸仍红
   （stale-gate / struct / corpus / read / read2 / lang / adapters / atomic-publish /
   fresh-judgement / observation-store-identity），列为 0.14.0 平台债。
+- 已发布：npm `aura-basetools@0.13.3` / `aura-basetools-dsh@0.13.3`；GitHub Release
+  `aura-basetools-v0.13.3`（源码提交 monorepo `36cbc3f`）。
 
 ## 0.13.2：安装只走 npm，移除自定义安装器
 
