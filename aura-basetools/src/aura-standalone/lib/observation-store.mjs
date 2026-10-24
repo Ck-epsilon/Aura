@@ -204,8 +204,10 @@ export function createDiskStore(file = observationsPath()) {
    * 陈旧锁（进程崩溃留下）超过 `LOCK_STALE_MS` 后清掉。拿不到锁时仍做一次尽力而为的
    * 合并写入——缓存损坏/丢一条都不该让编辑失败，但正常情况下不会走到这条。
    */
-  const LOCK_STALE_MS = 5000
-  const LOCK_WAIT_MS = 2000
+  // Runner 上 6 个 Node 进程同时启动时，2s 不够；拿不到锁仍写入会互相覆盖（实测 CI 偶发）。
+  // 锁只覆盖一次极小的 read-merge-write，15s 是安全上限，不是常态等待。
+  const LOCK_STALE_MS = 30000
+  const LOCK_WAIT_MS = 15000
   const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
   const acquireLock = () => {
     const lock = `${file}.lock`
@@ -221,7 +223,9 @@ export function createDiskStore(file = observationsPath()) {
         try { fs.writeFileSync(fd, String(process.pid)) } finally { fs.closeSync(fd) }
         return lock
       } catch (error) {
-        if (error?.code !== 'EEXIST') return null
+        // Windows 上另一个进程正在 rename/unlink 时，`wx` 可能给 EPERM/EACCES 而不是 EEXIST；
+        // 这不是“没锁可用”，而是“锁正在换手”，继续等到 deadline。
+        if (error?.code !== 'EEXIST' && error?.code !== 'EPERM' && error?.code !== 'EACCES') return null
         try {
           const st = fs.statSync(lock)
           if (Date.now() - st.mtimeMs > LOCK_STALE_MS) {
@@ -254,7 +258,20 @@ export function createDiskStore(file = observationsPath()) {
       if (path.sep !== '\\') {
         try { fs.chmodSync(tmp, 0o600) } catch { /* 同上 */ }
       }
-      fs.renameSync(tmp, file)
+      // Windows：另一个进程正读 observations.json 时，rename 目标可能短暂 EPERM/EBUSY。
+      // 不重试就会静默丢掉这一条观测（CI 的 6 并发实测 1/5 概率）。
+      let renamed = false
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        try {
+          fs.renameSync(tmp, file)
+          renamed = true
+          break
+        } catch (error) {
+          if (!['EPERM', 'EBUSY', 'EACCES'].includes(error?.code) || attempt === 49) throw error
+          sleep(20)
+        }
+      }
+      if (!renamed) throw new Error('observation cache rename did not complete')
       lastStamp = fileStamp()
       if (path.sep !== '\\') {
         try { fs.chmodSync(file, 0o600) } catch { /* 同上 */ }
