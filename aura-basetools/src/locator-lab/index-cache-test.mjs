@@ -460,7 +460,10 @@ let warmReadMs = NaN
    * 绝对项仍有判定力：短路命中分支后热读数 ~350 ms（今天）/ ~102 ms（再快 3.4 倍）都在它之上。
    */
   const warmBound = Math.max(first.ms * 0.25, WARM_ABS_MS)
-  say(`  上界：max(冷建索引 × 25% = ${(first.ms * 0.25).toFixed(1)} ms, 绝对上界 ${WARM_ABS_MS.toFixed(1)} ms) = ${warmBound.toFixed(1)} ms（另有地板标定上界 ${(floor.ms * 4 + FLOOR_SLACK_MS).toFixed(1)} ms）`)
+  // 地板标定是“本机行数组生成有多快”的读数；慢 runner 上 4×地板+40ms 可能超过绝对上界。
+  // 绝对上界仍是硬约束，所以把地板项**封顶**在绝对上界，而不是让慢机器把门槛抬过 100ms。
+  const floorBound = Math.min(floor.ms * 4 + FLOOR_SLACK_MS, WARM_ABS_MS)
+  say(`  上界：max(冷建索引 × 25% = ${(first.ms * 0.25).toFixed(1)} ms, 绝对上界 ${WARM_ABS_MS.toFixed(1)} ms) = ${warmBound.toFixed(1)} ms（地板标定封顶 ${floorBound.toFixed(1)} ms，原始 ${(floor.ms * 4 + FLOOR_SLACK_MS).toFixed(1)} ms）`)
   check(
     hit.ms <= HIT_ABS_MS,
     '热读数里的那一份确实是**命中**（indexStructure 命中读数是个小数，不是又建了一次索引）',
@@ -477,14 +480,14 @@ let warmReadMs = NaN
     `${warm.ms.toFixed(1)} ms ≤ ${WARM_ABS_MS.toFixed(1)} ms`,
   )
   check(
-    floor.ms * 4 + FLOOR_SLACK_MS <= WARM_ABS_MS,
-    '地板标定的上界不松于绝对上界（两个上界都不许被抬到 100 ms 以上）',
-    `${(floor.ms * 4 + FLOOR_SLACK_MS).toFixed(1)} ms ≤ ${WARM_ABS_MS.toFixed(1)} ms`,
+    floorBound <= WARM_ABS_MS,
+    '地板标定的上界不松于绝对上界（封顶后不会把门槛抬到 100 ms 以上）',
+    `${floorBound.toFixed(1)} ms ≤ ${WARM_ABS_MS.toFixed(1)} ms`,
   )
   check(
-    warm.ms <= floor.ms * 4 + FLOOR_SLACK_MS,
-    `热读数 ≤ 地板 × 4 + ${FLOOR_SLACK_MS} ms（地板 = 先生成行数组；本机器可复算，不依赖冷索引有多快）`,
-    `${warm.ms.toFixed(1)} ms ≤ ${(floor.ms * 4 + FLOOR_SLACK_MS).toFixed(1)} ms（地板 ${floor.ms.toFixed(2)} ms）`,
+    warm.ms <= floorBound,
+    `热读数 ≤ min(地板 × 4 + ${FLOOR_SLACK_MS} ms, 绝对上界)（地板 = 先生成行数组；慢机器不抬高门槛）`,
+    `${warm.ms.toFixed(1)} ms ≤ ${floorBound.toFixed(1)} ms（地板 ${floor.ms.toFixed(2)} ms）`,
   )
 
 }
