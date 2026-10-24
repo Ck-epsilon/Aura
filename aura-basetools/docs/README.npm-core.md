@@ -90,6 +90,7 @@ Compared with the DSH built-in `dsh-tool-fs` tools, the differences are delibera
 - **Read by intent, not whole file.** `map` / `digest` / `lines` / `search` return the structural slice you ask for; the customer comparison measured about 1/24 of the context for the same file.
 - **Edits refuse stale bases.** A region-level gate rejects an edit when the addressed region changed after the read that authorized it, and points at the lines to re-read; `expect` makes the intended text explicit.
 - **Writes are verified, not assumed.** Every write goes through a temp file, flush, rename, and a byte-for-byte read-back; multi-target edits plan first and write nothing if any target fails.
+- **Changes can prove themselves.** `edit` / `write` accept an explicit `verify` command; a non-zero exit or timeout rolls the transaction back and returns the command output plus the rollback state. No auto-discovery of repo scripts.
 - **Addressing is structural.** `target` / `lines` / `old` / `expect` / handles replace "copy the literal text exactly"; failure receipts include ready-to-use retry addresses.
 - **The core is DSH-free.** `aura-basetools` has no runtime dependencies and no DSH imports; the DSH adapter is a separate optional package.
 
@@ -203,6 +204,7 @@ npx -y --package aura-basetools aura basetools mcp
 - **按意图读，不读整份。** `map` / `digest` / `lines` / `search` 只返回你要的结构切片；客户版对照实测同一文件上下文约 1/24。
 - **依据过期就拒绝。** 区域级陈旧闸门在“授权读取之后该区域被改过”时拒绝，并指出重读哪几行；`expect` 让目标原文显式化。
 - **写完要验，不靠相信。** 每次写盘走临时文件、flush、rename，再做逐字节回读；多目标先全量规划，任一失败则一个字节都不写。
+- **变更可以自证。** `edit` / `write` 接受显式 `verify` 命令；非零退出或超时会把整个事务回滚，回执带命令输出与回滚状态。不自动发现仓库脚本。
 - **寻址是结构化的。** `target` / `lines` / `old` / `expect` / 句柄替代“把原文一字不差抄对”；失败回执带可直接用的重试地址。
 - **核心不依赖 DSH。** `aura-basetools` 零运行时依赖、无 DSH import；DSH 适配器是独立可选包。
 

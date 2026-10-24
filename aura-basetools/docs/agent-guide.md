@@ -65,6 +65,8 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
 - `no_overwrite: true`（CLI `--no-overwrite`）：文件已存在就拒绝（`WRITE_EXISTS`），不覆盖。
 - `dry_run: true`（CLI `--dry-run` / `--plan`）：不落盘；覆写预演不回 `bytes`，因为它可能被行尾适配改写。
 - 与 `edit` 共用工作区锁与落盘回读；0.14.0 起没有公开事务 id / `undo` / `transactions`。
+- **写后验证**：`verify: "<命令>"`（CLI `--verify`）在 workspace 根下执行；非零/超时 ⇒ 自动回滚，
+  回执 `PATCH_VERIFY_FAILED` + `verification`。只跑你显式给的命令，不自动发现仓库脚本。
 - 回执是紧凑形状：`result.{path, operation: create|write, bytes, dryRun, write_verify}`，
   不带整份 `applied` 文本。
 

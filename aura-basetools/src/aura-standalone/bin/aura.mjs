@@ -3,7 +3,7 @@
  * aura CLI（薄壳）：参数解析 → `lib/ops.mjs` → 一行 JSON。
  *
  *   aura basetools read  --file F [--mode …] [--around X] [--lines a,b] [--search S] [--since V] [--max-chars N]
- *   aura basetools edit  --file F (--hunks '<json>' | --hunks-file P) [--dry-run] [--create <文本|@文件>]
+ *   aura basetools edit  --file F (--hunks '<json>' | --hunks-file P) [--dry-run] [--verify "命令"] [--create <文本|@文件>]
  *   aura basetools read  --targets '[...]|@spec.json'                    一次读多个目标（与 --file 互斥）
  *   aura basetools edit  --targets '[...]|@spec.json'                    一次改多个文件（与 --file 互斥；任一规划失败 ⇒ 零写入）
  *   aura basetools mcp
@@ -86,11 +86,11 @@ const COMMAND_FLAGS = {
     bool: ['pretty'],
   },
   edit: {
-    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol'],
+    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol', 'verify'],
     bool: ['pretty', 'dry-run', 'plan', 'replace-all', 'require-observation'],
   },
   write: {
-    value: ['cwd', 'file', 'content', 'eol'],
+    value: ['cwd', 'file', 'content', 'eol', 'verify'],
     bool: ['pretty', 'dry-run', 'plan', 'no-overwrite', 'allow-unobserved'],
   },
   doctor: { value: ['cwd'], bool: ['pretty', 'json'] },
@@ -166,9 +166,9 @@ const USAGE = [
   // `--file` 指向**目录**时直接给一张仓库地图（模块/目录/依赖方向），不需要额外旗标。
   '             （--file 传目录 ⇒ 仓库地图：模块清单 + 目录骨架 + 被依赖最多的模块 + 入口点）',
   '  aura basetools read  --targets <json|@文件>                               # 一次读多个目标（≤32 项；与 --file 互斥）',
-  '  aura basetools edit  --targets <json|@文件> [--dry-run|--plan]          # 一次改多个文件（先全量规划，任一失败则零写入）',
+  '  aura basetools edit  --targets <json|@文件> [--dry-run|--plan] [--verify "命令"]  # 一次改多个文件（先全量规划，任一失败则零写入）',
   "  aura basetools edit  --file <路径> --create <内容|@文件>                     # 建文件（不必再给 --hunks）",
-  "  aura basetools edit  --file <路径> (--hunks '<json>' | --hunks-file <路径>) [--dry-run|--plan] [--eol auto|preserve|lf|crlf] [--require-observation]",
+  "  aura basetools edit  --file <路径> (--hunks '<json>' | --hunks-file <路径>) [--dry-run|--plan] [--verify \"命令\"] [--eol auto|preserve|lf|crlf] [--require-observation]",
   '   aura basetools edit  --file <路径> --lines <a,b> --replace <文本> [--expect <文本>] [--near <n>]',
   '   aura basetools edit  --file <路径> --old <原文> --replace <文本> --replace-all        # 改全部非重叠出现',
           "              （只改一处时不必包成 JSON：--target / --lines / --start-line+--end-line / --line-cue / --anchor 任选其一）",
@@ -178,7 +178,7 @@ const USAGE = [
   '   aura basetools edit  --file <路径> --handle <h…> --position before|after --replace <文本>  # 在区间边界插入，区间本身不动',
   "              （--line / --position 是从属键：只有与 --handle 同时给才成立，单独给不构成一次编辑）",
   '  aura basetools mcp                    启动 MCP stdio 服务',
-  '  aura basetools write --file <路径> --content <文本|@文件> [--no-overwrite] [--dry-run|--plan] [--allow-unobserved] [--eol auto|preserve|lf|crlf]',
+  '  aura basetools write --file <路径> --content <文本|@文件> [--no-overwrite] [--dry-run|--plan] [--verify "命令"] [--allow-unobserved] [--eol auto|preserve|lf|crlf]',
   '             （覆写默认要求先读过这一版；--allow-unobserved 才允许盲写）',
   '  aura basetools doctor [--json]        自检：Node/版本/MCP 握手/缓存与锁目录可写',
   '  aura basetools capabilities [--pretty] 能力清单：读模式/地址档/语言/限制（JSON）',
@@ -352,6 +352,7 @@ if (command === 'write') {
     noOverwrite: has('no-overwrite'),
     allowUnobserved: has('allow-unobserved'),
     ...(typeof eol === 'string' ? { eol } : {}),
+    ...(typeof flag('verify') === 'string' ? { verify: flag('verify') } : {}),
   })
   emit(env, env.ok ? 0 : 2)
 }
@@ -473,6 +474,7 @@ if (command === 'edit') {
       targets: spec.targets,
       dryRun: has('dry-run') || has('plan') || spec.dryRun,
       ...(has('require-observation') ? { requireObservation: true } : {}),
+      ...(typeof flag('verify') === 'string' ? { verify: flag('verify') } : {}),
     })
     emit(env, env.ok ? 0 : 2)
   }
@@ -585,6 +587,7 @@ if (command === 'edit') {
     dryRun: has('dry-run') || has('plan'),
     create,
     ...(has('require-observation') ? { requireObservation: true } : {}),
+    ...(typeof flag('verify') === 'string' ? { verify: flag('verify') } : {}),
   })
   emit(env, env.ok ? 0 : 2)
 }

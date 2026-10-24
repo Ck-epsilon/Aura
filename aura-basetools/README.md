@@ -49,6 +49,10 @@ MCP `aura_basetools_write`。新建与覆写都走 `edit` 同一条工作区锁�
 `--no-overwrite` 拒绝覆盖，`--dry-run` / `--plan` 只规划。
 整份写仍比 `edit` 粗：能改局部就不要整份写。
 
+**0.15.0 起 `edit` / `write` 支持 `--verify "命令"`**（MCP `verify`）：写后执行调用方显式给出的命令；
+非零退出或超时 ⇒ 整个事务自动回滚，回执 `PATCH_VERIFY_FAILED` 带命令输出与回滚状态。
+不自动发现/执行仓库脚本；命令在 workspace 根下跑，默认 120s 超时。
+
 **0.10.2 起 `old` 可配 `replace_all`**（CLI `--replace-all`、MCP/DSH `replace_all: true`）：
 一次替换全部**非重叠**出现（从左到右；`aa` 在 `aaaa` 上得到两处）。不能与
 `target` / `lines` / `line_cue` / `anchor` / `context` / `handle` / `near` 同用

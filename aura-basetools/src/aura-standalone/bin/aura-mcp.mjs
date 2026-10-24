@@ -200,6 +200,10 @@ const TOOLS = [
           type: 'boolean',
           description: '严格新鲜度：要求这一版文件在本会话里被读过（或由本工具写过）；否则 PATCH_UNOBSERVED。create 不受影响；dry_run 同样执行这条判决。',
         },
+        verify: {
+          type: 'string',
+          description: '写后验证命令（显式给出才执行；在 workspace 根下、受超时/输出上限约束）。非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED。不自动发现/执行仓库脚本。',
+        },
         create: { type: 'string', description: '文件不存在时用它创建（整份内容）' },
         targets: TARGETS_SCHEMA,
       },
@@ -236,6 +240,10 @@ const TOOLS = [
           type: 'string',
           enum: ['auto', 'preserve', 'lf', 'crlf'],
           description: '覆写时的换行风格：auto（默认）适配文件已有风格；preserve 按 content 原样写；lf/crlf 强制。新建文件始终按 content 原样写（非 auto 会被拒绝）。',
+        },
+        verify: {
+          type: 'string',
+          description: '写后验证命令（显式给出才执行；非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED）。',
         },
       },
       required: ['file_path', 'content'],
@@ -324,6 +332,7 @@ async function editTargetsCall(provider, args) {
     targets,
     dryRun: args.dry_run === true,
     ...(args.require_observation === true ? { requireObservation: true } : {}),
+    ...(typeof args.verify === 'string' ? { verify: args.verify } : {}),
   })
 }
 
@@ -408,6 +417,7 @@ async function callTool(provider, name, args = {}) {
       dryRun: args.dry_run === true,
       create: creating ? args.create : undefined,
       ...(args.require_observation === true ? { requireObservation: true } : {}),
+      ...(typeof args.verify === 'string' ? { verify: args.verify } : {}),
     })
   }
   if (name === 'aura_basetools_write') {
@@ -418,6 +428,7 @@ async function callTool(provider, name, args = {}) {
       noOverwrite: args.no_overwrite === true,
       allowUnobserved: args.allow_unobserved === true,
       ...(typeof args.eol === 'string' ? { eol: args.eol } : {}),
+      ...(typeof args.verify === 'string' ? { verify: args.verify } : {}),
     })
   }
   return { ok: false, error: `unknown tool ${JSON.stringify(name)}`, code: 'UNKNOWN_TOOL' }

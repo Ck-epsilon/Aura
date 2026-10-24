@@ -10,6 +10,7 @@
  * （`flatHunk` 也从这里出去），于是「引擎在哪」这个问题在整棵树里只有一个答案。
  */
 import fs from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createNodeFsProvider, DEFAULT_MAX_TEXT_BYTES } from './fs-provider.mjs'
 import { withWorkspaceLock } from './workspace-lock.mjs'
@@ -91,7 +92,7 @@ export function capabilitiesEnvelope() {
       {
         name: 'aura_basetools_edit',
         addressKinds: [...new Set([...engineArgs.FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
-        options: ['replace_all', 'require_observation'],
+        options: ['replace_all', 'require_observation', 'verify'],
         writeSafety: {
           cli: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
           mcp: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
@@ -101,7 +102,7 @@ export function capabilitiesEnvelope() {
       {
         name: 'aura_basetools_write',
         operations: ['create', 'overwrite'],
-        options: ['eol'],
+        options: ['eol', 'verify'],
         writeSafety: {
           cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
           mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
@@ -479,6 +480,45 @@ function transactionError(error) {
   }
 }
 
+const VERIFY_OUTPUT_LIMIT = 4000
+const tailText = (value) => {
+  const text = String(value ?? '')
+  return text.length <= VERIFY_OUTPUT_LIMIT ? text : `…${text.slice(-VERIFY_OUTPUT_LIMIT)}`
+}
+
+/**
+ * 写后验证：**只在调用方显式给出命令时**执行。
+ *
+ * 不是自动发现仓库脚本，也不绕过沙箱/权限；命令在 workspace 根下跑，有超时与输出上限。
+ * 失败由外层事务回滚，调用方拿到的是可判定的 `PATCH_VERIFY_FAILED`，不是“写完再说”。
+ */
+function runVerification(command, cwd) {
+  const timeout = Math.min(600000, Math.max(1000, Number(process.env.AURA_VERIFY_TIMEOUT_MS) || 120000))
+  const started = Date.now()
+  const res = spawnSync(command, {
+    cwd,
+    shell: true,
+    encoding: 'utf8',
+    timeout,
+    maxBuffer: 8 * 1024 * 1024,
+    env: process.env,
+    windowsHide: true,
+  })
+  const timedOut = res.error?.code === 'ETIMEDOUT'
+  return {
+    command,
+    cwd,
+    ok: res.status === 0 && res.error === undefined,
+    exitCode: res.status,
+    signal: res.signal ?? null,
+    timedOut,
+    durationMs: Date.now() - started,
+    stdout: tailText(res.stdout),
+    stderr: tailText(res.stderr),
+    ...(res.error === undefined ? {} : { error: String(res.error.message ?? res.error) }),
+  }
+}
+
 /**
  * 写事务外壳：workspace 锁 + 事务日志 + 失败回滚。
  *
@@ -492,11 +532,34 @@ export async function editEnvelope(provider, request) {
    * 预演不建事务、不写盘，也不需要工作区锁；0.14.0 起事务日志只用于失败回滚。
    */
   if (request.dryRun === true) return editEnvelopeInner(provider, request)
+  const verifyCommand = typeof request.verify === 'string' && request.verify.trim().length > 0 ? request.verify.trim() : null
   try {
     return await withWorkspaceLock(provider.root, async () => {
       const tx = createTransaction(provider.root, 'aura_basetools_edit')
       const env = await editEnvelopeInner(tx.proxy(provider), request)
       if (env.ok) {
+        if (verifyCommand !== null) {
+          const verification = runVerification(verifyCommand, provider.root)
+          if (!verification.ok) {
+            const rollback = await tx.rollback(provider)
+            return {
+              ok: false,
+              error: `edit verification failed (exit ${verification.exitCode ?? 'no-status'}${verification.timedOut ? ', timed out' : ''}): ${verifyCommand}`,
+              code: 'PATCH_VERIFY_FAILED',
+              verification,
+              rollback,
+            }
+          }
+          try {
+            tx.commit()
+          } catch (error) {
+            const rollback = await tx.rollback(provider)
+            error.transaction = tx.summary()
+            error.rollback = rollback
+            throw error
+          }
+          return { ...env, verification }
+        }
         try {
           tx.commit()
         } catch (error) {
@@ -520,12 +583,37 @@ export async function editManyEnvelope(provider, request) {
   if (provider.root === undefined) return editManyEnvelopeInner(provider, request)
   // 与单目标同一条：预演不建事务、不写盘，不能顶掉真正的最近 committed 事务。
   if (request.dryRun === true) return editManyEnvelopeInner(provider, request)
+  const verifyCommand = typeof request.verify === 'string' && request.verify.trim().length > 0 ? request.verify.trim() : null
   try {
     return await withWorkspaceLock(provider.root, async () => {
       const tx = createTransaction(provider.root, 'aura_basetools_edit')
       try {
         const batch = await editManyEnvelopeInner(tx.proxy(provider), request)
         if (batch.ok) {
+          if (verifyCommand !== null) {
+            const verification = runVerification(verifyCommand, provider.root)
+            if (!verification.ok) {
+              const rollback = await tx.rollback(provider)
+              const finalBatch = writePath.rebuildAfterRollback(batch, rollback)
+              return {
+                ...finalBatch,
+                ok: false,
+                code: 'PATCH_VERIFY_FAILED',
+                error: `edit verification failed (exit ${verification.exitCode ?? 'no-status'}${verification.timedOut ? ', timed out' : ''}): ${verifyCommand}`,
+                verification,
+                rollback,
+              }
+            }
+            try {
+              tx.commit()
+            } catch (error) {
+              const rollback = await tx.rollback(provider)
+              error.transaction = tx.summary()
+              error.rollback = rollback
+              throw error
+            }
+            return { ...batch, verification }
+          }
           try {
             tx.commit()
           } catch (error) {
@@ -567,6 +655,7 @@ function compactWriteReceipt(env, content) {
   const bytes = result.write_verify?.bytes ?? (dryRun && result.operation === 'create' ? Buffer.byteLength(content, 'utf8') : undefined)
   return {
     ok: true,
+    ...(env.verification === undefined ? {} : { verification: env.verification }),
     result: {
       path: result.path,
       operation: result.operation ?? 'write',
@@ -594,7 +683,7 @@ function compactWriteReceipt(env, content) {
  * `preserve` 按 content 原样写（与内置 Write 的“给什么写什么”对齐），`lf` / `crlf` 强制统一。
  * 新建文件永远按 content 原样写；显式传非 `auto` 的 eol 会被拒绝（不做静默忽略）。
  */
-export async function writeEnvelope(provider, { file, content, dryRun = false, noOverwrite = false, allowUnobserved = false, eol = 'auto' } = {}) {
+export async function writeEnvelope(provider, { file, content, dryRun = false, noOverwrite = false, allowUnobserved = false, eol = 'auto', verify } = {}) {
   if (typeof file !== 'string' || file.length === 0) {
     return { ok: false, error: 'write needs a file path', code: 'WRITE_BAD_ARGS' }
   }
@@ -621,7 +710,7 @@ export async function writeEnvelope(provider, { file, content, dryRun = false, n
       if (dryRun) {
         return { ok: true, result: { path: displayPath, operation: 'create', bytes: Buffer.byteLength(content, 'utf8'), dryRun: true } }
       }
-      return compactWriteReceipt(await editEnvelope(provider, { file, create: content }), content)
+      return compactWriteReceipt(await editEnvelope(provider, { file, create: content, verify }), content)
     }
     return compactWriteReceipt(
       await editEnvelope(provider, {
@@ -632,6 +721,7 @@ export async function writeEnvelope(provider, { file, content, dryRun = false, n
         requireObservation: allowUnobserved !== true,
         skipStaleGate: allowUnobserved === true,
         toolName: 'aura_basetools_write',
+        verify,
       }),
       content,
     )

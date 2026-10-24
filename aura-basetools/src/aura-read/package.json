@@ -1,6 +1,6 @@
 {
   "name": "dsh-tool-aura-read",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "private": true,
   "description": "Structure-aware reading for the DeepSeek Harness: ask for what you need (map / digest / around / lines / search / changed) instead of pulling the whole file.",
   "type": "module",

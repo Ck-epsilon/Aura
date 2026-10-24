@@ -51,7 +51,7 @@ export function buildCapabilities() {
       {
         name: 'aura_basetools_edit',
         addressKinds: [...new Set([...FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
-        options: ['replace_all', 'require_observation'],
+        options: ['replace_all', 'require_observation', 'verify'],
         /**
          * 写安全能力按**入口**分：CLI/MCP 的 envelope 才有工作区锁；
          * DSH 壳只经过引擎的陈旧闸门与回读校验，不能跟着宣称同一组能力。
@@ -66,7 +66,7 @@ export function buildCapabilities() {
       {
         name: 'aura_basetools_write',
         operations: ['create', 'overwrite'],
-        options: ['eol'],
+        options: ['eol', 'verify'],
         writeSafety: {
           cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
           mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],

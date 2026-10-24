@@ -44,7 +44,7 @@ const ranSuites = []
 const CRITICAL_SUITES = new Set([
   'write-verify', 'stale-gate', 'byte-fidelity', 'encoding-fidelity', 'span-fidelity',
   'content-address', 'arg-shape', 'read-schema', 'read', 'notfound-receipt', 'range-args',
-  'standalone', 'write', 'replace-all', 'observation-gate', 'multi-read', 'multi-edit',
+  'standalone', 'write', 'replace-all', 'observation-gate', 'multi-read', 'multi-edit', 'verify-edit',
   'argument-surface', 'single-line-target', 'observation-concurrency', 'range-bytes',
   'aura-read/load', 'aura-edit/load', 'capabilities', 'public-surface', 'ci-contract',
 ])
@@ -432,6 +432,8 @@ const SUITES = [
   // 0.10.0：`replace` 换行风格（auto/preserve/lf/crlf）——对齐内置 Edit 的 CRLF 行为，
   //   同时保留旧的 preserve 口径与 BOM/区外字节不动。15 项。
   ['eol-adapt', 'src/locator-lab/eol-adapt-test.mjs'],
+  // 0.15.0：写后验证闭环。显式 verify 命令成功才提交；失败自动回滚（单/多目标/write 都钉住）。
+  ['verify-edit', 'src/locator-lab/verify-edit-test.mjs'],
   // 0.10.2：`replace_all`——全部非重叠出现、同行多处的列级重叠判定、参数互斥、
   //   expect 逐处核对、出现次数变化拒绝（was/now）、CLI/MCP 两面。现读数 36 项。
   ['replace-all', 'src/locator-lab/replace-all-test.mjs'],
@@ -744,6 +746,7 @@ const CENSUS_EXEMPT = [
   // 说明：这张表记的是“命中形态但不是套件”，不是“所有非套件文件” —— 所以此处是删除而非改理由。
   ['src/locator-lab/recoverable.mjs', '读数探针：量“失败回执附符号目录”的可救率，无判据'],
   ['src/aura-standalone/lib/transaction-store.mjs', '事务日志/回滚实现：内部用 throw 表达拒绝，没有套件的 ✓/✗ 汇总；行为由 standalone-test 的 O1–O8 覆盖'],
+  ['src/aura-standalone/lib/ops.mjs', 'CLI/MCP 共用产品库：`ok` 字段是回执，不是判据/汇总；行为由 standalone/write/verify-edit/cli-mcp-e2e 覆盖'],
   // ── probes/：C37 逐件定性 —— 写这句时命中形态 18 件（3 件已登记进 `SUITES`，收件理由写在
   //    那边；其余 15 件逐条写在这里，每条都注明它为什么"不是回归线"，口径见文件头 §⑩）。
   //    这三个数都是**当时快照**、不是现值：真值来源是闸输出「归属·probes」那一行的四格
