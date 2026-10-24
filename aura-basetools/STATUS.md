@@ -1,10 +1,10 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**0.14.0（已发布；安装只走 npm）**
-> 发布提交：monorepo `3fba1a6`；tag `aura-basetools-v0.14.0`
+> 当前版本：**0.15.0（已发布；安装只走 npm）**
+> 发布提交：monorepo `becc82c`；tag `aura-basetools-v0.15.0`
 > 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
-> npm：`aura-basetools@0.14.0`、`aura-basetools-dsh@0.14.0` 已发布
-> GitHub Release：`aura-basetools-v0.14.0`
+> npm：`aura-basetools@0.15.0`、`aura-basetools-dsh@0.15.0` 已发布
+> GitHub Release：`aura-basetools-v0.15.0`
 
 ---
 
@@ -56,6 +56,9 @@ aura basetools capabilities
 
 ## 3. 最近完成的关键变更
 
+- **0.15.0（已发布）**：写后验证闭环。`edit` / `write` 接受显式 `verify`（CLI `--verify`、MCP `verify`）；
+  非零退出/超时 ⇒ 事务自动回滚，回执 `PATCH_VERIFY_FAILED` + `verification` + `rollback`。
+  不自动发现/执行仓库脚本；单/多目标/write 三条路共用；新套件 `verify-edit` 17 项。
 - **0.14.0（已发布）**：按 642 会话采用率做减法，只删采用率为 0 的两项：`intent` 模糊地址
   （0 次，-755 行，套件 89→88）与公开 `undo`/`transactions`（0 次，MCP 5→3，内部事务日志
   只保留失败回滚）。`handle`(1)/`multi-read`(8)/`changed`(15)/`digest`(37)/`around`(106)/
@@ -91,7 +94,7 @@ aura basetools capabilities
 
 ## 4. 验证状态
 
-最近一次全量闸（0.14.0，intent + 公开 undo/transactions 移除后）：
+最近一次全量闸（0.15.0，写后验证闭环后）：
 
 ```bash
 node build/make-bundle.mjs --pack
@@ -113,8 +116,8 @@ node build/release-check.mjs    # exit 0
 
 其他事实：
 
-- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.14.0`（已发布）。
-- 闸内实跑套件 88 件；`src↔dist` 24 个运行时文件逐字节一致。
+- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.15.0`（已发布）。
+- 闸内实跑套件 89 件；`src↔dist` 24 个运行时文件逐字节一致。
 - `installed-package` 在本机有 0.13.1 安装时跑 19/19；没有安装时显示 `⏭`（跳过），不再记 ✅。
 - CI 工作流配置了 Linux + Node 22 全量闸和 Node 18/20 冒烟；**本机是 Windows，Linux runner 尚未实际执行过**。
   （实际运行的 monorepo workflow 目前只跑 3 个 OS 的子集；这是已知缺口。）
@@ -126,7 +129,7 @@ node build/release-check.mjs    # exit 0
 - **图片读取不在范围内**：`read_image` 仍只能用内置工具。
 - **DSH 需要重启宿主**：工具模块在宿主启动时导入，改名后必须重启才会加载新名字。
 - **MCP 客户端需要重新拉取 `tools/list`**：旧工具名不再存在。
-- **已发布**：npm `aura-basetools@0.14.0` / `aura-basetools-dsh@0.14.0` 与 GitHub Release `aura-basetools-v0.14.0`；0.14.0 只删采用率为 0 的 `intent` 与公开 `undo`/`transactions`。0.15 再评估 `handle`(1)/`multi-read`(8)/`changed`(15)/`digest`(37)/`around`(106)/`edit --create`(78)。
+- **已发布**：npm `aura-basetools@0.15.0` / `aura-basetools-dsh@0.15.0` 与 GitHub Release `aura-basetools-v0.15.0`；0.15.0 加写后验证闭环，不再做使用率减法。0.14.0 只删了采用率为 0 的 `intent` 与公开 `undo`/`transactions`；`handle`(1)/`multi-read`(8)/`changed`(15)/`digest`(37)/`around`(106)/`edit --create`(78) 保留。
 - **安装只走 npm（0.13.2）**：自定义 `install.mjs`、交付 zip、manifest 与升级/回滚命令已移除；`~/.aura/pkg` 旧安装不再由本项目维护，改用 `npm i -g aura-basetools`。
 - **历史分析件**：`probes/`、`failure-corpus.json`、旧版本 CHANGELOG 与
   `docs/aura-tools-0.*.md` 中的旧工具名是历史数据，不应批量改写；需要读取历史日志的分析件

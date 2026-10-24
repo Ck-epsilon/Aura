@@ -15,6 +15,8 @@
 - 单目标、多目标、`write` 三条路都接同一套；CLI `--verify "命令"`、MCP `verify`。
 - 不自动发现/执行仓库脚本；命令在 workspace 根下跑，默认 120s 超时、输出截断，失败自动回滚。
 - 新套件 `verify-edit`（17 项）入闸；0.14.0 的减法结论保持不变。
+- 已发布：npm `aura-basetools@0.15.0` / `aura-basetools-dsh@0.15.0`；GitHub Release
+  `aura-basetools-v0.15.0`（源码提交 monorepo `becc82c`）。
 
 ## 0.14.0：按采用率做减法（第一期）
 
