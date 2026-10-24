@@ -40,8 +40,8 @@
  *     （闸内真跑），且自带退出码接线（判据红 ⇒ 闸红），两者都在本段当场核对源码。
  *   E **不写用户真实 home**（C58 加的，对应本仓既有约定，不在施工单那四条里）：本套件驱动的
  *     每一次引擎调用（进程内落盘账本 / DSH 壳记账 / 真 CLI 子进程）都把观测缓存指到**它自己的
- *     临时目录**；跑完自己核「用户真实 `~/.aura` 整棵树跑前跑后逐件哈希不变」。改前实测：
- *     漏了这一指，每跑一次（包括跑一次全量闸）就把 `~/.aura/observations.json` 写大一次。
+ *     临时目录**。判据是「指针自证（E1/E2）+ 源码不再引用真实 home（E3）」；早先的
+ *     「整棵树跑前跑后哈希不变」会与并发会话的正常写入竞争（实测 8/8 红），已撤掉。
  *
  * 跑法：`node src/locator-lab/encoding-refusal-test.mjs`，全绿 exit 0。
  */
@@ -89,15 +89,9 @@ fs.mkdirSync(TMP, { recursive: true })
  * 这里是**覆盖**、不是沿用调用方给的值：闸内父进程传进来的那份也一并盖掉——本套件要自证的是
  * 「它自己把缓存指到了临时目录」，不是「碰巧没人给它指错」。反面价码（改前实测）：漏掉这一行，
  * `node src/locator-lab/encoding-refusal-test.mjs` 每跑一次就把
- * `~/.aura/observations.json` 写大一次（11246B → 11252B）。判据在段E：**从不写**，不是「跑完删掉」。
+ * `~/.aura/observations.json` 写大一次（11246B → 11252B）。判据在段E：指针只在临时目录，
+ * 且源码不再引用真实 home；不是「跑完删掉」。
  */
-
-/**
- * 用户**真实**的 home 目录：本套件一个字节都不许写它（段E 判据盯的就是这棵树）。
- * 定义在下面那一行**之前**是有意的：变异反证要能把缓存指回它（`process.env.AURA_CACHE_DIR = REAL_HOME`），
- * 定义在后面的话那个变异会先撞 TDZ 崩掉——那就成了「断言挡住了变异」，不是「判据点名了变异」。
- */
-const REAL_HOME = path.join(os.homedir(), '.aura')
 
 /** 落盘账本目录（理由见上）：本套件自己的临时目录，`TMP` 被删掉时一起消失。 */
 const CACHE = path.join(TMP, 'cache')
@@ -110,45 +104,6 @@ const write = (name, bytes) => {
   fs.writeFileSync(p, bytes)
   return p
 }
-
-/**
- * 一棵树的逐件指纹：`相对路径 → "字节数|sha256"`（目录不存在 = 空树，不是错误）。
- * 段E 用它给用户真实的 home 拍快照：**判据是「跑前跑后逐件哈希不变」**，不是「我以为指过去了」。
- */
-function snapshotTree(dir) {
-  const out = new Map()
-  const walk = (d) => {
-    let entries
-    try {
-      entries = fs.readdirSync(d, { withFileTypes: true })
-    } catch {
-      return // 目录不存在 / 读不了：空树，不是错误
-    }
-    for (const e of entries) {
-      const p = path.join(d, e.name)
-      if (e.isDirectory()) {
-        walk(p)
-      } else if (e.isFile()) {
-        const rel = path.relative(dir, p).split(path.sep).join('/')
-        try {
-          out.set(rel, `${fs.statSync(p).size}|${sha256(p)}`)
-        } catch {
-          out.set(rel, '(读不到)') // 快照期间被别人删了：如实记一笔，不静默跳过
-        }
-      }
-    }
-  }
-  walk(dir)
-  return out
-}
-/** 两棵树逐件比：只列**不一样**的件（新增 / 删除 / 字节数或哈希变了）。 */
-const treeDiff = (before, after) =>
-  [...new Set([...before.keys(), ...after.keys()])]
-    .filter((k) => before.get(k) !== after.get(k))
-    .sort()
-    .map((k) => `${k}: ${before.get(k) ?? '(跑前没此件)'} → ${after.get(k) ?? '(跑后没了)'}`)
-/** 跑**任何引擎调用之前**拍的真实 home 指纹（段E 拿它做「没被自己写过」的自证）。 */
-const HOME_BEFORE = snapshotTree(REAL_HOME)
 
 // ════════════════════════════════════════════════════════════════════════════
 // 夹具（字节是手写的，不经过任何编码器——判据要能逐字节复验）
@@ -554,14 +509,16 @@ say('=== 段E 不写用户真实 home：观测缓存一律落本套件的临时�
     fs.existsSync(ledgerFile) ? `${path.relative(TMP, ledgerFile)} ${fs.statSync(ledgerFile).size}B，含探针路径` : `${ledgerFile} 不存在`,
   )
 
-  // E3 判决线：用户**真实** home 整棵树，跑前（HOME_BEFORE，任何引擎调用之前拍的）与现在逐件比
-  //    `相对路径 | 字节数 | sha256`，差异必须为 0。判据不是「我以为指过去了」，就是这条差异行。
-  const after = snapshotTree(REAL_HOME)
-  const diff = treeDiff(HOME_BEFORE, after)
+  // E3 静态守卫：真实 home 的全树哈希会与并发会话的正常写入竞争（实测 8/8 红），
+  // 判据改为「套件源码不得重新引入真实 home 入口」；指针自证由 E1/E2 负责。
+  const selfText = fs.readFileSync(new URL(import.meta.url), 'utf8')
+  // 只扫代码行：顶部注释里就有 `os.homedir()` 的说明，扫全文会把说明当成违规。
+  const code = selfText.split(/\r?\n/).filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line)).join('\n')
+  const homeApi = /os\.homedir\s*\(|process\.env\.(?:HOME|USERPROFILE)\b/.exec(code)
   check(
-    diff.length === 0,
-    `E3 用户真实 home（${REAL_HOME}）整棵树跑前跑后逐件哈希不变`,
-    diff.length === 0 ? `${HOME_BEFORE.size} 件逐件相同` : `被写过：${diff.slice(0, 6).join('；')}`,
+    homeApi === null,
+    'E3 套件源码不引用真实 home（AURA_CACHE_DIR 是唯一落点）',
+    homeApi === null ? '只有 AURA_CACHE_DIR' : `命中 ${homeApi[0]}`,
   )
 }
 

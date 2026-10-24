@@ -8,6 +8,19 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.13.3：发布内容可信化 + 闸可并发 + 探针流式
+
+- npm README 去掉手抄的 0.13.0 闸读数与已删除的 `upgrade` 行；新增中英双语
+  **Why aura-basetools**（基线 DSH 内置 `dsh-tool-fs`），验证段指向 release-check 与 Release notes，
+  避免读数过期。
+- `encoding-refusal` 的 E3 从真实 home 全树哈希改为**源码静态守卫**（+ E1/E2 指针自证）：
+  闸可在并发 Aura 会话下运行；实测 3/3 绿。
+- `which-tools` 改为流式读取（512 MB heap、43.6s）；`adoption-stats` 新增 `--stream`
+  （512 MB、36.7s），给出模式/寻址分布，为 0.14 的减法提供数据。
+- CI：Windows Node 22 全量闸 + Ubuntu Node 18/20 冒烟；Linux 全量闸仍红
+  （stale-gate / struct / corpus / read / read2 / lang / adapters / atomic-publish /
+  fresh-judgement / observation-store-identity），列为 0.14.0 平台债。
+
 ## 0.13.2：安装只走 npm，移除自定义安装器
 
 - **安装面只剩 npm**：MCP 用 `npx -y --package aura-basetools aura basetools mcp`，CLI 用

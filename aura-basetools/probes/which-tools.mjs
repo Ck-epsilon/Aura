@@ -7,7 +7,7 @@
  * 本文件只负责逐会话打印。**三个入口共用一份解析**，避免口径漂移
  * （此前有过"同一个日志、两个采用率"的问题，见 adoption-stats.mjs 头部）。
  */
-import { readSessions, tallyOf } from './session-log.mjs'
+import { iterateSessionsDetailed } from './session-log.mjs'
 import { AURA, BUILTIN } from './adoption-stats.mjs'
 
 const say = (m) => process.stdout.write(`${m}\n`)
@@ -25,12 +25,26 @@ const guardUnknown = (argv) => {
 }
 guardUnknown(process.argv.slice(2))
 const since = process.argv[2] === undefined ? 0 : Date.parse(process.argv[2])
-const rows = readSessions(since)
+// 流式读：只保留最近 25 条的摘要与全量计数，不把每个会话的正文/回执留在内存里。
+// 旧版 `readSessions` 会把全部会话（含正文）收进数组，实测 4GB heap OOM。
+const recent = []
+const tally = {}
+let total = 0
+for (const row of iterateSessionsDetailed(since)) {
+  total += 1
+  const counts = {}
+  for (const call of row.calls) {
+    tally[call.name] = (tally[call.name] ?? 0) + 1
+    counts[call.name] = (counts[call.name] ?? 0) + 1
+  }
+  recent.push({ mtime: row.mtime, dir: row.dir, counts })
+  recent.sort((a, b) => a.mtime - b.mtime)
+  if (recent.length > 25) recent.shift()
+}
 
-say(`=== ${rows.length} 个含工具调用的会话（按时间，只列最近 25 个）===`)
-for (const row of rows.slice(-25)) {
-  const counts = row.calls.reduce((map, name) => ((map[name] = (map[name] ?? 0) + 1), map), {})
-  const summary = Object.entries(counts)
+say(`=== ${total} 个含工具调用的会话（按时间，只列最近 25 个）===`)
+for (const row of recent) {
+  const summary = Object.entries(row.counts)
     .map(([name, count]) => `${name}×${count}`)
     .join(' ')
   say(`  ${row.mtime.toLocaleString()}  ${row.dir.slice(0, 22)}…  ${summary}`)
@@ -38,7 +52,6 @@ for (const row of rows.slice(-25)) {
 
 say('')
 say('=== 合计 ===')
-const tally = tallyOf(rows)
 const tracked = (name) => AURA.test(name) || BUILTIN.test(name) || ['pwsh', 'glob', 'grep'].includes(name)
 for (const [name, count] of Object.entries(tally).sort((a, b) => b[1] - a[1])) {
   if (tracked(name)) say(`  ${name.padEnd(12)} ${count}`)

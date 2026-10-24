@@ -1,9 +1,9 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**0.13.2（已发布；安装只走 npm）**
-> 发布提交：monorepo `af8ae85`；tag `aura-basetools-v0.13.2`
+> 当前版本：**0.13.3（未发布；安装只走 npm）**
+> 上一发布：0.13.2（monorepo `af8ae85`；tag `aura-basetools-v0.13.2`）
 > 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
-> npm：`aura-basetools@0.13.2`、`aura-basetools-dsh@0.13.2` 已发布
+> npm：`aura-basetools@0.13.2`、`aura-basetools-dsh@0.13.2` 已发布；0.13.3 待发布
 > GitHub Release：`aura-basetools-v0.13.2`
 
 ---
@@ -60,7 +60,11 @@ aura basetools capabilities
 
 ## 3. 最近完成的关键变更
 
-- **0.13.2（未发布）**：安装只走 npm。移除 `install.mjs`、双击壳、交付 zip、自定义 manifest 与
+- **0.13.3（未发布）**：npm README 去掉手抄的过期闸读数、加中英双语 Why；`encoding-refusal`
+  的 E3 改为源码静态守卫（闸可在并发会话下运行）；`which-tools` 与 `adoption-stats --stream`
+  改为流式（512 MB）；CI 保留跨平台子集 + Node 18/20 冒烟，全量闸改为手动 workflow
+  （GitHub runner 平台债列为 0.14.0）。
+- **0.13.2（已发布）**：安装只走 npm。移除 `install.mjs`、双击壳、交付 zip、自定义 manifest 与
   升级/回滚命令；`npx ... aura mcp` 旧指引修正为 `aura basetools mcp`。
 - **2026-10-24（0.13.0 后，未发版）**：`target` 整行区间的剩余越界形状。
   - 行内**非符号**内容（`import` / 指令 / 尾随调用 / 嵌套声明）以前仍会被整行替换吃掉；
@@ -87,7 +91,7 @@ aura basetools capabilities
 
 ## 4. 验证状态
 
-最近一次全量闸（0.13.2，安装器移除后）：
+最近一次全量闸（0.13.3，发布内容/闸/探针改动后）：
 
 ```bash
 node build/make-bundle.mjs --pack
@@ -111,7 +115,7 @@ node build/release-check.mjs    # exit 0
 
 其他事实：
 
-- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.13.2`（未发布）。
+- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.13.3`（未发布）。
 - 闸内实跑套件 89 件；`src↔dist` 24 个运行时文件逐字节一致。
 - `installed-package` 在本机有 0.13.1 安装时跑 19/19；没有安装时显示 `⏭`（跳过），不再记 ✅。
 - CI 工作流配置了 Linux + Node 22 全量闸和 Node 18/20 冒烟；**本机是 Windows，Linux runner 尚未实际执行过**。
@@ -129,7 +133,10 @@ node build/release-check.mjs    # exit 0
 - **历史分析件**：`probes/`、`failure-corpus.json`、旧版本 CHANGELOG 与
   `docs/aura-tools-0.*.md` 中的旧工具名是历史数据，不应批量改写；需要读取历史日志的分析件
   应同时识别旧名与新名。
-- **平台覆盖**：本机 Windows 全量闸通过；macOS/Linux 仍以 CI 配置为主，尚未留下本机实跑记录。
+- **平台覆盖**：本机 Windows（Node 24）全量闸通过；macOS/Linux 仍无本机实跑记录。
+- **CI 全量闸仍是 report-only**：GitHub-hosted Windows/Ubuntu runners 上 full gate 有 13/8 个套件失败
+  （本地 Node 24 全绿）；已加手动 workflow `.github/workflows/aura-basetools-full-gate.yml`，
+  平台对齐列为 0.14.0。CI 的阻塞项是跨平台子集 + Node 18/20 冒烟。
 
 ## 5.1 绝对路径检查
 

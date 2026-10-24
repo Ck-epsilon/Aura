@@ -84,29 +84,28 @@ The server exposes:
 
 The older tool names (`aura_read`, `aura_edit`, `aura_write`, ...) are no longer exposed by MCP or DSH.
 
-### Guarantees and verification
+### Why aura-basetools
 
-The 0.13.0 release gate was run on Windows and reported:
+Compared with the DSH built-in `dsh-tool-fs` tools, the differences are deliberate:
 
-| Suite | Result |
-|---|---|
-| `standalone` | 228 / 0 |
-| `range-bytes` | 218 / 218 |
-| `write` | 66 / 66 |
-| `argument-surface` | 18 / 18 |
-| `split-package` | 75 / 75 |
-| `upgrade` | 94 / 94 |
+- **Byte fidelity, not text normalization.** Leading BOM and per-line endings are preserved; only the addressed bytes change. The byte-fidelity suite asserts this with 102 checks.
+- **Read by intent, not whole file.** `map` / `digest` / `lines` / `search` return the structural slice you ask for; the customer comparison measured about 1/24 of the context for the same file.
+- **Edits refuse stale bases.** A region-level gate rejects an edit when the addressed region changed after the read that authorized it, and points at the lines to re-read; `expect` makes the intended text explicit.
+- **Writes are verified, not assumed.** Every write goes through a temp file, flush, rename, and a byte-for-byte read-back; multi-target edits plan first and write nothing if any target fails.
+- **Addressing is structural.** `target` / `lines` / `old` / `expect` / handles replace "copy the literal text exactly"; failure receipts include ready-to-use retry addresses.
+- **The core is DSH-free.** `aura-basetools` has no runtime dependencies and no DSH imports; the DSH adapter is a separate optional package.
 
-The guarantees the tests exercise:
+Scope note: the byte-level comparison is against the DSH built-in tools. Other clients may already preserve BOM/CRLF (for example ZCode's built-in `Edit`); do not generalize this comparison to every editor.
 
-- UTF-8 decoding is fatal; invalid UTF-8 is rejected rather than silently replaced.
-- Leading BOM and per-line endings are preserved.
-- Writes go through a temporary file, flush, rename, and a byte-for-byte read-back check.
-- A region-level stale gate and an optional strict read-before-write policy reject edits whose basis changed.
-- Write transactions record original bytes, support rollback/undo, and reject undo when a file changed after the transaction.
-- Multi-target writes plan first; if planning fails, no file is written.
+### Verification
 
-Linux CI is configured but was not executed on the local Windows machine used for the 0.13.0 gate. Do not read that sentence as a Linux pass.
+The release gate is the source of truth:
+
+```bash
+node build/release-check.mjs
+```
+
+It runs the full suite set, range fixtures, packaged tests, split-package install, and consistency checks. Exact counts and pass/fail are recorded in the GitHub release notes; they are not copied here, so they cannot go stale.
 
 ### Boundaries
 
@@ -200,29 +199,28 @@ npx -y --package aura-basetools aura basetools mcp
 
 旧工具名（`aura_read`、`aura_edit`、`aura_write` 等）不再由 MCP/DSH 暴露。
 
-### 保证与验证
+### 为什么是 aura-basetools
 
-0.13.0 发布闸在 Windows 上实跑，读数：
+与 DSH 内置 `dsh-tool-fs` 相比，差异是刻意设计的：
 
-| 套件 | 结果 |
-|---|---|
-| `standalone` | 228 / 0 |
-| `range-bytes` | 218 / 218 |
-| `write` | 66 / 66 |
-| `argument-surface` | 18 / 18 |
-| `split-package` | 75 / 75 |
-| `upgrade` | 94 / 94 |
+- **字节保真，不做文本归一化。** 保留前导 BOM 与逐行行尾，只改被寻址的字节；字节保真套件用 102 条断言守着。
+- **按意图读，不读整份。** `map` / `digest` / `lines` / `search` 只返回你要的结构切片；客户版对照实测同一文件上下文约 1/24。
+- **依据过期就拒绝。** 区域级陈旧闸门在“授权读取之后该区域被改过”时拒绝，并指出重读哪几行；`expect` 让目标原文显式化。
+- **写完要验，不靠相信。** 每次写盘走临时文件、flush、rename，再做逐字节回读；多目标先全量规划，任一失败则一个字节都不写。
+- **寻址是结构化的。** `target` / `lines` / `old` / `expect` / 句柄替代“把原文一字不差抄对”；失败回执带可直接用的重试地址。
+- **核心不依赖 DSH。** `aura-basetools` 零运行时依赖、无 DSH import；DSH 适配器是独立可选包。
 
-这些套件实际检查：
+范围说明：字节级对照的对象是 DSH 内置工具；其他客户端可能本来就保留 BOM/CRLF（例如 ZCode 内置 `Edit`），不要把该对照泛化到所有编辑器。
 
-- UTF-8 解码使用 fatal 模式；非法字节被拒绝，不做静默替换。
-- 保留前导 BOM 与逐行行尾。
-- 写入走同目录临时文件、flush、rename，并做逐字节回读校验。
-- 区域级陈旧闸门；可选的严格“先读后写”策略会拒绝依据已变化的编辑。
-- 写事务记录原始字节，支持回滚/undo；事务后文件又被改过时拒绝 undo。
-- 多目标写入先全量规划；规划失败则一个文件都不写。
+### 验证
 
-Linux CI 已配置，但本机 0.13.0 发布闸是 Windows 实跑；不能据此声称 Linux 已通过。
+发布闸是唯一事实源：
+
+```bash
+node build/release-check.mjs
+```
+
+它跑完整套件、三套靶场、包内验收、拆包安装与一致性检查。本次发布的精确读数与通过/失败记录在 GitHub Release notes 里，本文不手抄，避免过期。
 
 ### 边界
 

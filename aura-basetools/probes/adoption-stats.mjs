@@ -1,7 +1,8 @@
 /**
  * adoption-stats.mjs —— aura_* 到底被用起来没有？**唯一入口**。
  *
- *   node probes/adoption-stats.mjs [since] [--include-meta] [--json]
+ *   node probes/adoption-stats.mjs [since] [--include-meta] [--json] [--stream]
+ *   --stream：流式读（不保留正文与回执），内存有界；模式/寻址分布与默认路径同口径。
  *
  * since 例：`2026-09-21T07:26`（web profile 打上 aura 补丁的时刻）—— 用来回答"补丁之后还用不用"。
  *
@@ -20,7 +21,7 @@
  * 模式与寻址分布则相反，按**次**（寻址按 hunk）算才有意义——它们描述的是"怎么用"。
  */
 import { pathToFileURL } from 'node:url'
-import { readSessionsDetailed, tallyOf } from './session-log.mjs'
+import { iterateSessionsDetailed, readSessionsDetailed, tallyOf } from './session-log.mjs'
 
 export const AURA = /^aura_(read|edit)$/
 export const BUILTIN = /^(read|edit|write)$/
@@ -147,6 +148,85 @@ export function summarize(rows, options = {}) {
   }
 }
 
+/**
+ * 流式口径：与 `summarize` 同样的计数器，但逐会话消费、不把正文留在内存里。
+ * 用于日志大到 `readSessionsDetailed` 会 OOM 的机器；默认路径仍保留完整行以便最近会话明细。
+ */
+function streamReport(since, includeMeta, json) {
+  const readModes = {}
+  const editHunks = {}
+  const tally = {}
+  const sessions = { total: 0, raw: 0, aura: 0, auraOnly: 0, both: 0, builtinOnly: 0, selfExcluded: 0 }
+  const recent = []
+  let readCalls = 0
+  let editCalls = 0
+  let readErrors = 0
+  let editErrors = 0
+  let editDryRun = 0
+
+  for (const row of iterateSessionsDetailed(since)) {
+    sessions.raw += 1
+    if (!includeMeta && isSelfSession(row.dir, '', row.cwd)) {
+      sessions.selfExcluded += 1
+      continue
+    }
+    sessions.total += 1
+    let hasAura = false
+    let hasBuiltin = false
+    const counts = {}
+    for (const call of row.calls) {
+      tally[call.name] = (tally[call.name] ?? 0) + 1
+      counts[call.name] = (counts[call.name] ?? 0) + 1
+      if (AURA.test(call.name)) hasAura = true
+      if (BUILTIN.test(call.name)) hasBuiltin = true
+      const args = call.args ?? {}
+      if (call.name === 'aura_read') {
+        readCalls += 1
+        if (call.isError) readErrors += 1
+        bump(readModes, typeof args.mode === 'string' && args.mode.length > 0 ? args.mode : '(auto)')
+      } else if (call.name === 'aura_edit') {
+        editCalls += 1
+        if (call.isError) editErrors += 1
+        if (args.dry_run === true) editDryRun += 1
+        for (const hunk of Array.isArray(args.hunks) ? args.hunks : []) {
+          bump(editHunks, addressOf(hunk))
+          if (hunk?.expect !== undefined) bump(editHunks, 'expect')
+          if (hunk?.near !== undefined) bump(editHunks, 'near')
+        }
+      }
+    }
+    if (hasAura) sessions.aura += 1
+    if (hasAura && hasBuiltin) sessions.both += 1
+    else if (hasAura) sessions.auraOnly += 1
+    else if (hasBuiltin) sessions.builtinOnly += 1
+    recent.push({ mtime: row.mtime, counts })
+    if (recent.length > 10) recent.shift()
+  }
+
+  const result = { sessions, readCalls, editCalls, readErrors, editErrors, readModes, editHunks, editDryRun, tally }
+  if (json) {
+    process.stdout.write(`${JSON.stringify(result, null, 1)}\n`)
+    return
+  }
+  say(`=== aura 采用率（流式${since === 0 ? '' : `，mtime ≥ ${new Date(since).toLocaleString()}`}）===`)
+  say(`  含工具调用的会话        : ${sessions.total}${includeMeta ? '' : `（另有自测会话 ${sessions.selfExcluded} 个，未计入）`}`)
+  say(`  用过 aura_* 的会话      : ${sessions.aura}  (${pct(sessions.aura, sessions.total)})`)
+  say(`  只用内置三件套的会话    : ${sessions.builtinOnly}  (${pct(sessions.builtinOnly, sessions.total)})`)
+  say(`  两者都用的会话          : ${sessions.both}`)
+  say(`  只用 aura 的会话        : ${sessions.auraOnly}`)
+  say('')
+  say('=== aura_read：调用与失败 ===')
+  say(`  调用 ${readCalls} 次；失败 ${readErrors} 次（${pct(readErrors, readCalls)}）`)
+  table('aura_read 的 mode 分布', readModes, readCalls, '(auto) = 未给 mode')
+  say('')
+  say('=== aura_edit：调用与失败 ===')
+  say(`  调用 ${editCalls} 次；失败 ${editErrors} 次（${pct(editErrors, editCalls)}）；dry_run ${editDryRun} 次`)
+  const hunkTotal = Object.entries(editHunks)
+    .filter(([k]) => !['expect', 'near'].includes(k))
+    .reduce((a, [, v]) => a + v, 0)
+  table('aura_edit 的寻址分布（按 hunk）', editHunks, hunkTotal, 'expect / near 是额外标志，不参与该分母')
+}
+
 const pct = (part, whole) => (whole === 0 ? '—' : `${Math.round((100 * part) / whole)}%`)
 const say = (m) => process.stdout.write(`${m}\n`)
 const table = (title, map, total, note = '') => {
@@ -171,6 +251,10 @@ function main() {
     process.exit(2)
   }
   const includeMeta = argv.includes('--include-meta')
+  if (argv.includes('--stream')) {
+    streamReport(since, includeMeta, argv.includes('--json'))
+    return
+  }
   const rows = readSessionsDetailed(since)
   const s = summarize(rows, { includeMeta })
 
