@@ -122,6 +122,7 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
   失败/外部改动/verify 失败都可 `tx rollback --id <id>`。commit 前做 afterVersion 校验与三方合并；
   非重叠外部改动自动合并，重叠/不可合并为 `TX_CONFLICT`（零写入）。
   MCP 用 `aura_basetools_tx`（action=begin/commit/rollback/status）与 edit/write 的 `transaction`。
+- MCP `initialize.instructions` 会请求客户端优先 aura 工具；这是标准提示位，不是强制。
 
 ## 6. 诊断
 

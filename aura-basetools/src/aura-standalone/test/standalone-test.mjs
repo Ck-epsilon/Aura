@@ -375,6 +375,12 @@ say('F MCP：initialize / tools/list / tools/call')
   const byId = new Map(replies.map((r) => [r.id, r]))
   check(byId.get(1)?.result?.protocolVersion === '2025-06-18', 'initialize 回显协议版本', JSON.stringify(byId.get(1)).slice(0, 120))
   check(byId.get(1)?.result?.serverInfo?.name === 'aura-basetools', 'serverInfo.name = aura-basetools')
+  const instructions = byId.get(1)?.result?.instructions
+  check(
+    typeof instructions === 'string' && instructions.includes('Prefer the aura_basetools_*') && instructions.includes('aura_basetools_tx'),
+    'initialize 带服务器 instructions（优先 aura + tx）',
+    String(instructions ?? '').slice(0, 120),
+  )
   // 版本号曾经写死在 bin 里（包到 0.4.0，服务对外还报 0.2.1）—— 这里钉住它跟包清单一致
   const manifest = (() => {
     try {

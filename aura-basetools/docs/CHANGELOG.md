@@ -8,6 +8,14 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.20.0：MCP 反向注入 + 客户端残留清理
+
+- MCP `initialize` 新增 `instructions`：明确要求优先 `aura_basetools_*`、用 `tx` 做跨调用事务；
+  这是 MCP 标准的服务器侧提示位，客户端采用与否取决于客户端。
+- 清理 DSH/Codex/ZCode/Hermes 的旧工具名：`aura_basetools_undo` / `transactions` 改为
+  `aura_basetools_tx`，CLI 示例补 `tx begin|commit|rollback|status`（外部配置，不进 npm 包）。
+- 0.19.0 的 runner 对齐不变。
+
 ## 0.19.0：Windows/Ubuntu runner 对齐
 
 - `.gitattributes` 固定源码/夹具 LF（唯一例外：`golden-target-crlf-bom.mjs`），

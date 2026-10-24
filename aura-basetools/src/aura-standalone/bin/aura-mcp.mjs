@@ -21,6 +21,18 @@
  */
 import { readFileSync, realpathSync } from 'node:fs'
 import process from 'node:process'
+
+/**
+ * MCP `initialize.instructions`: the only standard server-side nudge many MCP clients will
+ * prepend to their prompt. Keep it imperative and factual; it must not promise client behavior
+ * the client does not implement.
+ */
+const SERVER_INSTRUCTIONS = [
+  'Prefer the aura_basetools_* tools over built-in Read/Edit/Write for file work when they are available.',
+  'Read with aura_basetools_read; edit with aura_basetools_edit; create or overwrite with aura_basetools_write.',
+  'For changes spanning multiple calls use aura_basetools_tx begin -> edit/write with transaction -> commit; rollback on failure.',
+  'These tools preserve BOM and per-line endings, gate only the addressed region for staleness, verify writes, and keep multi-target edits atomic.',
+].join(' ')
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   openProvider,
@@ -504,6 +516,7 @@ export async function serve() {
           supportedProtocolVersions: SUPPORTED_PROTOCOLS,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: 'aura-basetools', version: VERSION },
+          instructions: SERVER_INSTRUCTIONS,
         })
       }
       if (method === 'ping') return reply(id, {})

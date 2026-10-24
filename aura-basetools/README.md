@@ -56,6 +56,7 @@ MCP `aura_basetools_write`。新建与覆写都走 `edit` 同一条工作区锁�
 **0.16.0 起支持跨调用事务**：`tx begin` 拿 id，后续 `edit/write --tx <id>` 写进同一份日志，
 `tx commit --id <id> [--verify "命令"]` 提交，`tx rollback --id <id>` 回滚，`tx status --id <id>` 查状态。
 MCP 对应 `aura_basetools_tx`（`action`）与 `edit/write` 的 `transaction` 字段。
+MCP `initialize` 还带 `instructions`，明确要求优先 `aura_basetools_*`；客户端是否采用由客户端决定。
 commit 前会按 afterVersion 检查；外部非重叠改动用三方合并，重叠/不可合并 ⇒ `TX_CONFLICT`，不会静默覆盖。
 
 
