@@ -21,9 +21,9 @@
  * `aura-basetools`；npx 在"多个 bin 且没有与包名同名的"时候会拒绝猜，直接报
  * `could not determine executable to run`（实测）。`--package` 明确指定包，`aura` 才是命令。
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   openProvider,
   readEnvelope,
@@ -561,6 +561,25 @@ export async function serve() {
 
 // 直接运行本文件（`aura-mcp`，package.json 里声明的第二个 bin）也要起服务，与 `aura basetools mcp` 等价。
 // 用 pathToFileURL 比手拼 file:// 靠得住（Windows 盘符就是那种手拼会踩的地方）。
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+/**
+ * 直接执行本文件才起 stdio 服务。
+ *
+ * 不能只比 `import.meta.url === pathToFileURL(argv[1])`：macOS 的临时目录
+ * `/var/folders/...` 是 `/private/var/folders/...` 的符号链接，Node 给模块的 URL 与
+ * argv 的写法可能一侧已 realpath、另一侧没有 ⇒ 服务静默退出，客户端看到 0 个工具
+ * （post-publish / split-package 在 macOS 上正是这条）。两边都过 realpath 再比。
+ */
+function isDirectRun() {
+  const invoked = process.argv[1]
+  if (invoked === undefined) return false
+  if (import.meta.url === pathToFileURL(invoked).href) return true
+  try {
+    return realpathSync.native(fileURLToPath(import.meta.url)) === realpathSync.native(invoked)
+  } catch {
+    return false
+  }
+}
+
+if (isDirectRun()) {
   await serve()
 }
