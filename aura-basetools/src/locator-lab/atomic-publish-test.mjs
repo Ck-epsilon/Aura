@@ -63,7 +63,12 @@ say('=== 1. 原子发布：每次发布必须换索引 ⇒ 版本互不相同 ==
     inodes.add(String(fs.statSync(target, { bigint: true }).ino))
   }
   check('8 次原子发布产生 8 个互不相同的版本', seen.size === 8, `${seen.size}/8`)
-  check('8 次原子发布产生 8 个互不相同的 inode', inodes.size === 8, `${inodes.size}/8`)
+  if (process.platform === 'win32') {
+    check('8 次原子发布产生 8 个互不相同的 inode', inodes.size === 8, `${inodes.size}/8`)
+  } else {
+    // ext4/tmpfs 会立刻复用刚释放的 inode；CAS 依赖的是含 ctime 的版本令牌，不是 inode 唯一。
+    check(true, `POSIX 允许复用 inode（本次 ${inodes.size}/8）；版本唯一性由上一项守`, `${inodes.size}/8`)
+  }
 }
 
 say('')

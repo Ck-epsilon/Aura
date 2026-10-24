@@ -8,6 +8,16 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.19.0：Windows/Ubuntu runner 对齐
+
+- `.gitattributes` 固定源码/夹具 LF（唯一例外：`golden-target-crlf-bom.mjs`），
+  消除 Windows checkout 把字节级黄金集/冻结夹具整体改 CRLF 导致的假红。
+- 源码探针（read outcome D6 / quote-render E3）先归一 CRLF；`encoding-refusal` E2 同时认
+  8.3 短路径与 realpath 长路径；`observation-store-identity` 在大小写敏感 FS 上跳过
+  "同一文件两种写法"分支；`atomic-publish` 在 POSIX 不再要求 inode 不复用（CAS 靠版本令牌）。
+- `stale-gate` N 跳过分支比较操作前快照，不再硬编码 LF。
+- 0.18.0 的并发合并保持不变。
+
 ## 0.18.0：并发合并
 
 - `tx commit` 遇到外部改动时，先做三方合并：非重叠行改动用 `git merge-file` 合并；

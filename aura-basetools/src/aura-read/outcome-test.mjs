@@ -344,7 +344,7 @@ say('=== D. 句柄字段：读侧新字段不会被壳层丢掉，也不会把�
    * 正文是宿主剪枝器真正量的东西（契约 §2 不变式 5 / §4），句柄只进结构化字段。
    * 这一条盯的是源码本身：`renderEnvelope` 的函数体里不得出现句柄相关标识符。
    */
-  const selfSrc = fs.readFileSync(new URL('./index.js', import.meta.url), 'utf8')
+  const selfSrc = fs.readFileSync(new URL('./index.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const at = selfSrc.indexOf('function renderEnvelope(env)')
   const body = selfSrc.slice(at, selfSrc.indexOf('\n}\n', at))
   check(at > 0, 'D6 找到 renderEnvelope 源码段（这条断言不是空的）', `at=${at}`)

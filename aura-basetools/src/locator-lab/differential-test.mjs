@@ -179,10 +179,12 @@ say('=== 3. planHunks 的落盘内容（快路径 vs 整份 split/join）===')
   let bad = 0
   for (const f of CORPUS.slice(0, 10)) {
     const src = fs.readFileSync(f, 'utf8')
-    const lines = src.split('\n')
+    // Windows 工作树可能是 CRLF；快路径按文件已有行尾写回，笨裁判必须用同一行尾比。
+    const eol = src.includes('\r\n') ? '\r\n' : '\n'
+    const lines = src.split(/\r?\n/)
     const start = ((src.length % Math.max(1, lines.length - 2))) + 1
     const end = Math.min(lines.length, start + 2)
-    const original = lines.slice(start - 1, end).join('\n')
+    const original = lines.slice(start - 1, end).join(eol)
     const marker = `// diff-test-${start}-${end}`
     let planned
     try {
@@ -190,7 +192,7 @@ say('=== 3. planHunks 的落盘内容（快路径 vs 整份 split/join）===')
     } catch {
       continue // 该区间不可寻址（例如落在符号中途）——不是本项的判据
     }
-    const naive = lines.slice(0, start - 1).concat([marker], lines.slice(end)).join('\n')
+    const naive = lines.slice(0, start - 1).concat([marker], lines.slice(end)).join(eol)
     n += 1
     if (planned.content !== naive) {
       bad += 1

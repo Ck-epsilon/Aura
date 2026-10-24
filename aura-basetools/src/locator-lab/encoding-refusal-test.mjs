@@ -502,9 +502,10 @@ say('=== 段E 不写用户真实 home：观测缓存一律落本套件的临时�
   const ledgerText = fs.existsSync(ledgerFile) ? fs.readFileSync(ledgerFile, 'utf8').toLowerCase() : ''
   // 账本里存的是 JSON 串：反斜线是双写的，所以要比对转义后的探针路径（大小写不敏感：同一份
   // 文件在不同写法下可以由 realpath 归一成另一种大小写）。
-  const needle = JSON.stringify(probePath).slice(1, -1).toLowerCase()
+  // Windows runner 的 TMP 可能是 8.3 短路径，账本存的是 realpath 长路径；两种写法都认。
+  const needles = [...new Set([probePath, fs.realpathSync.native(probePath)])].map((p) => JSON.stringify(p).slice(1, -1).toLowerCase())
   check(
-    ledgerText.includes(needle),
+    needles.some((needle) => ledgerText.includes(needle)),
     'E2 真 CLI 子进程的观测落进**临时缓存目录**（子进程没有改用用户真实的 ~/.aura）',
     fs.existsSync(ledgerFile) ? `${path.relative(TMP, ledgerFile)} ${fs.statSync(ledgerFile).size}B，含探针路径` : `${ledgerFile} 不存在`,
   )

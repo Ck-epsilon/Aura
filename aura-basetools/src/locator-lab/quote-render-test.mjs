@@ -807,7 +807,7 @@ say('=== 段E：负向不变量 —— 渲染改变不得影响任何判定 ==='
    * E3：结构解耦 —— 判据层里不出现任何**渲染**符号。
    * 这条比"跑一遍看结果"更强：渲染改动**够不着**判据，不是"这次恰好没影响"。
    */
-  const source = codeOnly(fs.readFileSync(path.join(HERE, 'locator-api.mjs'), 'utf8'))
+  const source = codeOnly(fs.readFileSync(path.join(HERE, 'locator-api.mjs'), 'utf8').replace(/\r\n/g, '\n'))
   const verdictBody = /\n(?:export )?function expectVerdict\([\s\S]*?\n}\n/.exec(`\n${source}`)?.[0] ?? ''
   check(
     'E3 `expectVerdict` 的函数体里不出现任何渲染符号（`quoteForMessage` / `⏎` / U+201C）',

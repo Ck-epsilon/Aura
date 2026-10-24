@@ -1,0 +1,7 @@
+# Runner parity: keep text bytes deterministic across Windows/macOS/Linux.
+# Tests compare source bytes, golden receipts and packaged bins byte-for-byte;
+# a CRLF checkout makes those comparisons platform-dependent.
+* text=auto eol=lf
+
+# This fixture is intentionally CRLF (byte-fidelity test): never normalize it.
+fixtures/golden-target-crlf-bom.mjs -text

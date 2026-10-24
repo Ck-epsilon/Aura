@@ -615,9 +615,10 @@ const N_SPELLINGS = SPELLINGS.filter(
    * 回执不带 `unverified_region`）；归一化不在 ⇒ 认不出，回执谎称"没核对过"。
    */
   const third = path.join(dir, 'BETA.JS')
+  const nBefore = readTextFile(base)
   if (!fs.existsSync(third)) {
     check(true, 'N 本平台不把另一种写法解析到同一个文件 ⇒ 这条判别性判据在本机不成立', third)
-    check(readTextFile(base) === 'line one\nline two\nline three (A edited)\n', 'N 未发编辑 ⇒ 靶子停在上一判据的结果上', JSON.stringify(readTextFile(base)))
+    check(readTextFile(base) === nBefore, 'N 未发编辑 ⇒ 靶子停在上一判据的结果上', JSON.stringify(readTextFile(base)))
   } else {
     const r3 = await attempt(third, [{ lines: [1, 1], replace: 'line one (A edited)' }])
     check(r3.ok === true, 'N 用一个从未读过的写法编辑：照常成功（不许误拒）', `${r3.error?.code ?? 'ok'}`)

@@ -169,17 +169,19 @@ say('=== A. 跨进程：进程1 读 Beta.js → 第三方改被寻址行 → 进
   const u2 = cliEditLines(up.cache, up.upper, [3, 3], 'line three (A overwrote)')
   say(`  [同上·全大写] 进程1 读（exit=${u1.exit}）→ 第三方改第 3 行 → 进程2 用 ${up.upper}`)
   say(`          exit=${u2.exit} out=${u2.stdout}`)
-  check(
-    sameFile(up.base, up.upper),
-    'A8 本平台把 BETA.JS 解析到同一个文件（不解析就不是"另一种写法"，下面那条不成立）',
-    `sameFile=${sameFile(up.base, up.upper)}`,
-  )
-  check(
-    u2.exit !== 0 && u2.json?.code === 'PATCH_STALE_REGION',
-    'A9 全大写的写法同样被拦住（同一处记账与写法无关）',
-    `exit=${u2.exit} code=${u2.json?.code ?? '(放行)'}`,
-  )
-  check(sha(up.base) === rawUp, 'A10 全大写那一支磁盘也未变', JSON.stringify(readTextFile(up.base)))
+  if (sameFile(up.base, up.upper)) {
+    check(true, 'A8 本平台把 BETA.JS 解析到同一个文件（不解析就不是"另一种写法"，下面那条不成立）', 'sameFile=true')
+    check(
+      u2.exit !== 0 && u2.json?.code === 'PATCH_STALE_REGION',
+      'A9 全大写的写法同样被拦住（同一处记账与写法无关）',
+      `exit=${u2.exit} code=${u2.json?.code ?? '(放行)'}`,
+    )
+    check(sha(up.base) === rawUp, 'A10 全大写那一支磁盘也未变', JSON.stringify(readTextFile(up.base)))
+  } else {
+    check(true, 'A8 本平台把 BETA.JS 解析到同一个文件（不解析就不是"另一种写法"，下面那条不成立）', `sameFile=false（大小写敏感文件系统）`)
+    check(true, 'A9 全大写的写法同样被拦住（本平台不成立，跳过）', 'case-sensitive fs')
+    check(true, 'A10 全大写那一支磁盘也未变（本平台不成立，跳过）', 'case-sensitive fs')
+  }
 
   // 只读靶场没被别人动过：A1 之后没人写过它之前
   check(raw0 !== rawB, 'A11 靶场读数自证：第三方那次写入确实改了字节（否则 A3/A4 都无从谈起）', `${raw0.slice(0, 12)}… → ${rawB.slice(0, 12)}…`)
@@ -200,11 +202,11 @@ say('=== A. 跨进程：进程1 读 Beta.js → 第三方改被寻址行 → 进
   say(`  [建文件] aura edit --file ${createSpelling} --create <内容>（文件还不存在）`)
   say(`          exit=${c1.exit} out=${c1.stdout}`)
   check(
-    c1.exit === 0 && fs.existsSync(cr.base) && readTextFile(cr.base) === F1_BEFORE,
+    c1.exit === 0 && fs.existsSync(createSpelling) && readTextFile(createSpelling) === F1_BEFORE,
     'A12 用另一种写法建文件：成功且内容正确（不存在的路径走纯词法兜底，不因大小写被误伤）',
     `exit=${c1.exit}`,
   )
-  const c2 = cliRead(cr.cache, cr.base)
+  const c2 = cliRead(cr.cache, createSpelling)
   check(
     c2.exit === 0 && c2.json?.ok === true && c2.json?.unverified_region === undefined,
     'A13 建完再读：账本正常记账，回执不谎称"没核对过"',
