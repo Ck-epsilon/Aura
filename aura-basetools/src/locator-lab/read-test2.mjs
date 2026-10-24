@@ -13,6 +13,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { readWith, suggestMode, MODES, CONTENT_BUDGET, PRUNE_BUDGET } from './read-core.mjs'
+import { dshModulesRoot } from './dsh-test-paths.mjs'
 import { apply as applyPatchPlugin } from '../aura-edit/index.js'
 import { contextServices } from './mock-ctx.mjs'
 
@@ -23,7 +24,11 @@ const check = (ok, label, detail = '') => {
   say(`${ok ? '✓' : '✗'} ${label}${detail ? `  ${detail}` : ''}`)
 }
 
-const NM = 'E:\\software\\npmlocal\\node_global\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai'
+const NM = dshModulesRoot()
+if (NM === null) {
+  say('--- 0/0 通过（已跳过：未找到 DSH 语料）---')
+  process.exit(0)
+}
 const BIG = path.join(NM, 'dsh-tool-fs', 'lib', 'index.js')
 
 // ── A. 闭环：read 的产物直接喂给 patch ────────────────────────────────────

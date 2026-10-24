@@ -7,6 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { indexStructure, resolveTarget, regionConfidence, listSymbols, findReferences, langOf } from './struct-core.mjs'
+import { dshModulesRoot } from './dsh-test-paths.mjs'
 
 const say = (m) => fs.writeSync(1, `${m}\n`)
 const results = []
@@ -15,7 +16,11 @@ const check = (ok, label, detail = '') => {
   say(`${ok ? '✓' : '✗'} ${label}${detail ? `  ${detail}` : ''}`)
 }
 
-const NM = 'E:\\software\\npmlocal\\node_global\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai'
+const NM = dshModulesRoot()
+if (NM === null) {
+  say('--- 0/0 通过（已跳过：未找到 DSH 语料）---')
+  process.exit(0)
+}
 const FILE = path.join(NM, 'dsh-tool-todo', 'lib', 'index.js')
 const src = fs.readFileSync(FILE, 'utf8')
 const lang = langOf(FILE)

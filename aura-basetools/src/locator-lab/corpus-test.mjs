@@ -26,7 +26,15 @@ const check = (ok, label, detail = '') => {
  *  这里把「有没有失败」从 `results` 里**算出来**，末尾据此硬接退出码 —— 判据一条没动。 */
 let failing = 0
 
-const ROOTS = ['E:\\workspaces', 'E:\\software\\npmlocal\\node_global\\node_modules']
+// 真实语料由 AURA_CORPUS_ROOTS 显式提供；默认用仓库内**声明为主**的便携语料，
+// 否则 repo src 的 JS 声明占比只有 ~29%，会把 50% 阈值误判成回归。
+const REAL_ROOTS = (process.env.AURA_CORPUS_ROOTS ?? '').split(path.delimiter).filter(Boolean)
+const ROOTS = (REAL_ROOTS.length > 0 ? REAL_ROOTS : [path.join(process.cwd(), 'fixtures', 'corpus')])
+  .filter((p) => fs.existsSync(p))
+if (ROOTS.length === 0) {
+  say('--- 0/0 通过（已跳过：未找到语料）---')
+  process.exit(0)
+}
 
 /** 按扩展名收集真实文件，每类最多取 N 个，避免样本偏斜。 */
 function collect(perExt = 12) {

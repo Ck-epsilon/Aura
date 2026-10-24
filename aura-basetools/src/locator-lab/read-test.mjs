@@ -9,6 +9,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { readWith, PRUNE_BUDGET, CONTENT_BUDGET, MODES } from './read-core.mjs'
+import { dshModulesRoot } from './dsh-test-paths.mjs'
 
 const say = (m) => fs.writeSync(1, `${m}\n`)
 const results = []
@@ -17,7 +18,11 @@ const check = (ok, label, detail = '') => {
   say(`${ok ? '✓' : '✗'} ${label}${detail ? `  ${detail}` : ''}`)
 }
 
-const NM = 'E:\\software\\npmlocal\\node_global\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai'
+const NM = dshModulesRoot()
+if (NM === null) {
+  say('✗ 找不到 DSH 语料（设置 AURA_DSH_NM 或安装 @deepseek-ai/dsh）')
+  process.exit(2)
+}
 const FILE = path.join(NM, 'dsh-tool-fs', 'lib', 'index.js')
 const SRC = fs.readFileSync(FILE, 'utf8')
 const TOTAL = SRC.split('\n').length

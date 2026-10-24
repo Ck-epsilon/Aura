@@ -9,6 +9,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { indexStructure, langOf, listSymbols, LANGS } from './struct-core.mjs'
+import { dshModulesRoot } from './dsh-test-paths.mjs'
 
 const say = (m) => fs.writeSync(1, `${m}\n`)
 const results = []
@@ -76,7 +77,13 @@ check(!names(protoTrap, 'x.proto').includes('message:NotReal'), 'proto 注释里
 
 say('')
 say('=== C. 真实文件：不崩、有提取 ===')
-const ROOTS = ['E:\\workspaces', 'C:\\Users\\cxk\\.agents']
+const DSH = dshModulesRoot()
+const ROOTS = [
+  ...(process.env.AURA_CORPUS_ROOTS ?? '').split(path.delimiter).filter(Boolean),
+  path.join(process.cwd(), 'src'),
+  path.join(process.cwd(), 'fixtures'),
+  ...(DSH === null ? [] : [DSH]),
+].filter((p) => fs.existsSync(p))
 const NEW_EXTS = ['sh', 'ps1', 'pyx', 'pxd', 'pxi', 'proto', 'pl', 'pm', 'bat', 'cmd', 'bash']
 const found = new Map()
 function walk(dir, depth) {
@@ -129,6 +136,10 @@ for (const [ext, list] of [...found.entries()].sort()) {
   broken += localBroken
   symbols += localSym
   say(`  ${ext.padEnd(8)} ${String(list.length).padStart(3)} 个文件  ${String(localSym).padStart(5)} 个符号  ${localBroken === 0 ? 'ok' : `${localBroken} 失败`}`)
+}
+if (files === 0) {
+  say('--- 0/0 通过（已跳过：未找到语料）---')
+  process.exit(0)
 }
 check(files > 0, `找到 ${files} 个真实文件用于验证`)
 check(broken === 0, '全部真实文件建索引无异常', `失败 ${broken}`)
