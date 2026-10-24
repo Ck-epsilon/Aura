@@ -90,7 +90,7 @@ const COMMAND_FLAGS = {
     bool: ['pretty'],
   },
   edit: {
-    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'intent', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol'],
+    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol'],
     bool: ['pretty', 'dry-run', 'plan', 'transaction', 'replace-all', 'require-observation'],
   },
   write: {
@@ -177,7 +177,7 @@ const USAGE = [
   "  aura basetools edit  --file <路径> (--hunks '<json>' | --hunks-file <路径>) [--dry-run|--plan] [--eol auto|preserve|lf|crlf] [--require-observation]",
   '   aura basetools edit  --file <路径> --lines <a,b> --replace <文本> [--expect <文本>] [--near <n>]',
   '   aura basetools edit  --file <路径> --old <原文> --replace <文本> --replace-all        # 改全部非重叠出现',
-  "              （只改一处时不必包成 JSON：--target / --intent / --lines / --start-line+--end-line / --line-cue / --anchor 任选其一）",
+          "              （只改一处时不必包成 JSON：--target / --lines / --start-line+--end-line / --line-cue / --anchor 任选其一）",
   // 句柄（fs-contract-v2 §5）：读侧发的柄 + 三种定位写法。下面三行是三种**用法**，不是三种键。
   '   aura basetools edit  --file <路径> --handle <h…> --replace <文本>                          # 整段替换：区间由柄定，不靠转述',
   '   aura basetools edit  --file <路径> --handle <h…> --line <段内行号> --replace <文本>            # 只换区间内第 k 行（1-based，从区间首行数起）',
@@ -190,7 +190,7 @@ const USAGE = [
   '  aura basetools capabilities [--pretty] 能力清单：读模式/地址档/语言/限制（JSON）',
   '  aura --help | --version',
   '',
-  'hunks 形状：[{"target":"符号名"|"intent":"模糊意图（符号片段/短语/近似原文）"|"lines":[a,b]|"line_cue":"唯一词"|"anchor":"记得的原文",',
+      'hunks 形状：[{"target":"符号名"|"lines":[a,b]|"line_cue":"唯一词"|"anchor":"记得的原文",',
   '              "replace":"替换文本","expect":"该处应是什么","near":行号}]',
   '',
   '例：',
@@ -509,8 +509,6 @@ if (command === 'edit') {
    */
   const flat = flatHunk({
     target: flag('target'),
-    // 意图地址（T16）：`--intent 'config loader'` 一句话定位一处改动，不要求符号全名或原文。
-    intent: flag('intent'),
     lines: flag('lines'),
     start_line: flag('start-line'),
     end_line: flag('end-line'),
@@ -593,7 +591,7 @@ if (command === 'edit') {
       {
         ok: false,
         error:
-          'edit 需要 --hunks/--hunks-file，或平铺一组地址旗标（--target / --intent / --lines / --start-line+--end-line / --line-cue / --anchor / --handle（配 --line 或 --position），外加 --replace），或 --create <整份内容>',
+      'edit 需要 --hunks/--hunks-file，或平铺一组地址旗标（--target / --lines / --start-line+--end-line / --line-cue / --anchor / --handle（配 --line 或 --position），外加 --replace），或 --create <整份内容>',
         code: 'USAGE',
       },
       1,

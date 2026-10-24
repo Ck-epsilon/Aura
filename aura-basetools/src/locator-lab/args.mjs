@@ -126,7 +126,7 @@ export function normalizeReadRequest(args, totalLines = undefined) {
  * 导出它是为了不再出现第二份：守卫要拿它算“合法键集合”，而如果有两份名单，
  * 新增一种地址写法时必有一处漏改——那正是本项目反复出现的形状。
  */
-export const FLAT_ADDRESS_KEYS = ['target', 'intent', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle', 'old']
+export const FLAT_ADDRESS_KEYS = ['target', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle', 'old']
 
 /**
  * `targets` 元素（单目标参数）的合法键。
@@ -140,7 +140,7 @@ export const MT_READ_ELEMENT_KEYS = [
 ]
 export const MT_EDIT_ELEMENT_KEYS = [
   'file_path', 'hunks', 'create', 'dry_run', 'require_observation',
-  'target', 'intent', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'old', 'context',
+  'target', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'old', 'context',
   'replace', 'replace_all', 'eol', 'expect', 'near', 'handle', 'line', 'position',
 ]
 

@@ -94,7 +94,7 @@ say('A 引擎：全部非重叠出现')
     { old: 'foo', replace: 'X', replace_all: true, target: 'foo' },
     { old: 'foo', replace: 'X', replace_all: true, near: 1 },
     { old: 'foo', replace: 'X', replace_all: true, handle: 'h1a2b3c4d5e6:1-1' },
-    { old: 'foo', replace: 'X', replace_all: true, intent: 'foo' },
+
   ]
   const codes = conflicts.map((hunk) => {
     try {

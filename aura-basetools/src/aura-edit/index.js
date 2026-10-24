@@ -104,18 +104,6 @@ const HUNK_PROPERTIES = {
     description:
       'Symbol to replace, e.g. `toTodoList`, `function:apply`, `Outer/Inner`, `name#2`. Skips all text matching, so it is immune to misremembered content.',
   },
-  /**
-   * 意图地址（T16）：调用方给一段**模糊**的意图串，引擎确定性地落到一个精确区间。
-   *
-   * 这是比 `target` 更弱、比 `anchor` 更自由的一层：它先当符号名解析（含 `name#n` 等写法），
-   * 再按符号名子串匹配，最后落到文本匹配。落不下来就报歧义并给候选，**不猜**。
-   * 它与其余地址字段互斥（`PATCH_INTENT_CONFLICT`）：同时给两个地址时谁说了算没有正确答案。
-   */
-  intent: {
-    type: 'string',
-    description:
-      'Fuzzy intent address: a symbol-name fragment, a phrase, or approximate text (e.g. `parseConfig`, `config loader`, `// retry the upload`). Resolved deterministically to one exact region; an ambiguous intent is refused with candidates. Use it alone (not with target/lines/line_cue/anchor/old/context/handle); `near` and `expect` are allowed.',
-  },
   // 与 aura_basetools_read 同一套宽容声明：模型把区间写成 `4, 6` 时那不是合法 JSON（宿主在参数层就拒），
   // 写成 `"4,6"` / `4` 则是合法 JSON 但形状不对——声明宽一点，能容的都容下来。
   lines: {
@@ -174,7 +162,7 @@ const HUNK_PROPERTIES = {
   replace_all: {
     type: 'boolean',
     description:
-      'With `old`: replace every non-overlapping occurrence, not just a unique one. Left-to-right; cannot be combined with target/intent/lines/line_cue/anchor/context/handle/near (those narrow to one place). If the occurrence count changed since your last read, the whole patch is refused.',
+      'With `old`: replace every non-overlapping occurrence, not just a unique one. Left-to-right; cannot be combined with target/lines/line_cue/anchor/context/handle/near (those narrow to one place). If the occurrence count changed since your last read, the whole patch is refused.',
   },
   eol: {
     type: 'string',
@@ -306,7 +294,7 @@ function hunkListOf(args) {
  * 名单在这里是为了"被忽略的一方"能被逐字点名——不是第二份寻址判据：
  * 谁真的生效由引擎决定（`write-path.mjs`），这里只报告"调用方还给了这些"。
  */
-const ADDRESS_KEYS_BESIDE_HANDLE = ['old', 'context', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'target', 'intent']
+const ADDRESS_KEYS_BESIDE_HANDLE = ['old', 'context', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'target']
 
 /** 这个键这次**真的给了**吗（判据与 `flatHunk` 一致：跳过 undefined / null / 空串 / 空数组）。 */
 function gaveKey(source, key) {
@@ -571,9 +559,6 @@ const OUTCOME_BY_CODE = new Map([
   ['PATCH_AMBIGUOUS', 'needs_choice'],
   ['LOCATOR_AMBIGUOUS', 'needs_choice'],
   ['LOCATOR_CUE_AMBIGUOUS', 'needs_choice'],
-  // 意图地址（T16）：落不下来时**拒绝并给候选**（不猜），没命中时给可执行的替代地址。
-  ['LOCATOR_INTENT_AMBIGUOUS', 'needs_choice'],
-  ['LOCATOR_INTENT_NOT_FOUND', 'not_found'],
   /**
    * 句柄路的四种**如实拒绝**（契约 §5 解析次序 / §9 的 D6）：句柄过期、身份标签不符、
    * 段内行号越界、`{handle, old}` 而引文不在该区间内。

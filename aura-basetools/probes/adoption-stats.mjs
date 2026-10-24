@@ -60,13 +60,13 @@ const bump = (map, key) => {
 
 /**
  * 寻址方式：按引擎的互斥优先级归类。
- * `handle` / `intent` / `old` 以前漏在这里，全落进 `(none)`，于是 0.13.3 的首版分布
+ * `handle` / `old` 以前漏在这里，全落进 `(none)`，于是 0.13.3 的首版分布
  * 把 8,861 个 hunk 误报成“无地址”；补上后才是可用来决定删减的分布。
  */
 function addressOf(hunk) {
   if (hunk === null || typeof hunk !== 'object') return '(none)'
   if (typeof hunk.handle === 'string' && hunk.handle.length > 0) return 'handle'
-  if (typeof hunk.intent === 'string' && hunk.intent.length > 0) return 'intent'
+
   if (typeof hunk.target === 'string' && hunk.target.length > 0) return 'target'
   if (Array.isArray(hunk.lines) || hunk.start_line !== undefined) return 'lines'
   if (typeof hunk.line_cue === 'string') return 'line_cue'

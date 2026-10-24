@@ -33,7 +33,7 @@ const write = cap.tools.find((tool) => tool.name === 'aura_basetools_write')
 say('=== A. 工具 / 读模式 / 地址档 ===')
 check('A1 三个工具都在', read !== undefined && edit !== undefined && write !== undefined, cap.tools.map((tool) => tool.name).join(','))
 check('A2 读模式 = auto + MODES', JSON.stringify(read?.modes) === JSON.stringify(['auto', ...MODES]), JSON.stringify(read?.modes))
-for (const kind of ['intent', 'target', 'lines', 'line_cue', 'anchor', 'old', 'context', 'handle', 'position']) {
+for (const kind of ['target', 'lines', 'line_cue', 'anchor', 'old', 'context', 'handle', 'position']) {
   check(`A3 地址档含 ${kind}`, edit?.addressKinds.includes(kind), JSON.stringify(edit?.addressKinds))
 }
 check('A4 地址档与 FLAT_ADDRESS_KEYS 同源', FLAT_ADDRESS_KEYS.every((key) => edit?.addressKinds.includes(key)), FLAT_ADDRESS_KEYS.join(','))

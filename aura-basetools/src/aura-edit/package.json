@@ -1,6 +1,6 @@
 {
   "name": "dsh-tool-patch",
-  "version": "0.13.3",
+  "version": "0.14.0",
   "private": true,
   "description": "Anchored multi-hunk patch and whole-file write tools for the DeepSeek Harness: aura_basetools_edit owns matching/disambiguation/atomic commit, aura_basetools_write creates or replaces a whole file with read-before-write and read-back verification.",
   "type": "module",

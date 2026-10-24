@@ -23,28 +23,24 @@ import { indexFile, locateWith, normSpace } from './anchor-core.mjs'
 /**
  * 定位一份源码里的改动点。
  *
- * 五层寻址，按"模型要提供什么"从强到弱排列。每层覆盖上一层够不到的场景，
+ * 四层寻址，按"模型要提供什么"从强到弱排列。每层覆盖上一层够不到的场景，
  * 但**都不要求模型复现字节**——这是它们与 `edit` 的根本差别：
  *
- *   1. `intent`  —— 一段模糊意图（符号名片段 / 短语 / 近似原文）。引擎按固定次序收敛：
- *                    精确符号 → 符号子串 → 文本锚点；收敛不了就报歧义并给候选，绝不猜。
- *   2. `target`  —— 符号名。不读文本，对内容记错免疫。适合改整个函数/类/类型。
- *   3. `lines`   —— 行号区间。模型刚用 `read` 看过文件，输出就是 `<行号>: <文本>`，
+ *   1. `target`  —— 符号名。不读文本，对内容记错免疫。适合改整个函数/类/类型。
+ *   2. `lines`   —— 行号区间。模型刚用 `read` 看过文件，输出就是 `<行号>: <文本>`，
  *                    `grep` 也给行号——**位置是它本来就知道的信息**，我却一直只让它给内容。
  *                    把行号纳入地址空间后，符号体内的任意一行都变得可精确寻址。
- *   4. `lineCue` —— 一个词。当模型记不住行号时，说"就在有 resolvePolicy 的那一行"。
+ *   3. `lineCue` —— 一个词。当模型记不住行号时，说"就在有 resolvePolicy 的那一行"。
  *                    只接受**全文件唯一**的线索；不唯一则报歧义并给出候选行号，绝不猜。
- *   5. `anchor`  —— 记得的原文。五级降级匹配，容错性最好但要求模型复现内容。
+ *   4. `anchor`  —— 记得的原文。五级降级匹配，容错性最好但要求模型复现内容。
  *
- * `intent` 与其余四层**互斥**（由 `planHunks` 判）：同时给两个地址时谁说了算没有正确答案。
- * 前两层偏**精确**（要么命中要么报错），后三层偏**容错**。
- * 调用方可以传 `assert` 做内容校验，五层都适用——那才是防止"指到错的行"的那道闸。
+ * 前两层偏**精确**（要么命中要么报错），后两层偏**容错**。
+ * 调用方可以传 `assert` 做内容校验，四层都适用——那才是防止"指到错的行"的那道闸。
  * 判据是**包含且唯一**：这段文字必须在整个文件里只出现一处，且该处落在受寻址区间内
  * （短引文例外，仍要求与区间整段相等；推导见 {@link ASSERT_RELAX_MIN_CHARS}）。
  *
  * @param {string} source - 源码全文
  * @param {object} request - 定位请求
- * @param {string} [request.intent] - 模糊意图地址（符号名片段 / 短语 / 近似原文）
  * @param {string} [request.target] - 符号名（`name` / `kind:name` / `Outer/Inner` / `name#n`）
  * @param {{start:number,end:number}} [request.lines] - 1-based 闭区间行号
  * @param {string} [request.lineCue] - 一个词的线索，必须全文件唯一
@@ -644,53 +640,14 @@ function assertVerdict(lines, startLine, endLine, tier, actual, assertText) {
   }
 }
 
-/**
- * 意图地址（T16）的符号子串匹配：这个候选符号离 `near` 有多远。
- *
- * 判据只有一条：**`near` 落在符号的跨度里就是 0**，否则取到两端中较近的那一端。
- * 与 `resolveTarget` 的 `|startLine - near|` 刻意不同：`intent` 匹配的是"大概想改哪个符号"，
- * 调用方给的 `near` 常常是**符号体内**的一行（它刚从 read 回执里抄来），拿起点算距离会把
- * 一个明显在说的符号判成第二近。跨度包含 `near` ⇒ 距离 0，是这里唯一能自洽的口径。
- *
- * @param - 符号投影（含 startLine / endLine）
- * @param near - 1-based 行号提示
- * @returns 非负整数距离
- */
-function symbolDistanceFrom(symbol, near) {
-  if (near >= symbol.startLine && near <= symbol.endLine) return 0
-  return Math.min(Math.abs(near - symbol.startLine), Math.abs(near - symbol.endLine))
-}
 
 /**
- * 多个子串命中里，`near` 能否**严格**收敛到一个（唯一最小值）。
+ * 定位一个区间。四层降级：符号身份 → 行号 → 唯一词 → 文本锚点。
  *
- * 不唯一（并列最小）⇒ null：那正是"该报歧义"的形状，猜测在这里比拒绝贵得多。
- * @returns 命中的符号，或 null（near 没给 / 并列）
- */
-function nearestSymbolBySpan(symbols, near) {
-  let best = null
-  let bestDistance = Infinity
-  let ties = 0
-  for (const symbol of symbols) {
-    const distance = symbolDistanceFrom(symbol, near)
-    if (distance < bestDistance) {
-      bestDistance = distance
-      best = symbol
-      ties = 1
-    } else if (distance === bestDistance) ties += 1
-  }
-  return ties === 1 ? best : null
-}
-
-/**
- * 定位一个区间。五层降级：意图 → 符号身份 → 行号 → 唯一词 → 文本锚点。
- *
- * `intent`（T16）是**最弱但最自然**的一层：调用方给一个符号名片段、短语或近似原文，
- * 引擎先当符号名解析（精确/限定写法），再按符号名子串匹配，最后才落到文本匹配。
  * 每一档都**确定性地**收敛到一个区间；收敛不了就报歧义并给候选，不猜。
  *
  * @param source - 文件全文
- * @param request - `intent` / `target` / `lines` / `lineCue` / `anchor` 五选一，外加 `near` 与 `assert`
+ * @param request - `target` / `lines` / `lineCue` / `anchor` 四选一，外加 `near` 与 `assert`
  * @returns 命中时 `{ok: true, startLine, endLine, tier, actual}`；未命中时 `{ok: false, code, message, ...}`。
  *   `actual` 是该区间的原文，供调用方核对或展示。
  */
@@ -761,125 +718,6 @@ export function locate(source, request = {}) {
     return { ok: false, code: 'LOCATOR_LINE_SHARED', message, shared }
   }
 
-  // ── 第 0 层：意图地址（T16）。调用方给一段模糊的意图串，引擎确定性地落成精确区间。
-  //
-  // 解析次序（每一档都不猜，落不下来就报歧义并给候选）：
-  //   ① 已知语言时，先当符号名解析（`resolveTarget` 的精确 / 限定写法）——命中就算 symbol 档；
-  //   ② 符号名没对上（或对上多个）⇒ 按符号名**子串**匹配（先区分大小写，再忽略大小写）；
-  //   ③ 一个符号都没命中（或语言未知）⇒ 落到文本匹配（`locateWith`，与 `anchor` 同一份引擎）。
-  //
-  // 顺序上刻意在 `target` 之前：`intent` 与其余地址字段**互斥**（`PATCH_INTENT_CONFLICT`，
-  // 由 `planHunks` 判），所以两者同时到达这里是不可能的；放在最前只是把"intent 自成一层"写明。
-  if (typeof request.intent === 'string' && request.intent.trim().length > 0) {
-    const intent = request.intent.trim()
-    const near = request.near ?? null
-    const label = clipReceiptLabel(filePath === null ? 'this file' : filePath, RECEIPT_LABEL_CHARS)
-    /** 跨度覆盖不了符号体时的拒绝——与 `target=` 那一支**同一句话、同一个码**（不是第二套说法）。 */
-    const spanIncomplete = (hit) => ({
-      ok: false,
-      code: 'LOCATOR_SPAN_INCOMPLETE',
-      message: `cannot address "${hit.name}" by intent in ${label}: the span does not cover the body — ${hit.spanNote}; address it with lines= or line_cue= instead`,
-      hint: directoryHint(source, lang),
-    })
-    if (lang !== null) {
-      const index = indexStructure(source, lang)
-      /**
-       * 精确/限定符号：先**不带 near** 解析，拿到唯一命中或完整候选。
-       * 带 near 交给 `resolveTarget` 会用“起点距离”，与 intent 档的“跨度包含 near 记 0”冲突，
-       * 实测会把 near 落在第一个长函数体内的情况选到第二个同名函数上。歧义时这里用
-       * `nearestSymbolBySpan` 按跨度收敛；解析不了再落到子串匹配。
-       */
-      let exact = null
-      try {
-        exact = resolveTarget(index, intent, null)
-      } catch (error) {
-        if (error.code === 'STRUCT_AMBIGUOUS') {
-          const candidates = Array.isArray(error.candidates) ? error.candidates : []
-          if (near !== null && near !== undefined) {
-            const chosen = nearestSymbolBySpan(candidates, near)
-            if (chosen !== null) {
-              if (chosen.spanComplete === false) return spanIncomplete(chosen)
-              return done(chosen.startLine, chosen.endLine, 'intent~symbol', true)
-            }
-          }
-          return failure('LOCATOR_INTENT_AMBIGUOUS', `intent ${JSON.stringify(intent)}: ${error.message}`, candidates)
-        }
-        // STRUCT_NOT_FOUND / 其它：符号名没猜中不是终点，落到子串匹配（下面）。
-      }
-      if (exact !== null) {
-        if (exact.spanComplete === false) return spanIncomplete(exact)
-        const shared = sharedLineContent(source, index, exact, lang)
-        if (shared !== null) return sharedLineRefusal(exact, shared, 'intent')
-        return done(exact.startLine, exact.endLine, 'intent~symbol')
-      }
-      // 用原始符号表而不是 `listSymbols` 投影：整行区间是否越界要看 token，投影里没有。
-      const symbols = index.symbols
-      let matches = symbols.filter((s) => s.name.includes(intent))
-      if (matches.length === 0) {
-        const lower = intent.toLowerCase()
-        matches = symbols.filter((s) => s.name.toLowerCase().includes(lower))
-      }
-      if (matches.length === 1) {
-        const only = matches[0]
-        if (only.spanComplete === false) return spanIncomplete(only)
-        const shared = sharedLineContent(source, index, only, lang)
-        if (shared !== null) return sharedLineRefusal(only, shared, 'intent')
-        return done(only.startLine, only.endLine, 'intent~symbol')
-      }
-      if (matches.length > 1) {
-        if (near !== null && near !== undefined) {
-          const chosen = nearestSymbolBySpan(matches, near)
-          if (chosen !== null) {
-            if (chosen.spanComplete === false) return spanIncomplete(chosen)
-            const shared = sharedLineContent(source, index, chosen, lang)
-            if (shared !== null) return sharedLineRefusal(chosen, shared, 'intent')
-            return done(chosen.startLine, chosen.endLine, 'intent~symbol', true)
-          }
-        }
-        const why =
-          near === null || near === undefined
-            ? `intent ${JSON.stringify(intent)} matched ${matches.length} symbols — pick one with target=<name>, or add near=<line>`
-            : `intent ${JSON.stringify(intent)} matched ${matches.length} symbols and near=${near} did not single one out`
-        return failure(
-          'LOCATOR_INTENT_AMBIGUOUS',
-          why,
-          matches.map((s) => ({
-            name: s.name,
-            kind: s.kind,
-            startLine: s.startLine,
-            endLine: s.endLine,
-            enclosing: s.enclosing,
-          })),
-        )
-      }
-    }
-    // ── ③ 文本兜底：与 `anchor` 同一份引擎（`locateWith`）；tier 里带上它命中的那一档
-    try {
-      const loc = locateWith(indexFile(source), intent, near)
-      return done(loc.start + 1, loc.end, `intent~text~${loc.tier}`, loc.byNear === true)
-    } catch (error) {
-      if (error.code === 'PATCH_AMBIGUOUS') {
-        /**
-         * 行候选统一成 `{line, text}`（`failure` 只认这一形状才会印出行号与原文）：
-         * `locateWith` 抛的是 `number[]`，直接递下去会印成 `line undefined`。
-         */
-        const listed = (Array.isArray(error.candidates) ? error.candidates : [])
-          .filter((n) => typeof n === 'number' && n >= 1 && n <= lines.length)
-          .map((n) => ({ line: n, text: lines[n - 1].slice(0, 80) }))
-        return failure('LOCATOR_INTENT_AMBIGUOUS', `intent ${JSON.stringify(intent)}: ${error.message}`, listed)
-      }
-      if (error.code === 'PATCH_NOT_FOUND' || error.code === 'PATCH_EMPTY_ANCHOR') {
-        return {
-          ok: false,
-          code: 'LOCATOR_INTENT_NOT_FOUND',
-          message: `no symbol or text matches intent ${JSON.stringify(intent)} in ${label}; try target=<name>, lines=, or line_cue=`,
-          // 符号目录是实测支撑的恢复路径（与 anchor 失败同一条）：只有认识这门语言时才给得出。
-          ...(lang === null ? {} : { hint: directoryHint(source, lang) }),
-        }
-      }
-      return failure(error.code ?? 'LOCATOR_FAILED', error.message, error.candidates)
-    }
-  }
 
   // ── 第 1 层：符号身份。不读文本，因此对内容记错免疫。
   if (typeof request.target === 'string' && request.target.trim().length > 0) {
@@ -1028,7 +866,7 @@ export function locate(source, request = {}) {
     }
   }
 
-  return { ok: false, code: 'LOCATOR_NO_REQUEST', message: 'provide one of: intent, target, lines, lineCue, anchor' }
+  return { ok: false, code: 'LOCATOR_NO_REQUEST', message: 'provide one of: target, lines, lineCue, anchor' }
 }
 
 /**

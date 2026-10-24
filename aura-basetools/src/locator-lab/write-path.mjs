@@ -2577,35 +2577,6 @@ function locateByHandle(lines, hunk, parsed, ctx) {
   })
 }
 
-/**
- * `intent` 与哪些字段**不能同时出现**（T16）。
- *
- * `intent` 是**自成一体的一层地址**：它由引擎决定落到哪个精确区间。若同时给出任何别的地址，
- * 谁说了算就没有正确答案——挑一个执行就是一次静默换语义（调用方写的两个地址指向不同地方时，
- * 改错的那次不会有任何提示）。所以参数面直接拒绝，而不是挑一个。
- *
- * 名单与 {@link planHunks} 的地址判据同源：`target` / `lines`（含别名 `range`）/ `start_line` /
- * `end_line` / `line_cue` / `anchor` / `old` / `context` / `handle`。
- * `near` / `expect` / `replace` **不在**名单里：前两个是修饰，第三个是动作。
- *
- * 「在场」的判据逐字段照搬它自己那一层的：字符串看非空（`anchor` 看长度、其余看 trim），
- * 坐标看 `!== undefined && !== null`。判据写宽或写窄都会让某个形状在参数面与引擎里得到两种结论。
- *
- * @returns 冲突的字段名（按上面的固定顺序）；没有冲突时为空数组
- */
-function intentAddressConflicts(hunk) {
-  const clashes = []
-  if (typeof hunk.target === 'string' && hunk.target.trim().length > 0) clashes.push('target')
-  for (const key of ['lines', 'range', 'start_line', 'end_line']) {
-    if (hunk[key] !== undefined && hunk[key] !== null) clashes.push(key)
-  }
-  if (typeof hunk.line_cue === 'string' && hunk.line_cue.trim().length > 0) clashes.push('line_cue')
-  if (typeof hunk.anchor === 'string' && hunk.anchor.length > 0) clashes.push('anchor')
-  if (oldAddressOf(hunk) !== null) clashes.push('old')
-  if (typeof hunk.context === 'string' && hunk.context.trim().length > 0) clashes.push('context')
-  if (typeof hunk.handle === 'string' && hunk.handle.trim().length > 0) clashes.push('handle')
-  return clashes
-}
 
 /**
  * 规划所有 hunk：逐个定位 → expect 核对 → 重叠检查 → 倒序拼接。
@@ -2661,7 +2632,7 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
      *
      * 它不是第六种地址，而是 `old` 的一种作用范围；因此只认 `old` + 动作字段（`replace` /
      * `expect` / `eol`）。把 `target`/`lines`/`context`/`near` 混进来意味着"既想全改又想收敛到一处"，
-     * 没有正确答案 —— 参数面直接拒绝，与 `intent` 的互斥同一条理由。
+     * 没有正确答案 —— 参数面直接拒绝，与地址字段互斥同一条理由。
      */
     const replaceAll = hunk.replace_all
     if (replaceAll !== undefined && typeof replaceAll !== 'boolean') {
@@ -2673,7 +2644,7 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
     if (replaceAll === true) {
       const clashes = []
       if (hasTarget) clashes.push('target')
-      if (typeof hunk.intent === 'string' && hunk.intent.trim().length > 0) clashes.push('intent')
+
       for (const key of ['lines', 'range', 'start_line', 'end_line']) {
         if (hunk[key] !== undefined && hunk[key] !== null) clashes.push(key)
       }
@@ -2708,23 +2679,6 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
         )
       }
     }
-    /**
-     * 意图地址（T16）：`intent` 是**自成一体**的一层地址，与其余地址字段互斥。
-     *
-     * 冲突在**定位之前**就拒（参数面没成形，与 `PATCH_NO_ADDRESS` 同族），而不是在引擎里挑一个：
-     * 调用方写了两个地址说明它自己也没定，工具替它选一次就是一次看不见的换语义。
-     * `near` / `expect` / `replace` 不在此列——前两个是修饰，第三个是动作。
-     */
-    const hasIntent = typeof hunk.intent === 'string' && hunk.intent.trim().length > 0
-    if (hasIntent) {
-      const clashed = intentAddressConflicts(hunk)
-      if (clashed.length > 0) {
-        throw new PatchError(
-          `\`intent\` is a complete address by itself — it cannot be combined with ${clashed.join(', ')} (near / expect / replace are fine); drop either intent or those fields — nothing was written`,
-          'PATCH_INTENT_CONFLICT',
-        )
-      }
-    }
     /** 句柄的形状在这里判（不对就抛错）；`{handle, old}` 那一支的 `old` 仍然要命中区间内部。 */
     const parsedHandle = handleAddressOf(hunk)
     /**
@@ -2752,9 +2706,9 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
         'PATCH_NO_ADDRESS',
       )
     }
-    if (oldText === null && parsedHandle === null && !hasTarget && range === undefined && !hasCue && !hasAnchor && !hasIntent) {
+    if (oldText === null && parsedHandle === null && !hasTarget && range === undefined && !hasCue && !hasAnchor) {
       throw new PatchError(
-        gaveLineAddress(hunk) ? LINE_ADDRESS_HINT : 'each hunk needs one of: old, intent, target, lines, line_cue, anchor',
+        gaveLineAddress(hunk) ? LINE_ADDRESS_HINT : 'each hunk needs one of: old, target, lines, line_cue, anchor',
         'PATCH_NO_ADDRESS',
       )
     }
@@ -2776,29 +2730,16 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
         ? locateAllByOld(lines, hunk, oldText, filePath === null ? 'this file' : filePath, handleCtx)
         : [locateByOld(lines, hunk, oldText, filePath === null ? 'this file' : filePath, handleCtx)]
     } else {
-      /**
-       * 意图地址（T16）单独走一条请求：只带 `intent` / `near` / `expect` / `filePath`。
-       * 冲突字段在上面已经拒了，这里刻意**不再把其余地址字段递下去**——即便哪天冲突判据放宽，
-       * 引擎也不该从第二个地址里"顺手"拿到位置（那正是静默换语义的来路）。
-       */
-      const request = hasIntent
-        ? {
-            intent: hunk.intent,
-            ...(hunk.near === undefined ? {} : { near: hunk.near }),
-            ...(hunk.expect === undefined || hunk.expect === null ? {} : { assert: hunk.expect }),
-            ...(filePath === null ? {} : { filePath }),
-            ...(options.allowLoneCr === true ? { allowLoneCr: true } : {}),
-          }
-        : {
-            ...(hasTarget ? { target: hunk.target } : {}),
-            ...(range === undefined ? {} : { lines: range }),
-            ...(hunk.line_cue === undefined ? {} : { lineCue: hunk.line_cue }),
-            ...(hasTarget || range !== undefined || hunk.line_cue !== undefined ? {} : { anchor: hunk.anchor }),
-            ...(hunk.near === undefined ? {} : { near: hunk.near }),
-            ...(hunk.expect === undefined || hunk.expect === null ? {} : { assert: hunk.expect }),
-            ...(filePath === null ? {} : { filePath }),
-            ...(options.allowLoneCr === true ? { allowLoneCr: true } : {}),
-          }
+      const request = {
+        ...(hasTarget ? { target: hunk.target } : {}),
+        ...(range === undefined ? {} : { lines: range }),
+        ...(hunk.line_cue === undefined ? {} : { lineCue: hunk.line_cue }),
+        ...(hasTarget || range !== undefined || hunk.line_cue !== undefined ? {} : { anchor: hunk.anchor }),
+        ...(hunk.near === undefined ? {} : { near: hunk.near }),
+        ...(hunk.expect === undefined || hunk.expect === null ? {} : { assert: hunk.expect }),
+        ...(filePath === null ? {} : { filePath }),
+        ...(options.allowLoneCr === true ? { allowLoneCr: true } : {}),
+      }
       const found = locate(content, request)
       if (!found.ok) {
         throw new PatchError(found.message, found.code, {

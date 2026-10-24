@@ -8,6 +8,15 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.14.0：按采用率做减法（第一期）
+
+- 移除 `intent` 模糊地址：642 个真实会话 / 10,974 次 edit 中采用率为 **0**。地址面保留
+  `target` / `lines` / `line_cue` / `anchor` / `old` / `handle`。定位层第 0 层、
+  `intentAddressConflicts`、`PATCH_INTENT_CONFLICT` 一并删除；CLI / MCP / DSH schema /
+  README / agent-guide 同步。套件从 89 降到 88。
+- `task-bench` 的 TypeScript / Erlang 场景改用 `target`，基准 id 同步为 `ts-target` / `erl-target`。
+- 保留 0.13.3 的发布内容可信化、并发安全闸与流式探针。
+
 ## 0.13.3：发布内容可信化 + 闸可并发 + 探针流式
 
 - npm README 去掉手抄的 0.13.0 闸读数与已删除的 `upgrade` 行；新增中英双语

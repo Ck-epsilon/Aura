@@ -133,11 +133,11 @@ say('=== C. 参数键的唯一来源：守卫名单 == schema 声明 == 兼容�
   //
   // 这份字面量是**手抄的第三方期望**（不从这里 import `FLAT_ADDRESS_KEYS` 派生）：派生就等于
   // 拿被测物当量具，下面那条"两份名单一致"的判据会永远自洽。`handle` 是 fs-contract-v2 的
-  // 第四种地址键（它单独在场就足以定下区间）；`intent`（T16）是第五种，同样单独在场即构成地址；
-  // `old`（0.10.2）是内容地址，平铺形状从此可直接 `--old <原文>`（`replace_all` 依赖它）。
+  // 地址键（它单独在场就足以定下区间）；`old`（0.10.2）是内容地址，平铺形状可直接
+  // `--old <原文>`（`replace_all` 依赖它）。
   // `line` / `position` **不是**地址键——它们只在 `handle` 同时在场时才成立（拒绝那一半在
   // `write-path.mjs` 的 `planHunks` 里）。
-  const flat = ['target', 'intent', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle', 'old']
+  const flat = ['target', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle', 'old']
   const missing = flat.filter((k) => !editKeys.includes(k))
   check(missing.length === 0, 'aura_basetools_edit 的名单覆盖全部平铺地址键（否则守卫拒自家实装的形状）', missing.join(','))
   const { FLAT_ADDRESS_KEYS } = await import(asUrl(path.join(pkgRoot, 'src', 'locator-lab', 'args.mjs')))

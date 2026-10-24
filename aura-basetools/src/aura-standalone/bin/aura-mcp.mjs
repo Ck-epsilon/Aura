@@ -81,11 +81,6 @@ const HUNK_SCHEMA = {
   type: 'object',
   properties: {
     target: { type: 'string', description: '符号名，如 `toTodoList` 或 `function:apply`；跳过全部文本匹配' },
-    intent: {
-      type: 'string',
-      description:
-        '模糊意图地址：符号名片段、短语或近似原文（如 `parseConfig`、`config loader`、`// retry the upload`），由引擎确定性地落成一个精确区间；歧义时报候选并拒绝（不猜）。单独使用（不与 target/lines/line_cue/anchor/old/context/handle 同用）；可用 near 与 expect',
-    },
     lines: {
       oneOf: [
         { type: 'array' },
@@ -137,7 +132,7 @@ const HUNK_SCHEMA = {
     replace_all: {
       type: 'boolean',
       description:
-        '与 old 同用：替换全部非重叠出现（从左到右），不再要求唯一。不能与 target/intent/lines/line_cue/anchor/context/handle/near 同用；读取后出现次数变了会整体拒绝。',
+        '与 old 同用：替换全部非重叠出现（从左到右），不再要求唯一。不能与 target/lines/line_cue/anchor/context/handle/near 同用；读取后出现次数变了会整体拒绝。',
     },
     eol: {
       type: 'string',
@@ -198,7 +193,7 @@ const TOOLS = [
   {
     name: 'aura_basetools_edit',
     description:
-      'Edit or create a UTF-8 text file with hunks in one call. Address each hunk by intent (fuzzy name/phrase), target (symbol), lines, line_cue, anchor, or old (verbatim content + optional context). With `old`, set `replace_all: true` to replace every non-overlapping occurrence. Writes back byte-for-byte (BOM and per-line endings preserved), refuses a hunk whose addressed region changed since your last read, and reads the file back to verify. All hunks must locate or nothing is written.',
+      'Edit or create a UTF-8 text file with hunks in one call. Address each hunk by target (symbol), lines, line_cue, anchor, or old (verbatim content + optional context). With `old`, set `replace_all: true` to replace every non-overlapping occurrence. Writes back byte-for-byte (BOM and per-line endings preserved), refuses a hunk whose addressed region changed since your last read, and reads the file back to verify. All hunks must locate or nothing is written.',
     inputSchema: {
       type: 'object',
       properties: {

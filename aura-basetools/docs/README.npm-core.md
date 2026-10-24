@@ -1,8 +1,8 @@
 # aura-basetools {{VERSION}}
 
-Byte-exact file tools for coding agents: read by intent, edit by intent, and write whole files without corrupting bytes. One engine shared by a standalone CLI and an MCP server.
+Byte-exact file tools for coding agents: read by intent, edit by address, and write whole files without corrupting bytes. One engine shared by a standalone CLI and an MCP server.
 
-面向 coding agent 的逐字节文件工具：按意图读取、按意图编辑、整文件写入；CLI 与 MCP 共用同一套引擎。
+面向 coding agent 的逐字节文件工具：按意图读取、按地址编辑、整文件写入；CLI 与 MCP 共用同一套引擎。
 
 ---
 

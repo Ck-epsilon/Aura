@@ -69,7 +69,7 @@ check(compiled.type === 'object', `编译后的参数是 object schema`)
  */
 check(
   paramKeys.join(',') ===
-    'file_path,targets,hunks,target,intent,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,line,position,dry_run,require_observation,create',
+    'file_path,targets,hunks,target,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,line,position,dry_run,require_observation,create',
   `参数 = ${paramKeys.join(',')}`,
 )
 // `hunks` 不再无条件必填：创建路径用 `create`，此时 hunks 可有可无。
@@ -88,11 +88,11 @@ check(
 const hunkKeys = Object.keys(compiled.properties?.hunks?.items?.properties ?? {})
 // start_line/end_line 是后加的：hunk 里也能用两个整数表达区间，不必写 `lines: [a, b]`。
 /**
- * `intent`（T16）是 0.8.0 加的第五种地址：模糊意图串由引擎确定性地落成精确区间。
- * 它落在 `target` 之后、`lines` 之前——顺序就是 `HUNK_PROPERTIES` 的顺序（声明面与守卫同源）。
+ * 0.14.0 移除了 `intent` 模糊地址；`target` 之后直接是 `lines`。
+ * 顺序就是 `HUNK_PROPERTIES` 的顺序（声明面与守卫同源）。
  */
 check(
-  hunkKeys.join(',') === 'target,intent,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,line,position',
+  hunkKeys.join(',') === 'target,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,line,position',
   `hunk 字段 = ${hunkKeys.join(',')}`,
 )
 check(

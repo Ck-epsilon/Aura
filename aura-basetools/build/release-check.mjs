@@ -423,19 +423,6 @@ const SUITES = [
   //   句柄化落地时就是靠这条发现"结构化字段到不了模型"）；② 变异臂 `--mutation=no-address` 在**导入前**
   //   把引擎那条地址行拿掉 ⇒ R1/R3/R4 按名变红，按字节还原 ⇒ 回绿（第一版变异落在 import 之后：
   //   ESM 已缓存 ⇒ 空变异 ⇒ 假绿，已修）；③ 退出码接线齐全，现读数 6/6。
-  // 意图地址（T16 / 0.8.0）：`intent` 是第五种地址 —— 调用方给一段**模糊**的意图串（符号名片段 /
-  //   短语 / 近似原文），引擎按固定次序收敛成一个精确区间，并把实际走的档写进 `tier`
-  //   （`intent~symbol` / `intent~text~<档>`）。收件理由：
-  //   · 判据是**行为**，只走公开 API（`locate` / `planHunks` / `applyEditToProvider`）：
-  //     ① 符号档三形状（精确名 / 唯一子串 / 大小写不敏感）；② 符号歧义 ⇒ 码 + **符号**候选
-  //     （不是文本候选——这条钉住"结构歧义绝不落到文本层"）；③ near 消歧（跨度含 near 记距离 0）与
-  //     并列时仍拒；④ 文本档四形状（唯一短语 / 一个词写错 / 重复短语 / 完全没有）；⑤ `intent` 与其余
-  //     地址字段互斥 ⇒ `PATCH_INTENT_CONFLICT` 且磁盘 sha256 不变；⑥ 写路径逐字节落地 + 回执 tier/line
-  //     + `expect` 闸门（不符 ⇒ `LOCATOR_ASSERT_MISMATCH`）；⑦ 三个入口的接线（`FLAT_ADDRESS_KEYS`
-  //     收下 intent、`flatHunk` 认"只有 intent + replace"、`EDIT_ARG_KEYS` 同源派生）。
-  //   · **离线自足**：夹具就地生成，临时文件落 `os.tmpdir()` 并删除；不起子进程、不碰外网。
-  //   · 自带通过/失败汇总行与退出码接线（`process.exitCode = fail === 0 ? 0 : 1`），现读数 31/31。
-  ['intent-address', 'src/locator-lab/intent-address-test.mjs'],
   // 0.8.1：编辑回执自带**改后坐标 / 行数变化 / 新句柄**（调用方不必回读即可继续编辑）；
   //   片段层另回填整行 `after`（`replaced` 只是行内那一段）。判据只走公开 API，27 项。
   ['receipt-context', 'src/locator-lab/receipt-context-test.mjs'],

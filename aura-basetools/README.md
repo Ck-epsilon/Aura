@@ -28,15 +28,9 @@ MCP 客户端只写一段配置（agent 自己就能加）：
 自定义安装器与交付 zip 已在 0.13.2 移除——稳定路径/升级/客户端注册由 npm 与 agent 自己完成。
 
 
-**0.8.0 起 `aura_basetools_edit` 多一层 `intent`**：给一段模糊意图（符号名片段 / 短语 / 近似原文），
-引擎按固定次序（精确符号 → 符号子串 → 文本锚点）收敛成精确区间；歧义时拒绝并给候选，
-回执的 `tier` 写明实际走的是哪一档（`intent~symbol` / `intent~text~<档>`）。
-它与 `target` / `lines` / `line_cue` / `anchor` / `old` / `handle` 互斥（同时给会被拒），
-`near` / `expect` / `replace` 可以同用。例：
-
-```bash
-aura basetools edit --file src/locator-lab/struct-core.mjs --intent 'matchPattern' --replace '...'
-```
+**0.14.0 起移除 `intent` 模糊地址**：采用率 census 为 0（642 个真实会话 / 10,974 次 edit），
+地址面保留 `target` / `lines` / `line_cue` / `anchor` / `old` / `handle`。
+`near` / `expect` / `replace` 仍可与这些地址同用。
 
 **0.8.1 起**，成功编辑的 `applied[]` 还带 `afterLine` / `afterEndLine` / `delta` / `handle`：
 下一次编辑直接拿 `handle` 寻址即可，不必先回读；片段层（`old` 命中行内一段）另回填整行 `after`。
@@ -57,7 +51,7 @@ MCP `aura_basetools_write`。新建与覆写都走 `edit` 同一条工作区锁�
 
 **0.10.2 起 `old` 可配 `replace_all`**（CLI `--replace-all`、MCP/DSH `replace_all: true`）：
 一次替换全部**非重叠**出现（从左到右；`aa` 在 `aaaa` 上得到两处）。不能与
-`target` / `intent` / `lines` / `line_cue` / `anchor` / `context` / `handle` / `near` 同用
+`target` / `lines` / `line_cue` / `anchor` / `context` / `handle` / `near` 同用
 （它们都是“收敛到一处”的地址）；读取后出现次数变了 ⇒ `PATCH_STALE_REGION`，
 回执的 `occurrence_count` 给出 `{was, now}`。`old` 仍走两档匹配：有逐字命中时只改逐字那些，
 没有时才回退空白折叠。

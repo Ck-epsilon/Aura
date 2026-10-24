@@ -15,8 +15,8 @@
       "tier": "symbol",
       "allSuccess": true
     },
-    "ts-intent": {
-      "id": "ts-intent",
+    "ts-target": {
+      "id": "ts-target",
       "file": "types.ts",
       "readMode": "digest",
       "readChars": 199,
@@ -85,8 +85,8 @@
       "tier": "lines",
       "allSuccess": true
     },
-    "erl-intent": {
-      "id": "erl-intent",
+    "erl-target": {
+      "id": "erl-target",
       "file": "sample.erl",
       "readMode": "map",
       "readChars": 151,

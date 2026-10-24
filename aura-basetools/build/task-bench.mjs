@@ -64,7 +64,7 @@ const TASKS = [
     expect: ['Hi, ${name}'],
   },
   {
-    id: 'ts-intent',
+    id: 'ts-target',
     file: 'types.ts',
     source: [
       'export interface Config {',
@@ -77,7 +77,7 @@ const TASKS = [
       '',
     ].join('\n'),
     read: { mode: 'digest', budget: 8192 },
-    hunks: [{ intent: 'loadConfig', replace: 'export function loadConfig(path: string) {\n  return { retries: 5, path }\n}' }],
+    hunks: [{ target: 'loadConfig', replace: 'export function loadConfig(path: string) {\n  return { retries: 5, path }\n}' }],
     expect: ['retries: 5'],
   },
   {
@@ -140,11 +140,11 @@ const TASKS = [
     expect: ['NOT NULL'],
   },
   {
-    id: 'erl-intent',
+    id: 'erl-target',
     file: 'sample.erl',
     source: ['-module(sample).', '-export([beta/1]).', '', 'beta(X) ->', '    X + 1.', ''].join('\n'),
     read: { mode: 'map', budget: 8192 },
-    hunks: [{ intent: 'beta', replace: 'beta(X) ->\n    X + 2.' }],
+    hunks: [{ target: 'beta', replace: 'beta(X) ->\n    X + 2.' }],
     expect: ['X + 2'],
   },
   {

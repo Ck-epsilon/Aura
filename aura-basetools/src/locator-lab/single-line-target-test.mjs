@@ -120,9 +120,6 @@ say('D 声明之外的行内内容（import / 指令 / 尾随语句 / 嵌套）'
   const semi = put('semi.js', 'const a=1;const b=2\n')
   const sRes = json(run(['basetools', 'edit', '--file', semi, '--target', 'b', '--replace', 'x']))
   check(sRes.code === 'LOCATOR_LINE_SHARED', 'D9 分号分隔的两条声明 ⇒ 拒绝')
-
-  const intent = json(run(['basetools', 'edit', '--file', p, '--intent', 'alpha', '--replace', 'x']))
-  check(intent.code === 'LOCATOR_LINE_SHARED' && intent.shared?.side === 'before', 'D10 intent 落到符号层时同一判据', JSON.stringify(intent).slice(0, 200))
 }
 
 say('E 多行声明头')

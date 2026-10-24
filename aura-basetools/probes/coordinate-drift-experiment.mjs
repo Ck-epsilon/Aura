@@ -31,7 +31,6 @@ export function addressKindOf(args) {
   if (args.targets !== undefined && Array.isArray(args.targets) && args.targets.length > 0) {
     return addressKindOf(args.targets[0]?.hunks?.[0] ?? args.targets[0] ?? null)
   }
-  if (typeof args.intent === 'string' && args.intent.trim() !== '') return 'intent'
   if (typeof args.target === 'string' && args.target.trim() !== '') return 'target'
   if (args.lines !== undefined || args.start_line !== undefined) return 'lines'
   if (typeof args.line_cue === 'string' && args.line_cue.trim() !== '') return 'line_cue'
@@ -139,7 +138,6 @@ say('=== A. 合成自证：分析逻辑本身（不依赖真实日志） ===')
   ])
   check('A4 target 地址按同一规则分桶', flat.rows.every((r) => r.kind === 'target') && flat.rows.reduce((n, r) => n + r.n, 0) === 8, JSON.stringify(flat.rows))
 
-  check('A5 intent 地址被单独分类', addressKindOf({ intent: 'loadConfig' }) === 'intent')
   check('A6 多 hunk 取第一条的地址类型', addressKindOf({ hunks: [{ lines: [1, 2] }, { target: 'x' }] }) === 'lines')
   check('A7 多目标取第一个目标的 hunks', addressKindOf({ targets: [{ file_path: 'a.js', hunks: [{ target: 'x' }] }] }) === 'target')
 
