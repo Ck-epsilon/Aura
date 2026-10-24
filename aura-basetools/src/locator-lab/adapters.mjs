@@ -11,6 +11,7 @@
  */
 
 import fs from 'node:fs'
+import path from 'node:path'
 import { locate, outline, references, spanQuality, SUPPORTED_EXTENSIONS, directoryHint } from './locator-api.mjs'
 // `langOf` 用于"未配置扩展名"的判据：负向样本必须**构造得出来**，
 // 不能拿"某个扩展名恰好还没被支持"充数（旧断言用 `.hs`，语言表登记 Haskell 后就恒为红了）。
@@ -118,9 +119,9 @@ const SRC = [
   '',
 ].join('\n')
 
-const tmp = `${process.env.TEMP ?? '/tmp'}\\locator-adapters-${Date.now()}`
+const tmp = path.join(process.env.TEMP ?? '/tmp', `locator-adapters-${Date.now()}`)
 fs.mkdirSync(tmp, { recursive: true })
-const p = `${tmp}\\sample.js`
+const p = path.join(tmp, 'sample.js')
 
 say('=== 1. 裸函数适配器 ===')
 fs.writeFileSync(p, SRC, 'utf8')
@@ -171,7 +172,7 @@ check(fail.error.hint?.truncated === 0, '未被截时 truncated 为 0')
   // 夹具必须**足够多**符号才会真的触到预算：只有 2 个符号时"装得下就不该截"，
   // 用这种夹具去断言"一定会截"是断言写错了（循环还保证至少收一条）。
   const many = Array.from({ length: 40 }, (_, i) => `export function fn${i}(a) {\n  return a\n}`).join('\n')
-  const manyFile = `${tmp}\\many.mjs`
+  const manyFile = path.join(tmp, 'many.mjs')
   fs.writeFileSync(manyFile, many, 'utf8')
   const lang = langOf(manyFile)
   const tight = directoryHint(many, lang, 200)
@@ -187,7 +188,7 @@ check(fail.error.hint?.truncated === 0, '未被截时 truncated 为 0')
 
 say('')
 say('=== 5. 语言无关：同一适配器处理 Python / Go ===')
-const py = `${tmp}\\s.py`
+const py = path.join(tmp, 's.py')
 fs.writeFileSync(py, 'def hello():\n    return 1\n', 'utf8')
 const r5 = applyEditPlain({ path: py, target: 'hello', replace: 'def hello():\n    return 2' })
 check(r5.ok === true, `Python 符号定位 tier=${r5.tier}`)
@@ -222,7 +223,7 @@ check(outline(SRC, 'x.hs') !== null, 'Haskell 现在已登记（旧断言写于�
 const UNKNOWN_EXT = 'x.zzz-unconfigured'
 check(langOf(UNKNOWN_EXT) === null, `真正未配置的扩展名识别为未配置：${UNKNOWN_EXT}`)
 check(outline(SRC, UNKNOWN_EXT) === null, '未配置扩展名 → outline 返回 null（而不是瞎猜）')
-const unkFile = `${tmp}\\x.zzz-unconfigured`
+const unkFile = path.join(tmp, 'x.zzz-unconfigured')
 fs.writeFileSync(unkFile, 'whatever\n', 'utf8')
 const unk = handleMcpTool('outline_file', { path: unkFile })
 check(unk.isError === true, `未配置语言被明确拒绝：${unk.content[0].text.slice(0, 46)}`)
