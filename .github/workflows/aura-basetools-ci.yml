@@ -14,6 +14,67 @@ permissions:
   contents: read
 
 jobs:
+  full-gate:
+    name: full-gate · ubuntu-latest · node-22
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: aura-basetools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Host peer packages (public)
+        # release-check runs the DSH shell suites as well; the host packages are public but
+        # are not dependencies of the core package (it must stay DSH-free).
+        run: >-
+          npm install --no-save --no-package-lock --ignore-scripts
+          @deepseek-ai/dsh-tools@0.2.1-rc.2
+          @deepseek-ai/dsh-shell@0.2.1-rc.2
+          @deepseek-ai/dsh-fs@0.2.1-rc.2
+          @deepseek-ai/schemastery@3.18.5
+      - name: Build bundle
+        run: node build/make-bundle.mjs --pack
+      - name: Full release gate
+        # The single source of truth: every suite, range fixtures, packaged suite,
+        # split-package install and consistency checks. A skipped CRITICAL_SUITES entry fails.
+        run: node build/release-check.mjs
+
+  smoke:
+    name: smoke · node-${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20]
+    defaults:
+      run:
+        working-directory: aura-basetools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: CLI + MCP runtime smoke
+        run: |
+          set -euo pipefail
+          export AURA_CACHE_DIR="$RUNNER_TEMP/aura-cache"
+          f="$RUNNER_TEMP/smoke.txt"
+          printf 'alpha\n' > "$f"
+          node src/aura-standalone/bin/aura.mjs basetools read --file "$f" --mode full > /dev/null
+          node src/aura-standalone/bin/aura.mjs basetools edit --file "$f" --lines 1 --replace beta > /dev/null
+          grep -q 'beta' "$f"
+          node src/aura-standalone/bin/aura.mjs basetools write --file "$RUNNER_TEMP/new.txt" --content $'hello\n' > /dev/null
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | node src/aura-standalone/bin/aura-mcp.mjs > "$RUNNER_TEMP/mcp.out"
+          grep -q '"aura_basetools_read"' "$RUNNER_TEMP/mcp.out"
+          grep -q '"aura_basetools_write"' "$RUNNER_TEMP/mcp.out"
+
   test:
     name: node-${{ matrix.node }} · ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
