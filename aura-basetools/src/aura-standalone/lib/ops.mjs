@@ -100,6 +100,11 @@ export function capabilitiesEnvelope() {
         },
       },
       {
+        name: 'aura_basetools_tx',
+        actions: ['begin', 'commit', 'rollback', 'status'],
+        options: ['verify'],
+      },
+      {
         name: 'aura_basetools_write',
         operations: ['create', 'overwrite'],
         options: ['eol', 'verify'],

@@ -30,6 +30,10 @@ import {
   // 多目标（fs-contract-v2）的引擎绑定：与单目标同一处（`lib/ops.mjs`），bin 里不另找引擎。
   readManyWith,
   editManyEnvelope,
+  beginTransactionEnvelope,
+  commitTransactionEnvelope,
+  rollbackTransactionEnvelope,
+  statusTransactionEnvelope,
   assertReadTargets,
   assertEditTargets,
   assertTargetShape,
@@ -204,6 +208,7 @@ const TOOLS = [
           type: 'string',
           description: '写后验证命令（显式给出才执行；在 workspace 根下、受超时/输出上限约束）。非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED。不自动发现/执行仓库脚本。',
         },
+        transaction: { type: 'string', description: '跨调用事务 id（tx begin 返回）；本次修改追加到该事务，不立即 commit' },
         create: { type: 'string', description: '文件不存在时用它创建（整份内容）' },
         targets: TARGETS_SCHEMA,
       },
@@ -245,8 +250,23 @@ const TOOLS = [
           type: 'string',
           description: '写后验证命令（显式给出才执行；非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED）。',
         },
+        transaction: { type: 'string', description: '跨调用事务 id（tx begin 返回）；本次修改追加到该事务，不立即 commit' },
       },
       required: ['file_path', 'content'],
+    },
+  },
+  {
+    name: 'aura_basetools_tx',
+    description:
+      'Begin, commit, rollback, or inspect a cross-call transaction. Begin returns an id; pass it to edit/write `transaction` to append changes; commit checks each written file was not changed externally and can run `verify`; rollback restores all files.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['begin', 'commit', 'rollback', 'status'] },
+        transaction: { type: 'string', description: 'tx begin 返回的事务 id（begin 时不需要）' },
+        verify: { type: 'string', description: 'commit 时的写后验证命令；失败 ⇒ 整个事务回滚' },
+      },
+      required: ['action'],
     },
   },
 ]
@@ -333,6 +353,7 @@ async function editTargetsCall(provider, args) {
     dryRun: args.dry_run === true,
     ...(args.require_observation === true ? { requireObservation: true } : {}),
     ...(typeof args.verify === 'string' ? { verify: args.verify } : {}),
+    ...(typeof args.transaction === 'string' ? { transaction: args.transaction } : {}),
   })
 }
 
@@ -383,6 +404,14 @@ async function callTool(provider, name, args = {}) {
       }
     }
   }
+  if (name === 'aura_basetools_tx') {
+    const action = args.action
+    if (action === 'begin') return beginTransactionEnvelope(provider)
+    if (action === 'commit') return await commitTransactionEnvelope(provider, { id: args.transaction, verify: args.verify })
+    if (action === 'rollback') return await rollbackTransactionEnvelope(provider, { id: args.transaction })
+    if (action === 'status') return statusTransactionEnvelope(provider, { id: args.transaction })
+    return { ok: false, error: 'aura_basetools_tx needs action = begin | commit | rollback | status', code: 'BAD_ARGS' }
+  }
   if (name === 'aura_basetools_read') {
     if (multi) return await readTargetsCall(provider, args)
     const noShape = noShapeRefusal(args, 'aura_basetools_read')
@@ -418,6 +447,7 @@ async function callTool(provider, name, args = {}) {
       create: creating ? args.create : undefined,
       ...(args.require_observation === true ? { requireObservation: true } : {}),
       ...(typeof args.verify === 'string' ? { verify: args.verify } : {}),
+      ...(typeof args.transaction === 'string' ? { transaction: args.transaction } : {}),
     })
   }
   if (name === 'aura_basetools_write') {
@@ -429,6 +459,7 @@ async function callTool(provider, name, args = {}) {
       allowUnobserved: args.allow_unobserved === true,
       ...(typeof args.eol === 'string' ? { eol: args.eol } : {}),
       ...(typeof args.verify === 'string' ? { verify: args.verify } : {}),
+      ...(typeof args.transaction === 'string' ? { transaction: args.transaction } : {}),
     })
   }
   return { ok: false, error: `unknown tool ${JSON.stringify(name)}`, code: 'UNKNOWN_TOOL' }

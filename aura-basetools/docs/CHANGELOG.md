@@ -8,6 +8,13 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.17.0：MCP 事务面
+
+- MCP 新增 `aura_basetools_tx`（`begin` / `commit` / `rollback` / `status`）。
+- `aura_basetools_edit` / `aura_basetools_write` 新增 `transaction`：把本次修改追加到 `tx begin` 返回的事务。
+- commit 前 afterVersion 校验、可选 `verify`、失败整事务回滚；`tx-session` 增 MCP 段至 18 项。
+- CLI 与 MCP 共用同一份 `transaction-store`，不是两套实现。
+
 ## 0.16.0：跨调用事务（Change Set 第二块）
 
 - 新增 `aura basetools tx begin | commit --id <id> [--verify] | rollback --id <id> | status --id <id>`。

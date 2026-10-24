@@ -120,6 +120,7 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
 - 同一工作区的并发写由锁串行化；`AURA_NO_LOCK=1` 只用于明确知道没有并发者的场景。
 - **跨调用事务**：`tx begin` → 多次 `edit/write --tx <id>` → `tx commit --id <id> [--verify]`；
   失败/外部改动/verify 失败都可 `tx rollback --id <id>`。commit 前比对 afterVersion，冲突码 `TX_STALE`。
+  MCP 用 `aura_basetools_tx`（action=begin/commit/rollback/status）与 edit/write 的 `transaction`。
 
 ## 6. 诊断
 

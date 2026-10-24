@@ -89,6 +89,49 @@ console.log('=== D. 提交前外部改动 ⇒ TX_STALE，不覆盖 ===')
   check('D2 外部内容没有被覆盖', fs.readFileSync(path.join(tmp, 'e.txt'), 'utf8') === 'external\n')
 }
 
+console.log('')
+console.log('=== E. MCP：tx begin / edit.transaction / tx commit ===')
+{
+  const mcpPath = path.join(root, 'src', 'aura-standalone', 'bin', 'aura-mcp.mjs')
+  const call = (frames) => {
+    const res = spawnSync(process.execPath, [mcpPath], {
+      cwd: tmp,
+      input: `${frames.map((f) => JSON.stringify(f)).join('\n')}\n`,
+      encoding: 'utf8',
+      env,
+      timeout: 30000,
+    })
+    const byId = new Map()
+    for (const line of String(res.stdout ?? '').split('\n')) {
+      if (line.trim() === '') continue
+      try { const msg = JSON.parse(line); byId.set(msg.id, msg) } catch { /* 只收 JSON 行 */ }
+    }
+    return { res, byId }
+  }
+  const payload = (msg) => {
+    try { return JSON.parse(msg?.result?.content?.[0]?.text ?? 'null') } catch { return null }
+  }
+  const first = call([
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'aura_basetools_tx', arguments: { action: 'begin' } } },
+  ])
+  const begun = payload(first.byId.get(2))
+  const id = begun?.transaction?.id
+  check('E1 MCP tx begin 返回 id', begun?.ok === true && typeof id === 'string', JSON.stringify(begun).slice(0, 160))
+
+  fs.writeFileSync(path.join(tmp, 'mcp.txt'), 'm\n')
+  const second = call([
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'aura_basetools_edit', arguments: { file_path: path.join(tmp, 'mcp.txt'), hunks: [{ lines: [1, 1], replace: 'M' }], transaction: id } } },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aura_basetools_tx', arguments: { action: 'commit', transaction: id } } },
+  ])
+  const edited = payload(second.byId.get(2))
+  const committed = payload(second.byId.get(3))
+  check('E2 MCP edit.transaction 成功', edited?.ok === true && edited.transaction?.id === id, JSON.stringify(edited).slice(0, 180))
+  check('E3 MCP tx commit 成功', committed?.ok === true && committed.transaction?.status === 'committed', JSON.stringify(committed).slice(0, 180))
+  check('E4 文件已提交', fs.readFileSync(path.join(tmp, 'mcp.txt'), 'utf8') === 'M\n', JSON.stringify(fs.readFileSync(path.join(tmp, 'mcp.txt'), 'utf8')))
+}
+
 fs.rmSync(tmp, { recursive: true, force: true })
 console.log('')
 console.log(`--- 跨调用事务：${pass}/${pass + fail} 通过 ---`)

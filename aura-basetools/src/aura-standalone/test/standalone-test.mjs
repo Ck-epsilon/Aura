@@ -385,7 +385,7 @@ say('F MCP：initialize / tools/list / tools/call')
   })()
   if (manifest !== null) check(byId.get(1)?.result?.serverInfo?.version === manifest.version, `serverInfo.version 跟包一致（${manifest.version}）`, String(byId.get(1)?.result?.serverInfo?.version))
   const tools = byId.get(2)?.result?.tools ?? []
-  check(tools.length === 3 && tools.some((t) => t.name === 'aura_basetools_read') && tools.some((t) => t.name === 'aura_basetools_edit') && tools.some((t) => t.name === 'aura_basetools_write'), `tools/list 三个工具（${tools.map((t) => t.name).join(',')}`)
+  check(tools.length === 4 && tools.some((t) => t.name === 'aura_basetools_read') && tools.some((t) => t.name === 'aura_basetools_edit') && tools.some((t) => t.name === 'aura_basetools_write') && tools.some((t) => t.name === 'aura_basetools_tx'), `tools/list 四个工具（${tools.map((t) => t.name).join(',')}`)
   const readEnv = JSON.parse(byId.get(3)?.result?.content?.[0]?.text ?? '{}')
   check(readEnv.ok === true && Array.isArray(readEnv.symbols ?? []), 'aura_basetools_read 经 MCP 可用', JSON.stringify(readEnv).slice(0, 120))
   const editEnv = JSON.parse(byId.get(4)?.result?.content?.[0]?.text ?? '{}')
