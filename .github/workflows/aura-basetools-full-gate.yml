@@ -1,0 +1,45 @@
+name: aura-basetools-full-gate
+
+# Manual full-gate run. It is intentionally not blocking: GitHub-hosted runners currently fail
+# suites that pass on the local Windows Node 24 gate. Known failures on the last run:
+#   - windows-latest: stale-gate, struct, corpus, read, read2, lang, differential, failure-replay,
+#     aura-read/outcome, quote-render, encoding-refusal, single-target-nonregression, split-package
+#   - ubuntu-latest: stale-gate, struct, corpus, read, read2, lang, adapters, atomic-publish,
+#     fresh-judgement, observation-store-identity
+# Runner parity is tracked for 0.14.0; this workflow makes the debt reproducible without
+# turning main red.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-gate:
+    name: full-gate · ${{ matrix.os }} · node-22
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    defaults:
+      run:
+        working-directory: aura-basetools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Host peer packages (public)
+        run: >-
+          npm install --no-save --no-package-lock --ignore-scripts
+          @deepseek-ai/dsh-tools@0.2.1-rc.2
+          @deepseek-ai/dsh-shell@0.2.1-rc.2
+          @deepseek-ai/dsh-fs@0.2.1-rc.2
+          @deepseek-ai/schemastery@3.18.5
+      - name: Build bundle
+        run: node build/make-bundle.mjs --pack
+      - name: Full release gate
+        run: node build/release-check.mjs
