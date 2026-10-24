@@ -1,10 +1,10 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**0.13.3（已发布；安装只走 npm）**
-> 发布提交：monorepo `36cbc3f`；tag `aura-basetools-v0.13.3`
+> 当前版本：**0.14.0（已发布；安装只走 npm）**
+> 发布提交：monorepo `3fba1a6`；tag `aura-basetools-v0.14.0`
 > 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
-> npm：`aura-basetools@0.13.3`、`aura-basetools-dsh@0.13.3` 已发布
-> GitHub Release：`aura-basetools-v0.13.3`
+> npm：`aura-basetools@0.14.0`、`aura-basetools-dsh@0.14.0` 已发布
+> GitHub Release：`aura-basetools-v0.14.0`
 
 ---
 
@@ -12,7 +12,7 @@
 
 `aura-basetools` 已具备可直接替代内置文本 `Read` / `Edit` / `Write` 的读写能力：三个入口
 （MCP / DSH / CLI）共用同一份字节保真引擎，文本读写、整份写、`replace_all`、严格新鲜度、
-事务/undo、并发观测缓存和回滚回执都已落地并有回归测试。安装只走 npm
+并发观测缓存和失败回滚回执都已落地并有回归测试。安装只走 npm
 （`npx` / `npm i -g` / `dsh plugin`）；自定义安装器与交付 zip 已在 0.13.2 移除。
 
 ---
@@ -24,10 +24,8 @@
 | 工具标识 | 作用 |
 |---|---|
 | `aura_basetools_read` | 按意图取景：`map` / `digest` / `full` / `around` / `lines` / `search` / `changed` / `auto` |
-| `aura_basetools_edit` | 按意图寻址编辑；`old` + `replace_all`；事务/undo（CLI/MCP） |
+| `aura_basetools_edit` | 按地址编辑；`old` + `replace_all`；0.14.0 起无 intent / 公开事务面 |
 | `aura_basetools_write` | 整文件新建/覆写；BOM/行尾保留；覆写默认要求先读 |
-| `aura_basetools_undo` | 撤销最近一次/指定写事务 |
-| `aura_basetools_transactions` | 列出当前工作区写事务 |
 
 旧工具名 `aura_read` / `aura_edit` / `aura_write` / `aura_undo` / `aura_transactions`
 **不再作为 MCP/DSH API 暴露**。历史会话日志与 `failure-corpus.json` 仍保留旧名；
@@ -41,14 +39,12 @@
 aura basetools read  --file src/app.ts --mode map
 aura basetools edit  --file src/app.ts --hunks '[...]'
 aura basetools write --file new.ts --content @body.ts
-aura basetools undo
-aura basetools transactions
 aura basetools mcp
 aura basetools doctor
 aura basetools capabilities
 ```
 
-- 顶层 `aura read` / `edit` / `write` / `undo` / `transactions` / `mcp` / `doctor` /
+- 顶层 `aura read` / `edit` / `write` / `mcp` / `doctor` /
   `capabilities` **不再作为别名执行**：返回 exit 1、`shape:"CLI_NAMESPACE_REQUIRED"`，
   不会执行写操作。
 - `aura --help` / `aura --version` 仍在顶层。
@@ -60,6 +56,10 @@ aura basetools capabilities
 
 ## 3. 最近完成的关键变更
 
+- **0.14.0（已发布）**：按 642 会话采用率做减法，只删采用率为 0 的两项：`intent` 模糊地址
+  （0 次，-755 行，套件 89→88）与公开 `undo`/`transactions`（0 次，MCP 5→3，内部事务日志
+  只保留失败回滚）。`handle`(1)/`multi-read`(8)/`changed`(15)/`digest`(37)/`around`(106)/
+  `edit --create`(78) 采用率非零，留待 0.15。
 - **0.13.3（已发布）**：npm README 去掉手抄的过期闸读数、加中英双语 Why；`encoding-refusal`
   的 E3 改为源码静态守卫（闸可在并发会话下运行）；`which-tools` 与 `adoption-stats --stream`
   改为流式（512 MB）；CI 保留跨平台子集 + Node 18/20 冒烟，全量闸改为手动 workflow
@@ -91,7 +91,7 @@ aura basetools capabilities
 
 ## 4. 验证状态
 
-最近一次全量闸（0.13.3，发布内容/闸/探针改动后）：
+最近一次全量闸（0.14.0，intent + 公开 undo/transactions 移除后）：
 
 ```bash
 node build/make-bundle.mjs --pack
@@ -102,10 +102,8 @@ node build/release-check.mjs    # exit 0
 
 | 套件 | 结果 |
 |---|---|
-| 套件 | 结果 |
-|---|---|
-| `standalone` | 229 / 0 |
-| `write` | 66 / 66 |
+| `standalone` | 216 / 0 |
+| `write` | 61 / 61 |
 | `range-bytes` | 218 / 218 |
 | `multi-read` | 64 / 64 |
 | `public-surface` | 42 / 42 |
@@ -115,8 +113,8 @@ node build/release-check.mjs    # exit 0
 
 其他事实：
 
-- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.13.3`（已发布）。
-- 闸内实跑套件 89 件；`src↔dist` 24 个运行时文件逐字节一致。
+- `dist/npm/aura-basetools` 与 `dist/npm/aura-basetools-dsh` 版本都是 `0.14.0`（已发布）。
+- 闸内实跑套件 88 件；`src↔dist` 24 个运行时文件逐字节一致。
 - `installed-package` 在本机有 0.13.1 安装时跑 19/19；没有安装时显示 `⏭`（跳过），不再记 ✅。
 - CI 工作流配置了 Linux + Node 22 全量闸和 Node 18/20 冒烟；**本机是 Windows，Linux runner 尚未实际执行过**。
   （实际运行的 monorepo workflow 目前只跑 3 个 OS 的子集；这是已知缺口。）
@@ -128,15 +126,15 @@ node build/release-check.mjs    # exit 0
 - **图片读取不在范围内**：`read_image` 仍只能用内置工具。
 - **DSH 需要重启宿主**：工具模块在宿主启动时导入，改名后必须重启才会加载新名字。
 - **MCP 客户端需要重新拉取 `tools/list`**：旧工具名不再存在。
-- **已发布**：npm `aura-basetools@0.13.1` / `aura-basetools-dsh@0.13.1` 与 GitHub Release `aura-basetools-v0.13.1` 已发布；全局 `aura`、DSH profile、Codex、ZCode、Hermes 均指向官方 npm 0.13.1。0.13.2 待发布。
+- **已发布**：npm `aura-basetools@0.14.0` / `aura-basetools-dsh@0.14.0` 与 GitHub Release `aura-basetools-v0.14.0`；0.14.0 只删采用率为 0 的 `intent` 与公开 `undo`/`transactions`。0.15 再评估 `handle`(1)/`multi-read`(8)/`changed`(15)/`digest`(37)/`around`(106)/`edit --create`(78)。
 - **安装只走 npm（0.13.2）**：自定义 `install.mjs`、交付 zip、manifest 与升级/回滚命令已移除；`~/.aura/pkg` 旧安装不再由本项目维护，改用 `npm i -g aura-basetools`。
 - **历史分析件**：`probes/`、`failure-corpus.json`、旧版本 CHANGELOG 与
   `docs/aura-tools-0.*.md` 中的旧工具名是历史数据，不应批量改写；需要读取历史日志的分析件
   应同时识别旧名与新名。
-- **平台覆盖**：本机 Windows（Node 24）全量闸通过；macOS/Linux 仍无本机实跑记录。
-- **CI 全量闸仍是 report-only**：GitHub-hosted Windows/Ubuntu runners 上 full gate 有 13/8 个套件失败
-  （本地 Node 24 全绿）；已加手动 workflow `.github/workflows/aura-basetools-full-gate.yml`，
-  平台对齐列为 0.14.0。CI 的阻塞项是跨平台子集 + Node 18/20 冒烟。
+- **平台覆盖**：本机 Windows（Node 24）与 **macOS 15/26（GitHub-hosted）全量闸通过**；
+  Windows/Ubuntu runner 仍有套件失败，单独记录，不阻塞 macOS 目标。
+- **CI 全量闸仍是 report-only**：手动 workflow `.github/workflows/aura-basetools-full-gate.yml`；
+  CI 的阻塞项是跨平台子集 + Node 18/20 冒烟。
 
 ## 5.1 绝对路径检查
 

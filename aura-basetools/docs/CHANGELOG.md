@@ -19,6 +19,8 @@
   事务日志保留为**内部失败回滚**，不再提供对外撤销面。
 - `task-bench` 的 TypeScript / Erlang 场景改用 `target`，基准 id 同步为 `ts-target` / `erl-target`。
 - 保留 0.13.3 的发布内容可信化、并发安全闸与流式探针。
+- 已发布：npm `aura-basetools@0.14.0` / `aura-basetools-dsh@0.14.0`；GitHub Release
+  `aura-basetools-v0.14.0`（源码提交 monorepo `3fba1a6`）。
 
 ## 0.13.3：发布内容可信化 + 闸可并发 + 探针流式
 
