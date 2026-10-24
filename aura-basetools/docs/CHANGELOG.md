@@ -15,6 +15,8 @@
   乐观校验，外部改动 ⇒ `TX_STALE`；可选 verify 失败 ⇒ 整事务回滚。
 - 内部事务日志支持 `openTransaction` 恢复；`tx-session` 14 项（begin/commit/rollback/verify/stale）。
 - 0.15.0 的写后验证、0.14.0 的减法结论保持不变。
+- 已发布：npm `aura-basetools@0.16.0` / `aura-basetools-dsh@0.16.0`；GitHub Release
+  `aura-basetools-v0.16.0`（源码提交 monorepo `3d4f915`）。
 
 ## 0.15.0：写后验证闭环（Change Set 第一块）
 
