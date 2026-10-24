@@ -138,12 +138,18 @@ say('=== A. 跨进程：进程1 读 Beta.js → 第三方改被寻址行 → 进
   const r2 = cliEditLines(cache, lower, [3, 3], 'line three (A overwrote)')
   say(`  [进程2] aura edit --file ${lower} --hunks '[{"lines":[3,3],"replace":"line three (A overwrote)"}]'`)
   say(`          exit=${r2.exit} out=${r2.stdout}`)
-  check(
-    r2.exit !== 0 && r2.json?.ok === false && r2.json?.code === 'PATCH_STALE_REGION',
-    'A3 跨进程换写法发无 expect 编辑 ⇒ 结构化拒绝 PATCH_STALE_REGION（**本单改前必红的那一条**）',
-    `exit=${r2.exit} code=${r2.json?.code ?? '(放行)'} ${r2.json?.ok === true ? `unverified_region=${r2.json?.result?.unverified_region}` : ''}`,
-  )
-  check(sha(base) === rawB && readTextFile(base) === F1_AFTER_B, 'A4 磁盘保持第三方内容（我们的编辑一个字节都没落）', JSON.stringify(readTextFile(base)))
+  const sameCaseA = sameFile(base, lower)
+  if (sameCaseA) {
+    check(
+      r2.exit !== 0 && r2.json?.ok === false && r2.json?.code === 'PATCH_STALE_REGION',
+      'A3 跨进程换写法发无 expect 编辑 ⇒ 结构化拒绝 PATCH_STALE_REGION（**本单改前必红的那一条**）',
+      `exit=${r2.exit} code=${r2.json?.code ?? '(放行)'} ${r2.json?.ok === true ? `unverified_region=${r2.json?.result?.unverified_region}` : ''}`,
+    )
+    check(sha(base) === rawB && readTextFile(base) === F1_AFTER_B, 'A4 磁盘保持第三方内容（我们的编辑一个字节都没落）', JSON.stringify(readTextFile(base)))
+  } else {
+    check(true, 'A3 跨进程换写法发无 expect 编辑（本平台大小写敏感，β 是另一个文件）⇒ 跳过', 'case-sensitive fs')
+    check(sha(base) === rawB && readTextFile(base) === F1_AFTER_B, 'A4 磁盘保持第三方内容（我们的编辑一个字节都没落）', JSON.stringify(readTextFile(base)))
+  }
 
   // 判别性：同一次读取、同样无第三方改动时，换写法**必须**成功（否则"一律拒绝"也能过 A3）
   const ok = target('a2')
@@ -152,13 +158,19 @@ say('=== A. 跨进程：进程1 读 Beta.js → 第三方改被寻址行 → 进
   const o2 = cliEditLines(ok.cache, ok.lower, [3, 3], 'line three (A edited)')
   say(`  [正向对照] 进程1 读 ${ok.base}（exit=${o1.exit}）→ 无第三方改动 → 进程2 用 ${ok.lower} 编辑`)
   say(`          exit=${o2.exit} out=${o2.stdout}`)
-  check(o1.exit === 0 && o2.exit === 0 && o2.json?.ok === true, 'A5 正向对照：换写法编辑一个**没被别人改过**的文件 ⇒ 照常成功（不许误拒）', `exit=${o2.exit}`)
-  check(
-    o2.json?.ok === true && o2.json?.result?.unverified_region === undefined,
-    'A6 正向对照的回执不谎称"没核对过"（basis 是观测，不是 none）：这一条才说明 A3 的拒绝是**认出了同一处**，不是碰巧拦住',
-    JSON.stringify(o2.json?.result?.unverified_region ?? null),
-  )
-  check(readTextFile(ok.base) === 'line one\nline two\nline three (A edited)\n', 'A7 正向对照的改动确实落盘', JSON.stringify(readTextFile(ok.base)))
+  if (sameFile(ok.base, ok.lower)) {
+    check(o1.exit === 0 && o2.exit === 0 && o2.json?.ok === true, 'A5 正向对照：换写法编辑一个**没被别人改过**的文件 ⇒ 照常成功（不许误拒）', `exit=${o2.exit}`)
+    check(
+      o2.json?.ok === true && o2.json?.result?.unverified_region === undefined,
+      'A6 正向对照的回执不谎称"没核对过"（basis 是观测，不是 none）：这一条才说明 A3 的拒绝是**认出了同一处**，不是碰巧拦住',
+      JSON.stringify(o2.json?.result?.unverified_region ?? null),
+    )
+    check(readTextFile(ok.base) === 'line one\nline two\nline three (A edited)\n', 'A7 正向对照的改动确实落盘', JSON.stringify(readTextFile(ok.base)))
+  } else {
+    check(true, 'A5 正向对照（本平台大小写敏感，跳过）', 'case-sensitive fs')
+    check(true, 'A6 正向对照（本平台大小写敏感，跳过）', 'case-sensitive fs')
+    check(true, 'A7 正向对照（本平台大小写敏感，跳过）', 'case-sensitive fs')
+  }
 
   // 同一条洞的另一种写法（全大写）：读数里留一份，写明本平台认不认它
   const up = target('a3')
