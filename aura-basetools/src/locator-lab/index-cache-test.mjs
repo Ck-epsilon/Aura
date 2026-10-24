@@ -700,7 +700,10 @@ say('=== 段E. 负向不变量：改一个字节必须重算（大文件档同�
   const st1 = indexCacheStats()
   // 同一份内容紧接着走 indexStructure：上一次 readWith 已经付过冷代价，所以这一次是命中（下面两条据此）
   const bigAfter = timeIt(() => indexStructure(bigChanged, BIG_LANG))
-  check(st1.entries > st0.entries, '改一字节 ⇒ 那是**另一份内容** ⇒ 重新建索引并入缓存（条目数 +1）', `${st0.entries} → ${st1.entries} 条`)
+  // 缓存是**有界**的：macOS-15 runner 可用内存低，新内容入缓存时可能同时淘汰旧条目，
+  // 条目数因而可能持平。真正要守的是“另建了一份索引、没有错命中”，下面三条载荷判据负责；
+  // 这里只断言不下降（用 +1 当硬契约就是把缓存额度的实现细节写成了跨平台契约）。
+  check(st1.entries >= st0.entries, '改一字节 ⇒ 另建索引并入缓存（有界缓存可能淘汰旧条目；条目数不下降）', `${st0.entries} → ${st1.entries} 条`)
   check(!samePayload(structPayload(bigBefore), structPayload(bigAfter.out)), '100000 行档：改一个字节后载荷不同一 ⇒ 必须重算（额度放宽没有带来错命中）')
   check(bigAfter.out.symbols.some((s) => s.name === `${BIG_TAG}50Z`), `大文件档新索引里有改名后的符号 ${BIG_TAG}50Z`)
   check(!bigAfter.out.symbols.some((s) => s.name === needle), `大文件档新索引里没有旧名字 ${needle}`)
