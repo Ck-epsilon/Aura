@@ -8,6 +8,14 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.16.0：跨调用事务（Change Set 第二块）
+
+- 新增 `aura basetools tx begin | commit --id <id> [--verify] | rollback --id <id> | status --id <id>`。
+- `edit` / `write` 新增 `--tx <id>`：多次 CLI 调用写进同一份事务日志；commit 前做 afterVersion
+  乐观校验，外部改动 ⇒ `TX_STALE`；可选 verify 失败 ⇒ 整事务回滚。
+- 内部事务日志支持 `openTransaction` 恢复；`tx-session` 14 项（begin/commit/rollback/verify/stale）。
+- 0.15.0 的写后验证、0.14.0 的减法结论保持不变。
+
 ## 0.15.0：写后验证闭环（Change Set 第一块）
 
 - `edit` / `write` 新增**显式** `verify`：写后执行调用方给出的命令；成功才提交，非零退出/超时

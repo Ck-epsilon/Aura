@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createNodeFsProvider, DEFAULT_MAX_TEXT_BYTES } from './fs-provider.mjs'
 import { withWorkspaceLock } from './workspace-lock.mjs'
-import { createTransaction } from './transaction-store.mjs'
+import { createTransaction, getTransactionMeta, openTransaction } from './transaction-store.mjs'
 import { createDiskStore } from './observation-store.mjs'
 
 /**
@@ -111,7 +111,7 @@ export function capabilitiesEnvelope() {
         },
       },
     ],
-    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
+    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools tx', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
     langs,
     langsCount: langs.length,
     limits: {
@@ -519,6 +519,66 @@ function runVerification(command, cwd) {
   }
 }
 
+async function editInTransaction(provider, request) {
+  const verifyCommand = typeof request.verify === 'string' && request.verify.trim().length > 0 ? request.verify.trim() : null
+  try {
+    return await withWorkspaceLock(provider.root, async () => {
+      const tx = openTransaction(provider.root, request.transaction)
+      const env = await editEnvelopeInner(tx.proxy(provider), request)
+      if (!env.ok) return env
+      let verification
+      if (verifyCommand !== null) {
+        verification = runVerification(verifyCommand, provider.root)
+        if (!verification.ok) {
+          const rollback = await tx.rollback(provider)
+          return {
+            ok: false,
+            code: 'PATCH_VERIFY_FAILED',
+            error: `edit verification failed (exit ${verification.exitCode ?? 'no-status'}${verification.timedOut ? ', timed out' : ''}): ${verifyCommand}`,
+            verification,
+            rollback,
+            transaction: tx.summary(),
+          }
+        }
+      }
+      return { ...env, transaction: tx.summary(), ...(verification === undefined ? {} : { verification }) }
+    })
+  } catch (error) {
+    return transactionError(error)
+  }
+}
+
+async function editManyInTransaction(provider, request) {
+  const verifyCommand = typeof request.verify === 'string' && request.verify.trim().length > 0 ? request.verify.trim() : null
+  try {
+    return await withWorkspaceLock(provider.root, async () => {
+      const tx = openTransaction(provider.root, request.transaction)
+      const batch = await editManyEnvelopeInner(tx.proxy(provider), request)
+      if (!batch.ok) return batch
+      let verification
+      if (verifyCommand !== null) {
+        verification = runVerification(verifyCommand, provider.root)
+        if (!verification.ok) {
+          const rollback = await tx.rollback(provider)
+          const finalBatch = writePath.rebuildAfterRollback(batch, rollback)
+          return {
+            ...finalBatch,
+            ok: false,
+            code: 'PATCH_VERIFY_FAILED',
+            error: `edit verification failed (exit ${verification.exitCode ?? 'no-status'}${verification.timedOut ? ', timed out' : ''}): ${verifyCommand}`,
+            verification,
+            rollback,
+            transaction: tx.summary(),
+          }
+        }
+      }
+      return { ...batch, transaction: tx.summary(), ...(verification === undefined ? {} : { verification }) }
+    })
+  } catch (error) {
+    return transactionError(error)
+  }
+}
+
 /**
  * 写事务外壳：workspace 锁 + 事务日志 + 失败回滚。
  *
@@ -532,6 +592,7 @@ export async function editEnvelope(provider, request) {
    * 预演不建事务、不写盘，也不需要工作区锁；0.14.0 起事务日志只用于失败回滚。
    */
   if (request.dryRun === true) return editEnvelopeInner(provider, request)
+  if (typeof request.transaction === 'string' && request.transaction.length > 0) return editInTransaction(provider, request)
   const verifyCommand = typeof request.verify === 'string' && request.verify.trim().length > 0 ? request.verify.trim() : null
   try {
     return await withWorkspaceLock(provider.root, async () => {
@@ -583,6 +644,7 @@ export async function editManyEnvelope(provider, request) {
   if (provider.root === undefined) return editManyEnvelopeInner(provider, request)
   // 与单目标同一条：预演不建事务、不写盘，不能顶掉真正的最近 committed 事务。
   if (request.dryRun === true) return editManyEnvelopeInner(provider, request)
+  if (typeof request.transaction === 'string' && request.transaction.length > 0) return editManyInTransaction(provider, request)
   const verifyCommand = typeof request.verify === 'string' && request.verify.trim().length > 0 ? request.verify.trim() : null
   try {
     return await withWorkspaceLock(provider.root, async () => {
@@ -642,6 +704,85 @@ export async function editManyEnvelope(provider, request) {
   }
 }
 
+/** 开一个跨调用事务；后续 `edit --tx <id>` 写在同一份日志里。 */
+export function beginTransactionEnvelope(provider) {
+  if (provider.root === undefined) return { ok: false, error: 'transactions need a workspace root', code: 'TX_NO_ROOT' }
+  try {
+    const tx = createTransaction(provider.root, 'aura_basetools_tx')
+    return { ok: true, transaction: tx.summary() }
+  } catch (error) {
+    return transactionError(error)
+  }
+}
+
+/** 提交跨调用事务：先做 afterVersion 乐观校验，再跑可选 verify；失败自动 rollback。 */
+export async function commitTransactionEnvelope(provider, { id, verify } = {}) {
+  if (provider.root === undefined) return { ok: false, error: 'transactions need a workspace root', code: 'TX_NO_ROOT' }
+  if (typeof id !== 'string' || id.length === 0) return { ok: false, error: 'commit needs a transaction id', code: 'TX_BAD_ID' }
+  const verifyCommand = typeof verify === 'string' && verify.trim().length > 0 ? verify.trim() : null
+  try {
+    return await withWorkspaceLock(provider.root, async () => {
+      const tx = openTransaction(provider.root, id)
+      const conflicts = tx.assertFresh(provider)
+      if (conflicts.length > 0) {
+        return {
+          ok: false,
+          code: 'TX_STALE',
+          error: `transaction ${id} has ${conflicts.length} file(s) changed since the transaction wrote them`,
+          conflicts,
+          transaction: tx.summary(),
+        }
+      }
+      let verification
+      if (verifyCommand !== null) {
+        verification = runVerification(verifyCommand, provider.root)
+        if (!verification.ok) {
+          const rollback = await tx.rollback(provider)
+          return {
+            ok: false,
+            code: 'PATCH_VERIFY_FAILED',
+            error: `transaction verification failed (exit ${verification.exitCode ?? 'no-status'}${verification.timedOut ? ', timed out' : ''}): ${verifyCommand}`,
+            verification,
+            rollback,
+            transaction: tx.summary(),
+          }
+        }
+      }
+      tx.commit()
+      return { ok: true, transaction: tx.summary(), ...(verification === undefined ? {} : { verification }) }
+    })
+  } catch (error) {
+    return transactionError(error)
+  }
+}
+
+/** 回滚跨调用事务：与内部失败回滚同一套 afterVersion 校验。 */
+export async function rollbackTransactionEnvelope(provider, { id } = {}) {
+  if (provider.root === undefined) return { ok: false, error: 'transactions need a workspace root', code: 'TX_NO_ROOT' }
+  if (typeof id !== 'string' || id.length === 0) return { ok: false, error: 'rollback needs a transaction id', code: 'TX_BAD_ID' }
+  try {
+    return await withWorkspaceLock(provider.root, async () => {
+      const tx = openTransaction(provider.root, id)
+      const rollback = await tx.rollback(provider)
+      return { ok: rollback.status === 'rolled_back', rollback, transaction: tx.summary() }
+    })
+  } catch (error) {
+    return transactionError(error)
+  }
+}
+
+/** 只读事务状态。 */
+export function statusTransactionEnvelope(provider, { id } = {}) {
+  if (provider.root === undefined) return { ok: false, error: 'transactions need a workspace root', code: 'TX_NO_ROOT' }
+  if (typeof id !== 'string' || id.length === 0) return { ok: false, error: 'status needs a transaction id', code: 'TX_BAD_ID' }
+  try {
+    const meta = getTransactionMeta(provider.root, id)
+    return { ok: true, transaction: { id: meta.id, status: meta.status, files: meta.files.length, written: meta.files.filter((f) => f.written).length, dir: meta.dir } }
+  } catch (error) {
+    return transactionError(error)
+  }
+}
+
 /** 整文件写的紧凑回执：不把整份 old/new 文本塞进 applied（那是 edit 的形状，不是 write 的）。 */
 function compactWriteReceipt(env, content) {
   if (env === null || typeof env !== 'object' || env.ok !== true) return env
@@ -683,7 +824,7 @@ function compactWriteReceipt(env, content) {
  * `preserve` 按 content 原样写（与内置 Write 的“给什么写什么”对齐），`lf` / `crlf` 强制统一。
  * 新建文件永远按 content 原样写；显式传非 `auto` 的 eol 会被拒绝（不做静默忽略）。
  */
-export async function writeEnvelope(provider, { file, content, dryRun = false, noOverwrite = false, allowUnobserved = false, eol = 'auto', verify } = {}) {
+export async function writeEnvelope(provider, { file, content, dryRun = false, noOverwrite = false, allowUnobserved = false, eol = 'auto', verify, transaction } = {}) {
   if (typeof file !== 'string' || file.length === 0) {
     return { ok: false, error: 'write needs a file path', code: 'WRITE_BAD_ARGS' }
   }
@@ -710,7 +851,7 @@ export async function writeEnvelope(provider, { file, content, dryRun = false, n
       if (dryRun) {
         return { ok: true, result: { path: displayPath, operation: 'create', bytes: Buffer.byteLength(content, 'utf8'), dryRun: true } }
       }
-      return compactWriteReceipt(await editEnvelope(provider, { file, create: content, verify }), content)
+      return compactWriteReceipt(await editEnvelope(provider, { file, create: content, verify, transaction }), content)
     }
     return compactWriteReceipt(
       await editEnvelope(provider, {
@@ -722,6 +863,7 @@ export async function writeEnvelope(provider, { file, content, dryRun = false, n
         skipStaleGate: allowUnobserved === true,
         toolName: 'aura_basetools_write',
         verify,
+        transaction,
       }),
       content,
     )

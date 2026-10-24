@@ -6,6 +6,7 @@
  *   aura basetools edit  --file F (--hunks '<json>' | --hunks-file P) [--dry-run] [--verify "命令"] [--create <文本|@文件>]
  *   aura basetools read  --targets '[...]|@spec.json'                    一次读多个目标（与 --file 互斥）
  *   aura basetools edit  --targets '[...]|@spec.json'                    一次改多个文件（与 --file 互斥；任一规划失败 ⇒ 零写入）
+ *   aura basetools tx begin | commit --id <id> [--verify "命令"] | rollback --id <id> | status --id <id>
  *   aura basetools mcp
  *   aura --help | --version
  *
@@ -25,6 +26,10 @@ import {
   // 多目标（fs-contract-v2）的引擎绑定：与单目标同一处（`lib/ops.mjs`），bin 里不另找引擎。
   readManyWith,
   editManyEnvelope,
+  beginTransactionEnvelope,
+  commitTransactionEnvelope,
+  rollbackTransactionEnvelope,
+  statusTransactionEnvelope,
   capabilitiesEnvelope,
   writeEnvelope,
   assertReadTargets,
@@ -86,13 +91,14 @@ const COMMAND_FLAGS = {
     bool: ['pretty'],
   },
   edit: {
-    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol', 'verify'],
+    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol', 'verify', 'tx'],
     bool: ['pretty', 'dry-run', 'plan', 'replace-all', 'require-observation'],
   },
   write: {
-    value: ['cwd', 'file', 'content', 'eol', 'verify'],
+    value: ['cwd', 'file', 'content', 'eol', 'verify', 'tx'],
     bool: ['pretty', 'dry-run', 'plan', 'no-overwrite', 'allow-unobserved'],
   },
+  tx: { value: ['cwd', 'id', 'verify'], bool: ['pretty', 'json'] },
   doctor: { value: ['cwd'], bool: ['pretty', 'json'] },
   capabilities: { value: ['cwd'], bool: ['pretty'] },
   mcp: { value: ['cwd'], bool: ['pretty'] },
@@ -109,7 +115,9 @@ function validateCommandFlags(command, tokens) {
   if (spec === undefined) return undefined
   const valueFlags = new Set(spec.value)
   const boolFlags = new Set(spec.bool)
-  for (let i = 0; i < tokens.length; i += 1) {
+  // `tx` 的第一个裸位置参数是子命令（begin/commit/rollback/status）；其余命令不允许位置参数。
+  const start = command === 'tx' && tokens[0] !== undefined && !tokens[0].startsWith('--') ? 1 : 0
+  for (let i = start; i < tokens.length; i += 1) {
     const token = tokens[i]
     if (typeof token !== 'string' || !token.startsWith('--')) {
       return `unexpected argument ${JSON.stringify(token)} — this command takes flags only`
@@ -177,6 +185,10 @@ const USAGE = [
   '   aura basetools edit  --file <路径> --handle <h…> --line <段内行号> --replace <文本>            # 只换区间内第 k 行（1-based，从区间首行数起）',
   '   aura basetools edit  --file <路径> --handle <h…> --position before|after --replace <文本>  # 在区间边界插入，区间本身不动',
   "              （--line / --position 是从属键：只有与 --handle 同时给才成立，单独给不构成一次编辑）",
+  '  aura basetools tx begin               开一个跨调用事务（后续 edit/write 用 --tx <id> 加入）',
+  '  aura basetools tx commit --id <id> [--verify "命令"]  提交；verify 失败/文件被外部改过 ⇒ 拒绝并回滚',
+  '  aura basetools tx rollback --id <id>  回滚整个事务（按 afterVersion 校验）',
+  '  aura basetools tx status --id <id>    只读状态',
   '  aura basetools mcp                    启动 MCP stdio 服务',
   '  aura basetools write --file <路径> --content <文本|@文件> [--no-overwrite] [--dry-run|--plan] [--verify "命令"] [--allow-unobserved] [--eol auto|preserve|lf|crlf]',
   '             （覆写默认要求先读过这一版；--allow-unobserved 才允许盲写）',
@@ -305,7 +317,7 @@ if (command === '--version' || command === '-v') emit({ ok: true, version: VERSI
  * 旧顶层动词只给**迁移提示**，不再作为别名执行——保留别名等于保留未来的撞名。
  * 只提示、不执行：`aura basetools read` 不会偷偷改文件。
  */
-const MOVED_COMMANDS = new Set(['read', 'outline', 'edit', 'write', 'mcp', 'doctor', 'capabilities'])
+const MOVED_COMMANDS = new Set(['read', 'outline', 'edit', 'write', 'tx', 'mcp', 'doctor', 'capabilities'])
 if (!namespaced && MOVED_COMMANDS.has(command)) {
   emit(
     {
@@ -328,6 +340,29 @@ if (command === 'mcp') {
 }
 
 const provider = openProvider(typeof flag('cwd') === 'string' ? flag('cwd') : process.cwd())
+
+if (command === 'tx') {
+  const action = argv[1]
+  const id = typeof flag('id') === 'string' ? flag('id') : undefined
+  if (action === 'begin') {
+    const env = beginTransactionEnvelope(provider)
+    emit(env, env.ok ? 0 : 2)
+  }
+  if (action === 'commit') {
+    const verify = typeof flag('verify') === 'string' ? flag('verify') : undefined
+    const env = await commitTransactionEnvelope(provider, { id, verify })
+    emit(env, env.ok ? 0 : 2)
+  }
+  if (action === 'rollback') {
+    const env = await rollbackTransactionEnvelope(provider, { id })
+    emit(env, env.ok ? 0 : 2)
+  }
+  if (action === 'status') {
+    const env = statusTransactionEnvelope(provider, { id })
+    emit(env, env.ok ? 0 : 2)
+  }
+  emit({ ok: false, error: 'tx 需要 begin | commit | rollback | status（commit/rollback/status 还要 --id）', code: 'USAGE' }, 1)
+}
 
 if (command === 'capabilities') {
   const env = { ok: true, version: VERSION, ...capabilitiesEnvelope() }
@@ -353,6 +388,7 @@ if (command === 'write') {
     allowUnobserved: has('allow-unobserved'),
     ...(typeof eol === 'string' ? { eol } : {}),
     ...(typeof flag('verify') === 'string' ? { verify: flag('verify') } : {}),
+    ...(typeof flag('tx') === 'string' ? { transaction: flag('tx') } : {}),
   })
   emit(env, env.ok ? 0 : 2)
 }
@@ -475,6 +511,7 @@ if (command === 'edit') {
       dryRun: has('dry-run') || has('plan') || spec.dryRun,
       ...(has('require-observation') ? { requireObservation: true } : {}),
       ...(typeof flag('verify') === 'string' ? { verify: flag('verify') } : {}),
+      ...(typeof flag('tx') === 'string' ? { transaction: flag('tx') } : {}),
     })
     emit(env, env.ok ? 0 : 2)
   }
@@ -588,6 +625,7 @@ if (command === 'edit') {
     create,
     ...(has('require-observation') ? { requireObservation: true } : {}),
     ...(typeof flag('verify') === 'string' ? { verify: flag('verify') } : {}),
+    ...(typeof flag('tx') === 'string' ? { transaction: flag('tx') } : {}),
   })
   emit(env, env.ok ? 0 : 2)
 }

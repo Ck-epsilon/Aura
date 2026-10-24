@@ -44,7 +44,7 @@ const ranSuites = []
 const CRITICAL_SUITES = new Set([
   'write-verify', 'stale-gate', 'byte-fidelity', 'encoding-fidelity', 'span-fidelity',
   'content-address', 'arg-shape', 'read-schema', 'read', 'notfound-receipt', 'range-args',
-  'standalone', 'write', 'replace-all', 'observation-gate', 'multi-read', 'multi-edit', 'verify-edit',
+  'standalone', 'write', 'replace-all', 'observation-gate', 'multi-read', 'multi-edit', 'verify-edit', 'tx-session',
   'argument-surface', 'single-line-target', 'observation-concurrency', 'range-bytes',
   'aura-read/load', 'aura-edit/load', 'capabilities', 'public-surface', 'ci-contract',
 ])
@@ -434,6 +434,8 @@ const SUITES = [
   ['eol-adapt', 'src/locator-lab/eol-adapt-test.mjs'],
   // 0.15.0：写后验证闭环。显式 verify 命令成功才提交；失败自动回滚（单/多目标/write 都钉住）。
   ['verify-edit', 'src/locator-lab/verify-edit-test.mjs'],
+  // 0.16.0：跨调用事务。begin → 多次 edit --tx → commit/rollback；CLI 子进程证明持久化。
+  ['tx-session', 'src/locator-lab/tx-session-test.mjs'],
   // 0.10.2：`replace_all`——全部非重叠出现、同行多处的列级重叠判定、参数互斥、
   //   expect 逐处核对、出现次数变化拒绝（was/now）、CLI/MCP 两面。现读数 36 项。
   ['replace-all', 'src/locator-lab/replace-all-test.mjs'],

@@ -117,22 +117,13 @@ function fileSummary(entry) {
  * @param root - 工作区根
  * @param tool - 产生它的工具名（仅记录）
  */
-export function createTransaction(root, tool = 'aura_basetools_edit') {
-  const id = transactionId()
-  const dir = path.join(transactionsRoot(root), id)
-  ensureDir(dir)
-  const meta = {
-    id,
-    tool,
-    root: path.resolve(root),
-    createdAt: new Date().toISOString(),
-    status: 'pending',
-    files: [],
-    dir,
-  }
-  saveMeta(meta)
+function makeTransaction(root, meta, dir) {
   const entries = new Map()
-  let closed = false
+  for (let i = 0; i < meta.files.length; i += 1) {
+    const saved = meta.files[i]
+    entries.set(saved.path, { ...saved, metaIndex: i })
+  }
+  let closed = meta.status !== 'pending'
 
   const entryKey = (provider, target) => normalizeTarget(provider, target)
 
@@ -174,7 +165,7 @@ export function createTransaction(root, tool = 'aura_basetools_edit') {
   }
 
   const tx = {
-    id,
+    id: meta.id,
     dir,
     meta,
     entries,
@@ -196,17 +187,29 @@ export function createTransaction(root, tool = 'aura_basetools_edit') {
       }
       return proxy
     },
+    /** 交叉调用提交前的乐观校验：事务写过的文件必须仍停在 afterVersion。 */
+    assertFresh(provider) {
+      const conflicts = []
+      for (const entry of entries.values()) {
+        if (!entry.written) continue
+        let current
+        try { current = provider.stat(entry.path) } catch { current = undefined }
+        if (entry.afterVersion !== null && current?.version !== entry.afterVersion) {
+          conflicts.push({ path: entry.path, expected: entry.afterVersion, actual: current?.version ?? null })
+        }
+      }
+      return conflicts
+    },
     commit() {
       if (closed) return
       meta.status = 'committed'
       meta.committedAt = new Date().toISOString()
-      // 只有 meta 真正落盘后才 closed；否则调用方还能 rollback 已经写出的文件。
       saveMeta(meta)
       closed = true
       prune(root)
     },
     summary() {
-      return { id, dir, status: meta.status, files: meta.files.length }
+      return { id: meta.id, dir, status: meta.status, files: meta.files.length, written: meta.files.filter((f) => f.written).length }
     },
     async rollback(provider, options = {}) {
       if (closed) return { status: meta.status, restored: 0, conflicts: [] }
@@ -241,6 +244,48 @@ export function createTransaction(root, tool = 'aura_basetools_edit') {
     },
   }
   return tx
+}
+
+/**
+ * 创建一个 pending 事务。此时还没有任何文件被记录；第一次 writeText 前才记原始字节。
+ *
+ * @param root - 工作区根
+ * @param tool - 产生它的工具名（仅记录）
+ */
+export function createTransaction(root, tool = 'aura_basetools_edit') {
+  const id = transactionId()
+  const dir = path.join(transactionsRoot(root), id)
+  ensureDir(dir)
+  const meta = {
+    id,
+    tool,
+    root: path.resolve(root),
+    createdAt: new Date().toISOString(),
+    status: 'pending',
+    files: [],
+    dir,
+  }
+  saveMeta(meta)
+  return makeTransaction(root, meta, dir)
+}
+
+/** 打开一个仍处于 pending 的跨调用事务。 */
+export function openTransaction(root, id) {
+  const dir = path.join(transactionsRoot(root), id)
+  const meta = loadMeta(dir)
+  if (meta.status !== 'pending') {
+    throw Object.assign(new Error(`transaction ${id} is ${meta.status}, not open`), { code: 'TX_NOT_OPEN' })
+  }
+  return makeTransaction(root, meta, dir)
+}
+
+/** 读一个事务的元数据（状态/文件数）；不存在时抛 TX_NOT_FOUND。 */
+export function getTransactionMeta(root, id) {
+  try {
+    return loadMeta(path.join(transactionsRoot(root), id))
+  } catch {
+    throw Object.assign(new Error(`transaction not found: ${id}`), { code: 'TX_NOT_FOUND' })
+  }
 }
 
 function readAllMeta(root) {

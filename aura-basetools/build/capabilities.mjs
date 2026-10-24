@@ -75,7 +75,7 @@ export function buildCapabilities() {
         },
       },
     ],
-    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
+    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools tx', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
     langs: Object.keys(LANGS).sort(),
     langsCount: Object.keys(LANGS).length,
     limits: {

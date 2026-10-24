@@ -1,0 +1,95 @@
+/**
+ * tx-session-test —— 跨调用事务：begin → edit --tx（多次）→ commit/rollback。
+ *
+ * 判据只走 CLI 子进程（真正的跨进程持久化），不读私有状态之外的磁盘结果。
+ */
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { spawnSync } from 'node:child_process'
+
+const root = path.resolve(import.meta.dirname, '..', '..')
+const bin = path.join(root, 'src', 'aura-standalone', 'bin', 'aura.mjs')
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-tx-'))
+const env = { ...process.env, AURA_CACHE_DIR: path.join(tmp, 'cache') }
+const run = (args) => spawnSync(process.execPath, [bin, ...args], { cwd: tmp, encoding: 'utf8', env })
+const json = (res) => {
+  try { return JSON.parse(String(res.stdout ?? '')) } catch { return null }
+}
+const node = `"${process.execPath}"`
+const failCmd = `${node} -e "process.exit(7)"`
+
+let pass = 0
+let fail = 0
+const check = (label, ok, detail = '') => {
+  if (ok) {
+    pass += 1
+    console.log(`  ✓ ${label}${detail === '' ? '' : `  ${detail}`}`)
+  } else {
+    fail += 1
+    console.log(`  ✗ ${label}${detail === '' ? '' : `  ${detail}`}`)
+  }
+}
+
+console.log('=== A. begin → 两次 edit → commit ===')
+{
+  fs.writeFileSync(path.join(tmp, 'a.txt'), 'a\n')
+  fs.writeFileSync(path.join(tmp, 'b.txt'), 'b\n')
+  const begun = json(run(['basetools', 'tx', 'begin']))
+  const id = begun?.transaction?.id
+  check('A1 begin 返回 open/pending 事务', begun?.ok === true && typeof id === 'string' && begun.transaction.status === 'pending', JSON.stringify(begun).slice(0, 160))
+
+  const e1 = json(run(['basetools', 'edit', '--file', path.join(tmp, 'a.txt'), '--lines', '1', '--replace', 'A', '--tx', id]))
+  check('A2 第一次 edit --tx 成功且未提交', e1?.ok === true && e1.transaction?.id === id, JSON.stringify(e1).slice(0, 160))
+  check('A3 第一次写已落盘', fs.readFileSync(path.join(tmp, 'a.txt'), 'utf8') === 'A\n')
+  const e2 = json(run(['basetools', 'edit', '--file', path.join(tmp, 'b.txt'), '--lines', '1', '--replace', 'B', '--tx', id]))
+  check('A4 第二次 edit --tx 成功', e2?.ok === true, JSON.stringify(e2).slice(0, 160))
+  check('A5 第二次写已落盘', fs.readFileSync(path.join(tmp, 'b.txt'), 'utf8') === 'B\n')
+
+  const committed = json(run(['basetools', 'tx', 'commit', '--id', id]))
+  check('A6 commit 成功', committed?.ok === true && committed.transaction.status === 'committed', JSON.stringify(committed).slice(0, 160))
+  check('A7 两处修改都保留', fs.readFileSync(path.join(tmp, 'a.txt'), 'utf8') === 'A\n' && fs.readFileSync(path.join(tmp, 'b.txt'), 'utf8') === 'B\n')
+}
+
+console.log('')
+console.log('=== B. begin → edit → rollback ===')
+{
+  fs.writeFileSync(path.join(tmp, 'c.txt'), 'c\n')
+  const begun = json(run(['basetools', 'tx', 'begin']))
+  const id = begun.transaction.id
+  const e = json(run(['basetools', 'edit', '--file', path.join(tmp, 'c.txt'), '--lines', '1', '--replace', 'C', '--tx', id]))
+  check('B1 edit 成功', e?.ok === true)
+  const back = json(run(['basetools', 'tx', 'rollback', '--id', id]))
+  check('B2 rollback 返回 rolled_back', back?.ok === true && back.rollback?.status === 'rolled_back', JSON.stringify(back).slice(0, 160))
+  check('B3 文件回到原字节', fs.readFileSync(path.join(tmp, 'c.txt'), 'utf8') === 'c\n', JSON.stringify(fs.readFileSync(path.join(tmp, 'c.txt'), 'utf8')))
+}
+
+console.log('')
+console.log('=== C. commit --verify 失败 ⇒ 整个事务回滚 ===')
+{
+  fs.writeFileSync(path.join(tmp, 'd.txt'), 'd\n')
+  const begun = json(run(['basetools', 'tx', 'begin']))
+  const id = begun.transaction.id
+  json(run(['basetools', 'edit', '--file', path.join(tmp, 'd.txt'), '--lines', '1', '--replace', 'D', '--tx', id]))
+  const refused = json(run(['basetools', 'tx', 'commit', '--id', id, '--verify', failCmd]))
+  check('C1 commit 返回 PATCH_VERIFY_FAILED', refused?.ok === false && refused.code === 'PATCH_VERIFY_FAILED', JSON.stringify(refused).slice(0, 200))
+  check('C2 文件回到事务前', fs.readFileSync(path.join(tmp, 'd.txt'), 'utf8') === 'd\n', JSON.stringify(fs.readFileSync(path.join(tmp, 'd.txt'), 'utf8')))
+}
+
+console.log('')
+console.log('=== D. 提交前外部改动 ⇒ TX_STALE，不覆盖 ===')
+{
+  fs.writeFileSync(path.join(tmp, 'e.txt'), 'e\n')
+  const begun = json(run(['basetools', 'tx', 'begin']))
+  const id = begun.transaction.id
+  json(run(['basetools', 'edit', '--file', path.join(tmp, 'e.txt'), '--lines', '1', '--replace', 'E', '--tx', id]))
+  fs.writeFileSync(path.join(tmp, 'e.txt'), 'external\n')
+  const stale = json(run(['basetools', 'tx', 'commit', '--id', id]))
+  check('D1 commit 拒绝 TX_STALE', stale?.ok === false && stale.code === 'TX_STALE', JSON.stringify(stale).slice(0, 180))
+  check('D2 外部内容没有被覆盖', fs.readFileSync(path.join(tmp, 'e.txt'), 'utf8') === 'external\n')
+}
+
+fs.rmSync(tmp, { recursive: true, force: true })
+console.log('')
+console.log(`--- 跨调用事务：${pass}/${pass + fail} 通过 ---`)
+process.exitCode = fail === 0 ? 0 : 1
