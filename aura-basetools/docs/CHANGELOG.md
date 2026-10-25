@@ -25,8 +25,8 @@
   降低长嵌套 JSON 触发 `MALFORMED_RESPONSE` 的概率。根因在 provider 的流式解析（工具看不到那段字节），
   要归零需宿主开启 strict 模式——`aura basetools doctor` 会打印配方与转换器路径。
 - 判据：encoding 34 条、doc-map 45 条、probe 21 条；全量闸 `node build/release-check.mjs` exit 0。
-- 已发布：npm `aura-basetools@0.21.0` / `aura-basetools-dsh@0.21.0`（registry.npmjs.org）。
-  GitHub Release **未发**：本检出没有 remote，需在 monorepo 检出里推送并建 `aura-basetools-v0.21.0`。
+- 已发布：npm `aura-basetools@0.21.0` / `aura-basetools-dsh@0.21.0`（registry.npmjs.org）；
+  GitHub Release `aura-basetools-v0.21.0`（monorepo `Ck-epsilon/Aura`，源码提交 `2c28beb`）。
 
 ## 0.20.0：MCP 反向注入 + 客户端残留清理
 
