@@ -55,6 +55,7 @@
 import fs from 'node:fs'
 import { gaveLineAddress, lineRangeOf } from './args.mjs'
 import { readWith } from './read-core.mjs'
+import { docKindOf } from './doc-structure.mjs'
 import { indexStructure, langOf } from './struct-core.mjs'
 import { planHunks } from './write-path.mjs'
 
@@ -532,11 +533,23 @@ for (const fx of FIXTURES) {
       `${fx.file}：符号行号落在 1..${total}`,
       idx === null ? '建表抛错' : idx.symbols.map((s) => `${s.name}[${s.startLine}-${s.endLine}]`).join(' '),
     )
-  } else {
+  } else if (docKindOf(fx.file) !== null) {
+    /**
+     * 0.21 起：.md/.json/.yaml/.toml 不再是“未索引”——它们有自己的结构目录。
+     * 判据随之变成：必须给出 entries（symbols >= 1），而不是一句拒绝。
+     */
     check(
-      typeof map?.note === 'string' && map.note.length > 0,
+      typeof map?.text === 'string' && map.text.length > 0 && typeof map?.symbols === 'number' && map.symbols >= 1,
+      `${fx.file} map（文档）：给出结构目录而不是“不支持”`,
+      `symbols=${map?.symbols} text=${JSON.stringify(String(map?.text ?? '').slice(0, 60))}`,
+    )
+  } else {
+    // 说明从 `note` 改到 `text`（反馈 D8）：`metrics.chars` 量的是 `text` 的长度，
+    // 只给 note 时 chars 会报 0，与同一条回执里“未索引”的说明自相矛盾。
+    check(
+      typeof map?.text === 'string' && map.text.length > 0,
       `${fx.file} map（未索引）：明说没有符号表，而不是假装有`,
-      `note=${JSON.stringify(map?.note)}`,
+      `text=${JSON.stringify(map?.text)}`,
     )
     check(map?.symbols === undefined, `${fx.file} map（未索引）：不谎报 symbols`, `symbols=${JSON.stringify(map?.symbols)}`)
   }

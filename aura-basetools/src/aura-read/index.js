@@ -80,6 +80,19 @@ export const Config = z.object({})
  */
 export const PASSTHROUGH_FIELDS = [
   'symbols',
+  /**
+   * probe（0.21）：只给元信息、不发正文。六个字段都是**按模式出现**的可选字段：
+   *   · bytes / lineEndings —— 文件真实字节数与行尾风格；
+   *   · language / docKind —— 代码扩展名或文档/配置类型（二者至多一个）；
+   *   · structure —— 结构规模的一句话（`2 symbols` / `1 sections`）；
+   *   · encoding —— 非 UTF-8 时的探测结果（独立面才有）。
+   */
+  'bytes',
+  'lineEndings',
+  'language',
+  'docKind',
+  'structure',
+  'encoding',
   'metrics',
   'version',
   'omitted',
@@ -535,7 +548,8 @@ export function apply(ctx) {
     defineTool({
       name: 'aura_basetools_read',
       description:
-        'Read a file the way you actually need it. Seven modes, and `auto` picks the smallest one for you: ' +
+        'Read a file the way you actually need it. Eight modes, and `auto` picks the smallest one for you: ' +
+        '`probe` (metadata only — lines, bytes, line endings, encoding, language, structure size; no content), ' +
         '`map` (what is in this file — an importance-ranked symbol directory), ' +
         '`digest` (its interface and dependencies — signatures without bodies), ' +
         '`full` (whole text; smallest for tiny files), ' +
@@ -596,6 +610,13 @@ export function apply(ctx) {
         },
         mode: {
           type: 'string',
+          /**
+           * 刻意**不写枚举**（与 MCP 面不同，两边各自有理由）：
+           *   · MCP 面：客户端是否校验 schema 由客户端决定，枚举是给模型的提示，写全（含 `auto`）比不写准；
+           *   · 本面：DSH 框架**在参数层就校验**枚举，写在这里会让退出码变成框架的 `invalid arguments`，
+           *     而 `READ_BAD_MODE` 是引擎已发布的契约（`aura-read/load-test` 与 `outcome-test` 都钉着它）。
+           * 两边都接受同一组模式；只是“谁来拒、报什么码”不同。
+           */
           description: `One of: ${MODES.join(', ')}, or auto (default). Auto compares rendered sizes and picks the smallest.`,
         },
         around: {
@@ -723,6 +744,13 @@ export function apply(ctx) {
               },
             },
             symbols: { type: 'integer' },
+            // probe（0.21）：元信息字段，按模式出现（见 PASSTHROUGH_FIELDS 里的注释）。
+            bytes: { type: 'integer' },
+            lineEndings: { type: 'string', enum: ['lf', 'crlf', 'mixed'] },
+            language: { type: 'string' },
+            docKind: { type: 'string' },
+            structure: { type: 'string' },
+            encoding: { type: 'string' },
             /**
              * 0.9.8：确定性的回执 metrics（引擎统一附加）。只放可由内容复算的事实，
              * 不放墙钟；`truncated` 表示 `omitted` 是否存在（有没有被预算裁过）。
@@ -1123,6 +1151,13 @@ export function apply(ctx) {
           // 量体量的尺子交给引擎：本层是【引擎信封 ≠ 工具输出】这个接缝的唯一知情人。
           shippedSize,
           byteOrderMark,
+          /**
+           * probe 的真实字节数：宿主已经在上面 `ctx.fs.stat` 过，直接递进去，
+           * 不让引擎拿 `TextEncoder` 估（非 UTF-8 会估错；UTF-8 也只是碰巧相等）。
+           */
+          ...(Number.isFinite(info?.size) ? { fileSize: info.size } : {}),
+          // 宿主只给得起 UTF-8 文本；能读到内容就说明宿主按 UTF-8 解开了。
+          sourceEncoding: 'utf-8',
         }
         const env = readWith(source, request)
         if (env.ok === false) {

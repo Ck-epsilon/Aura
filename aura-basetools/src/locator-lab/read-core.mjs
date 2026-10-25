@@ -22,6 +22,7 @@
  */
 
 import { indexStructure, langOf, listSymbols, rankSymbols, resolveTarget } from './struct-core.mjs'
+import { docKindOf, indexDocument } from './doc-structure.mjs'
 /**
  * 区间句柄（HD1）：本文件只**发**句柄，编辑侧怎么解析是另一张单的事。
  *
@@ -185,7 +186,7 @@ function serializedSize(envelope) {
  * 模式。刻意做成显式枚举而不是"有参数就切换"——后者会让"我到底要什么"变得含糊，
  * 而含糊正是信息浪费的源头。
  */
-export const MODES = ['map', 'digest', 'full', 'around', 'lines', 'search', 'changed']
+export const MODES = ['map', 'digest', 'full', 'around', 'lines', 'search', 'changed', 'probe']
 
 /**
  * 摘要：**看懂一个文件**所需的最小信息集。
@@ -198,10 +199,26 @@ export const MODES = ['map', 'digest', 'full', 'around', 'lines', 'search', 'cha
  */
 function renderDigest(base, source, lines, lang, request, symbolsIndex = null) {
   if (lang === null) {
+    /**
+     * 文档没有签名，但有**结构**。`digest` 的承诺是“无正文的结构”，
+     * 所以文档的 digest = 结构目录（与 `map` 同源），而不是一句“没有结构”。
+     */
+    const docKind = docKindOf(request.filePath)
+    if (docKind !== null) {
+      return {
+        ...renderDocMap(base, lines, docKind, request),
+        mode: 'digest',
+        note: 'documents have no signatures; this is their structure directory (same as mode=map)',
+      }
+    }
+    /**
+     * 正文放 `text`（不是 `note`）：`metrics.chars` 量的是 `text` 的长度（read-test 钉着这条等式），
+     * 只给 `note` 时 `chars` 会报 0，与 note 里的实际信息矛盾（反馈 D8）。
+     */
     return {
       ...base,
       mode: 'digest',
-      note: `unsupported extension — no structure available; ${base.totalLines} lines`,
+      text: `unsupported extension — no structure available; ${base.totalLines} lines`,
       next: 'mode=lines lines=[a,b]',
     }
   }
@@ -1524,7 +1541,23 @@ function planIncremental(request, lines, version) {
       : { kind: 'skip' }
   }
   if (entry.version === version) {
-    return { kind: 'no-change', baseline: entry.version, asked, partial: entry.covered !== true, bomChanged: false }
+    /**
+     * 同一版重读：**只有账本里那份是完整交付时**，“不发正文”才成立。
+     *
+     * 上一次被预算截断（`covered = false`）时，调用方手里只有前半份。旧实现仍走
+     * `no-change`，只回一句“去用 lines 拿剩下的”，于是**显式提高 budget 的请求被吞掉**：
+     * 实测 401 行文件第二次 `full` + `budget: 60000` 只拿到 155 字符，且 `truncated: false`——
+     * 程序化调用方会把它当成“已拿全”。（反馈 D4）
+     *
+     * 现在：没被显式要求增量 ⇒ `skip`（普通 full 渲染，按本次 budget 出正文）；
+     * 被显式要求增量 ⇒ `degrade`（全文 + 为何不能给差量）。两者都不会再谎报“没变化”。
+     */
+    if (entry.covered !== true) {
+      return asked
+        ? { kind: 'degrade', asked: true, reason: 'your earlier read of this file was cut at the content budget, so the ledger copy is not a complete baseline; the full text follows' }
+        : { kind: 'skip' }
+    }
+    return { kind: 'no-change', baseline: entry.version, asked, bomChanged: false }
   }
   if (entry.covered !== true) {
     return asked
@@ -1563,15 +1596,9 @@ function planIncremental(request, lines, version) {
 
 /** 文件没变时的回执：**明写 no change、明写基准令牌，不给正文**。 */
 function noChangeEnvelope(base, plan, total) {
-  const partial = plan.partial === true
   const bom = plan.bomChanged === true ? ' (the byte-order mark changed; the text itself is unchanged)' : ''
-  const note = partial
-    ? `no change since baseline ${plan.baseline} — but your earlier read of this file was cut at the content budget, so it is not the whole file`
-    : `no change since baseline ${plan.baseline} — the file is byte-identical to the copy you already have${bom}`
-  const text = partial
-    ? `no change since baseline ${plan.baseline}; your earlier copy was truncated at the content budget — ask for the missing lines with mode=lines if you need them`
-    : `no change since baseline ${plan.baseline} — nothing to send${bom}`
-  return { ...base, mode: 'full', note, text, next: `mode=lines lines=[1,${total}] to get the whole text again` }
+  const note = `no change since baseline ${plan.baseline} — the file is byte-identical to the copy you already have${bom}`
+  return { ...base, mode: 'full', note, text: `no change since baseline ${plan.baseline} — nothing to send${bom}`, next: `mode=lines lines=[1,${total}] to get the whole text again` }
 }
 
 /**
@@ -2262,6 +2289,7 @@ export function readWith(source, request = {}) {
     // 符号索引只建一次：`map`/`digest`/`around` 本来就要用，而 `lines`/`search` 现在也要
     // （给裸行号附上可重新定位的引用）。没语言配置（未索引扩展名）时为 null，各处自行降级。
     const symbolsIndex = lang === null ? null : indexStructure(source, lang)
+    if (mode === 'probe') return renderProbe(base, source, lang, docKindOf(request.filePath), request)
     if (mode === 'map') return renderMap(base, source, lines, lang, request, symbolsIndex)
     if (mode === 'digest') return renderDigest(base, source, lines, lang, request, symbolsIndex)
     /**
@@ -2428,6 +2456,94 @@ export function readWith(source, request = {}) {
 }
 
 /**
+ * probe —— 只回答“这是什么文件”，不重复正文。
+ *
+ * 用途：调用方先判断“值不值得读”。行数、字节数、行尾风格、编码、语言/文档类型、
+ * 结构规模（符号数或节/键数）都在这一行里；正文一律不发。
+ *
+ * 它不是 `map` 的替代：`map` 给的是**可追问的目录**，`probe` 给的是一句**元信息摘要**。
+ * 代价也只有本地 IO——但对于“先看一眼再决定”这种意图，它省的是整份回执的 token。
+ */
+/** 1 symbols / 1 sections 这种复数噪声一律收掉（回执是给人读的）。 */
+const unitWord = (n, unit) => (n === 1 && unit.endsWith('s') ? unit.slice(0, -1) : unit)
+
+function renderProbe(base, source, lang, docKind, request) {
+  const bytes = Number.isSafeInteger(request.fileSize) ? request.fileSize : new TextEncoder().encode(source).length
+  const hasCrlf = source.includes('\r\n')
+  const hasLf = source.replaceAll('\r\n', '').includes('\n')
+  const lineEndings = hasCrlf && hasLf ? 'mixed' : hasCrlf ? 'crlf' : 'lf'
+  const encoding = typeof request.sourceEncoding === 'string' ? request.sourceEncoding : null
+  /**
+   * `lang` 是**语法配置对象**（`langOf` 的返回值），不是名字；直接拼进摘要会得到
+   * `[object Object]`（实测）。名字取扩展名，与 `langOf` 判定的是同一个东西。
+   */
+  const dot = typeof request.filePath === 'string' ? request.filePath.lastIndexOf('.') : -1
+  const language = lang !== null && dot >= 0 ? request.filePath.slice(dot + 1).toLowerCase() : null
+  let structure = null
+  if (lang !== null) {
+    const n = listSymbols(indexStructure(source, lang)).length
+    structure = `${n} ${unitWord(n, 'symbols')}`
+  } else if (docKind !== null) {
+    const index = indexDocument(source, docKind)
+    structure = `${index.entries.length} ${unitWord(index.entries.length, index.unit)}`
+  }
+  const parts = [`${base.totalLines} lines`, `${bytes} bytes`, lineEndings === 'mixed' ? 'mixed line endings' : lineEndings.toUpperCase()]
+  if (encoding !== null) parts.push(encoding)
+  if (language !== null) parts.push(language)
+  else if (docKind !== null) parts.push(docKind)
+  if (structure !== null) parts.push(structure)
+  return {
+    ...base,
+    mode: 'probe',
+    bytes,
+    lineEndings,
+    ...(encoding === null ? {} : { encoding }),
+    ...(language === null ? {} : { language }),
+    ...(docKind === null ? {} : { docKind }),
+    ...(structure === null ? {} : { structure }),
+    text: parts.join(' · '),
+    next: 'mode=map for a directory; mode=lines lines=[a,b] for a section; mode=full for every line',
+  }
+}
+
+/**
+ * 文档 / 配置的目录：行号 + 层级 + 名字，不复制正文。
+ *
+ * 与代码地图同一套预算与续读语义：超出预算时 `omitted` 点名区间，下一步是 `mode=lines`。
+ */
+function renderDocMap(base, lines, docKind, request) {
+  const index = indexDocument(lines.join('\n'), docKind)
+  const kindFilter = typeof request.kind === 'string' ? request.kind : null
+  const entries = kindFilter === null ? index.entries : index.entries.filter((entry) => entry.kind === kindFilter)
+  if (entries.length === 0) {
+    return {
+      ...base,
+      mode: 'map',
+      text: `${base.totalLines} lines · no ${index.unit} found in this ${docKind} file`,
+      ...(index.note === undefined ? {} : { note: index.note }),
+      next: 'use mode=full or mode=lines to read content',
+    }
+  }
+  const byKind = {}
+  for (const entry of entries) byKind[entry.kind] = (byKind[entry.kind] ?? 0) + 1
+  const header = `${base.totalLines} lines · ${index.entries.length} ${unitWord(index.entries.length, index.unit)} (${Object.entries(byKind).map(([kind, n]) => `${kind}:${n}`).join(' ')})`
+  const rows = entries.map((entry) => `${'  '.repeat(Math.max(0, entry.depth - 1))}${entry.name}  ${entry.startLine}-${entry.endLine}`)
+  const kept = fitWithin([header, ...rows].join('\n'), base.contentBudget)
+  const shown = Math.max(0, kept.kept - 1)
+  return {
+    ...base,
+    mode: 'map',
+    symbols: index.entries.length,
+    shown,
+    byKind,
+    text: kept.text,
+    ...(index.note === undefined ? {} : { note: index.note }),
+    ...(shown < rows.length ? { omitted: `${index.unit} ${shown + 1}..${rows.length} of ${rows.length} beyond the content budget; read them with mode=lines over their line range` } : {}),
+    next: 'mode=lines lines=[a,b] to read a section; mode=map kind=<kind> to filter',
+  }
+}
+
+/**
  * map —— 先给地图。
  *
  * 与旧 read 的根本差别：默认动作不是"把文件给你"，而是"告诉你这里有什么、怎么继续要"。
@@ -2437,10 +2553,18 @@ export function readWith(source, request = {}) {
  */
 function renderMap(base, source, lines, lang, request, symbolsIndex = null) {
   if (lang === null) {
+    /**
+     * 文档 / 配置（.md/.json/.yaml/.toml）也应有目录：实测 22% 的读取目标是这几类扩展名
+     * （最近 62 个会话 / 1,836 次 read），而旧实现只回一句“unsupported extension”。
+     * 结构索引在 `doc-structure.mjs`；这里只负责渲染与续读。
+     */
+    const docKind = docKindOf(request.filePath)
+    if (docKind !== null) return renderDocMap(base, lines, docKind, request)
+    // 同上：正文进 `text`，否则 `metrics.chars` 为 0 而同一条回执的说明里写着实际字符数。
     return {
       ...base,
       mode: 'map',
-      note: `unsupported extension — no symbol index; ${base.totalLines} lines, ${source.length} chars`,
+      text: `unsupported extension — no symbol index; ${base.totalLines} lines, ${source.length} chars`,
       next: 'use mode=full or mode=lines to read content',
     }
   }

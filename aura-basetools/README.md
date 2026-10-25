@@ -18,11 +18,37 @@ npm i -g aura-basetools                              # CLI
 dsh plugin --profile web add aura-basetools-dsh      # DSH 插件
 ```
 
-MCP 客户端只写一段配置（agent 自己就能加）：
+MCP 客户端只写一段配置（agent 自己就能加）。`aura basetools mcp` 与 `aura-mcp` 是**同一个服务器**：前者是 CLI 子命令，后者是它调用的 bin（`doctor` 报的 `mcp-bin` 是后者路径），升级时两条入口一起变，不需要分别维护：
 
 ```json
 {"mcpServers":{"aura":{"command":"npx","args":["-y","--package","aura-basetools","aura","basetools","mcp"]}}}
 ```
+
+**可选：在 provider 侧开 strict——把“工具参数不是合法 JSON”归零**
+
+模型输出的工具参数坏掉时（`MALFORMED_RESPONSE`：`tool input is invalid JSON`），请求在到达工具之前就失败了：
+工具看不到那段字节，只能降低概率。能做“归零”的只有 provider 的约束解码：
+
+- **DeepSeek**：`base_url` 用 `https://api.deepseek.com/beta`，每个 function 加 `"strict": true`（服务端会先校验 schema）；
+- **OpenAI**：`strict: true`（schema 需全 required + `additionalProperties: false`）。
+
+本包的 schema 可直接转成 strict 变体（全 required + 可选字段写成 `anyOf[类型, null]` + `anyOf` 取代 `oneOf`）：
+
+```js
+import { strictToolList } from 'aura-basetools/locator-lab/strict-schema.mjs'
+```
+
+`aura basetools doctor` 会把这条 recipe 打出来。代价：每次调用多输出一批 `null` 字段（按 15 天用量估算 ≈ +9M output tokens）。
+
+**安全保证的真实边界（别读成更多）**
+
+- **写入立即可见**：`tx begin` 之后的 `edit/write --tx` 改完就在盘上（`tx status` 仍是 pending）。`tx` 是跨文件**回滚日志**，不是隔离事务；`rollback` 按 afterVersion 恢复。要“改完再验证再提交”，把 `verify` 放在 `tx commit --verify`，并接受 pending 期间外部可见。
+- **`edit` 默认不要求先读**：`old`（内容地址）与 `handle`（版本绑定的字节区间）自带校验；`target` 按符号名定位；`lines` / `line_cue` / `anchor` 只按坐标/线索定位——未读过的文件也能写，回执标 `unverified_region: true`。需要强制新鲜度时加 `--require-observation`（MCP `require_observation: true`）。`write` 覆写默认要求先读（`PATCH_UNOBSERVED`）。
+- **`full` = up to budget**：默认约 7.5k 字符（`capabilities` 的 `limits.contentBudget`），`budget` 可顶大，但没有“一次给全”的保证。
+- **`verify` 只给命令**：在**工作区根目录**执行、无超时参数；MCP 传输上限 30s，慢命令别放进 verify。
+- **`probe` 模式（0.21 起）**：`mode=probe` 只回元信息——行数、字节数、行尾风格、编码、语言/文档类型、结构规模（符号或节/键数），**一个正文字节都不发**；用来先判断“值不值得读”。
+- **文档结构（0.21 起）**：`map` 对 `.md` / `.json` / `.jsonc` / `.yaml` / `.toml` 也给目录（标题树 / 键路径 + 行号区间），不再回一句 “unsupported extension”；实测 22% 的读取目标是这几类。
+- **编码（0.21 起）**：自动探测 UTF-8 / UTF-16LE/BE（BOM）/ GB18030（GBK）/ Shift_JIS / EUC-KR / Big5 / Windows-1252；回执带 `encoding`（非 UTF-8 另带 `encoding_confidence`）。写回沿用读时那次探测的编码，**未改动的行逐字节保留**；不可逆或猜不准时拒绝写（`ENCODING_NOT_ROUNDTRIP_SAFE` / `ENCODING_AMBIGUOUS`），用 `AURA_ENCODING` 显式指定；目标编码表示不了的字符 ⇒ `ENCODING_UNREPRESENTABLE`，零写入。
 
 离线：`npm i -g ./aura-basetools-<版本>.tgz`；回滚：`npm i -g aura-basetools@<旧版本>`。
 自定义安装器与交付 zip 已在 0.13.2 移除——稳定路径/升级/客户端注册由 npm 与 agent 自己完成。

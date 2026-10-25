@@ -15,7 +15,12 @@ import path from 'node:path'
 import zlib from 'node:zlib'
 
 const MAGIC = [0x28, 0xb5, 0x2f, 0xfd]
-const SESSION_FILE = 'session.v3.jsonl.zstd'
+/**
+ * v3 与 v4 是同一套事件（`tool/call` / `tool/result`），差别只有两处：文件名，以及失败标记的位置。
+ * 只认 v3 会让 2026-10-20 之后的会话从统计里整体消失——实测那段窗口有 62 个会话 /
+ * 17,358 次工具调用（其中 5,368 次 aura、1,929 次已经是 `aura_basetools_*` 新名）。
+ */
+const SESSION_FILE = /^session\.v[34]\.jsonl\.zstd$/
 
 /** 逐帧解压；坏帧忽略（日志尾部可能是半帧）。 */
 export function decompressAll(buf) {
@@ -47,7 +52,7 @@ function* sessionFiles(dir, depth = 0) {
   for (const entry of entries) {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) yield* sessionFiles(full, depth + 1)
-    else if (entry.name === SESSION_FILE) yield full
+    else if (SESSION_FILE.test(entry.name)) yield full
   }
 }
 
@@ -111,7 +116,12 @@ export function* parseSessionsDetailed(since = 0, root = path.join(process.env.U
         const call = typeof id === 'string' ? byId.get(id) : undefined
         if (call === undefined) continue
         const parts = event.data?.message?.content ?? []
-        call.isError = parts.some((part) => part?.isError === true)
+        /**
+         * v3 的失败标记在 `message.content[].isError`，v4 挪到了 `message.isError`——只读前者会让
+         * v4 的失败率**恒为 0**（实测同一文件：part 级 v3 13 条、v4 0 条；message 级 v4 5 条）。
+         * 两处都收：这种"格式变了所以没有失败"的假读数比缺字段更难发现。
+         */
+        call.isError = event.data?.message?.isError === true || parts.some((part) => part?.isError === true)
         /**
          * 回执正文一并留下（只取 text 块）。
          *

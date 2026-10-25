@@ -11,6 +11,7 @@ import { LANGS } from '../src/locator-lab/struct-core.mjs'
 import { FLAT_ADDRESS_KEYS, MT_MAX_TARGETS, MT_POOL } from '../src/locator-lab/args.mjs'
 import { CONTENT_BUDGET, DEFAULT_ENVELOPE_ALLOWANCE, DEFAULT_PRUNE_BUDGET, MODES } from '../src/locator-lab/read-core.mjs'
 import { HANDLE_MAX_PER_RECEIPT } from '../src/locator-lab/handle-core.mjs'
+import { SUPPORTED_ENCODINGS } from '../src/aura-standalone/lib/encoding.mjs'
 
 const say = (m) => fs.writeSync(1, `${m}\n`)
 let pass = 0
@@ -49,6 +50,28 @@ check('A5c 0.14.0：CLI/MCP 不再宣称 transaction/undo，只保留 lock/闸/�
 say('')
 say('=== B. 语言表与限制 ===')
 check('B1 languages 等于 LANGS 的键', JSON.stringify(cap.langs) === JSON.stringify(Object.keys(LANGS).sort()), `${cap.langs.length}`)
+// 反馈 D7/B1：寻址安全等级与文本编码是机器可读事实，不能只靠散文。
+{
+  const edit = cap.tools.find((tool) => tool.name === 'aura_basetools_edit')
+  check(
+    'A6 寻址安全等级与实测一致（coordinate 默认不设闸）',
+    edit?.addressSafety?.coordinate?.includes('lines') &&
+      edit?.addressSafety?.contentVerified?.includes('old') &&
+      edit.addressSafety.coordinateNeedsObservation === false,
+    JSON.stringify(edit?.addressSafety),
+  )
+  check(
+    'B7 文档/配置的结构目录类型已声明',
+    JSON.stringify(cap.docKinds) === JSON.stringify(['markdown', 'json', 'yaml', 'toml']),
+    JSON.stringify(cap.docKinds),
+  )
+  check(
+    'B5 文本编码声明与 encoding.mjs 同源（含非 UTF-8）',
+    JSON.stringify(cap.textEncodings) === JSON.stringify(SUPPORTED_ENCODINGS) && cap.textEncodings.includes('gb18030'),
+    JSON.stringify(cap.textEncodings),
+  )
+  check('B6 full 的默认预算是事实字段', cap.limits.defaultContentBudget === CONTENT_BUDGET && cap.limits.maxContentBudget === null, JSON.stringify({ d: cap.limits.defaultContentBudget, m: cap.limits.maxContentBudget }))
+}
 check('B2 langsCount 等于实际长度', cap.langsCount === Object.keys(LANGS).length, `${cap.langsCount}`)
 check('B3 覆盖常用语言', ['js', 'ts', 'py', 'go', 'rs', 'java', 'c', 'cpp'].every((ext) => cap.langs.includes(ext)), cap.langs.filter((x) => ['js', 'ts', 'py', 'go', 'rs', 'java', 'c', 'cpp'].includes(x)).join(','))
 check('B4 限制与源码常量一致', cap.limits.multiTargetsMax === MT_MAX_TARGETS && cap.limits.multiTargetPool === MT_POOL && cap.limits.defaultPruneBudget === DEFAULT_PRUNE_BUDGET && cap.limits.envelopeAllowance === DEFAULT_ENVELOPE_ALLOWANCE && cap.limits.contentBudget === CONTENT_BUDGET && cap.limits.handlesPerReceipt === HANDLE_MAX_PER_RECEIPT, JSON.stringify(cap.limits))

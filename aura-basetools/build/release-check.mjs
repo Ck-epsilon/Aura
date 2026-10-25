@@ -148,6 +148,23 @@ const SUITES = [
   ['embeddability', 'src/locator-lab/embeddability-test.mjs'],
   //   端到端+集成 —— CLI / MCP 当**真进程**驱动，多次调用串起来（含令牌跨进程、并发多进程）
   ['cli-mcp-e2e', 'src/locator-lab/cli-mcp-e2e-test.mjs'],
+  // 多 agent 共用面的可移植子集：MCP 的 schema 一旦用了 `oneOf`/`$ref`/长度约束，
+  // DeepSeek strict / OpenAI strict 会整面拒掉——而这一面 Codex/Claude Code/Cursor/ZCode 共用。
+  ['schema-portability', 'src/locator-lab/schema-portability-test.mjs'],
+  // 多编码：探测 / 读 / 回编码 / 不可表示拒绝 / UTF-8 回归（反馈 2026-10-25 第一条）。
+  ['encoding', 'src/locator-lab/encoding-test.mjs'],
+  // 文档/配置的结构目录（Markdown / JSON / YAML / TOML）。
+  ['doc-map', 'src/locator-lab/doc-map-test.mjs'],
+  // probe 模式（只给元信息、不发正文）。
+  ['probe', 'src/locator-lab/probe-test.mjs'],
+  // 同一工具在 MCP 与 DSH 两面必须是同一张形状（顶层键集合差只允许文档化清单；
+  // 平铺单 hunk 在两面都要真的能执行）。
+  ['surface-parity', 'src/locator-lab/surface-parity-test.mjs'],
+  // strict 变体是 P1 归零的唯一工具侧产物：输出必须满足 provider strict 的四条硬约束。
+  ['strict-schema', 'src/locator-lab/strict-schema-test.mjs'],
+  // 故障投递面（多 agent 稳定）：7 种现场 × CLI/MCP，断言“回包可解析 + 跨入口语义类一致”；
+  // 挂死 / 崩 / 非 JSON 回包 / 同一故障两面不同类 → 闸红（P1 不在其中：它发生在工具之前）。
+  ['interrupt-posture', 'probes/interrupt-matrix.mjs'],
   //   冒烟·部署 —— **装出来的那一份**能不能用（每个 .mjs 真 import / peer 从装包位置可解析）
   ['installed-package', 'src/locator-lab/installed-package-test.mjs'],
   // ── C32 补登：以下 18 件**本来就在 `src` 下自带判据与汇总行**，却因为"清单靠人手抄"而没进闸。

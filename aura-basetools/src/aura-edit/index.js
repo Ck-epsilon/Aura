@@ -1379,10 +1379,17 @@ function registerTools(ctx, sandbox) {
     defineTool({
       name: 'aura_basetools_edit',
       description:
-        'Edit or create a UTF-8 text file with hunks, in a single call. ' +
+        'Edit or create a text file in one call. ' +
+        /**
+         * 参数越短越安全：provider 的流式解析失败（MALFORMED_RESPONSE）几乎都出在
+         * 长、深嵌套的 tool-call JSON 上。平铺形式比 `hunks: [...]` 少一层嵌套，
+         * 而且有 `handle` 时不必把旧文本再抄一遍。这一条写在描述**最前面**，
+         * 因为模型读描述时先读首句。
+         */
+        'PREFER THE FLAT FORM for a single change: put the hunk fields at the top level (`start_line`/`end_line` + `replace`, or `old` + `replace`, or a `handle` from a previous read + `replace`) and omit `hunks` entirely — one JSON object instead of an array of objects, which keeps tool-call arguments short. Use `hunks: [...]` only when a call changes several places. ' +
         'For several files, pass `targets` — an array of the same single-target arguments (`file_path` + `hunks`); it is mutually exclusive with `file_path`. ' +
         'Every target is planned before anything is written: if any target fails to plan, nothing is written at all, and if a write itself fails the receipt names exactly which targets landed. ' +
-        'Address each hunk in the cheapest way you can: `target` (a symbol name — immune to misremembered content), or `start_line` + `end_line` (preferred: two plain numbers, no array syntax to get wrong — same as `lines: [a, b]`), or `line_cue` (one word unique to that line), or `anchor` (remembered text, matched with graceful degradation), or `old` (the verbatim text you are replacing). Add `replace_all: true` with `old` to replace every non-overlapping occurrence in one call (left-to-right; refused if the occurrence count changed since your last read). Only `anchor` and `old` require you to reproduce content; prefer the others. Pass `expect` to assert what is at that location — it is checked in every mode. All hunks must locate or nothing is written. Omit keys you do not need — an explicit `null` is rejected, not ignored.',
+        'Address each hunk in the cheapest way you can: `target` (a symbol name — immune to misremembered content), or `start_line` + `end_line` (preferred: two plain numbers, no array syntax to get wrong — same as `lines: [a, b]`), or `line_cue` (one word unique to that line), or `anchor` (remembered text, matched with graceful degradation), or `old` (the verbatim text you are replacing). Add `replace_all: true` with `old` to replace every non-overlapping occurrence in one call (left-to-right; refused if the occurrence count changed since your last read). Only `anchor` and `old` require you to reproduce content; prefer the others. JSON/JSONC edits: prefer `lines`/`start_line`+`end_line` and put only the new text in `replace` — re-typing the old text doubles the escaped quotes/newlines the call must carry. Pass `expect` to assert what is at that location — it is checked in every mode. All hunks must locate or nothing is written. A single hunk may also be passed flat at the top level (`file_path` + the hunk fields) instead of wrapped in `hunks: [...]`. Omit keys you do not need — an explicit `null` is rejected, not ignored.',
       parameters: {
         /**
          * `file_path` 不再声明 `required: true` —— 这是多目标形状唯一逼出来的一处**声明面**改动。
@@ -1429,7 +1436,7 @@ function registerTools(ctx, sandbox) {
           // "必须给 hunks 或 create 之一"这条约束由运行期判——schema 层表达不了"二选一"，
           // 硬写成必填会让创建功能被自己的 schema 挡住。
           description:
-            'The changes to apply. Every hunk must locate, or the file is left untouched. Each hunk locates either by `target` (a symbol name — preferred when you know it) or by `anchor` (remembered text). Not needed when `create` is used.',
+            'Multiple changes only — for a single change use the flat form instead (hunk fields at the top level, no `hunks`). Every hunk must locate, or the file is left untouched. Each hunk locates either by `target` (a symbol name — preferred when you know it) or by `anchor` (remembered text). Not needed when `create` is used.',
           /**
            * `items` 里**不写 `required`**。
            *

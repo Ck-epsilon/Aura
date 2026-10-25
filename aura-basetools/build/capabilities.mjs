@@ -26,6 +26,7 @@ import {
   MODES,
 } from '../src/locator-lab/read-core.mjs'
 import { HANDLE_MAX_PER_RECEIPT } from '../src/locator-lab/handle-core.mjs'
+import { SUPPORTED_ENCODINGS } from '../src/aura-standalone/lib/encoding.mjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -52,6 +53,22 @@ export function buildCapabilities() {
         name: 'aura_basetools_edit',
         addressKinds: [...new Set([...FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
         options: ['replace_all', 'require_observation', 'verify'],
+        /**
+         * 寻址安全等级（反馈 D7）：机器可读地说明“哪种地址自带校验”。
+         * 旧清单只有按**入口**分的 writeSafety，读起来像“写都被 gate”，
+         * 而 line 寻址在未观察过的文件上确实不设闸（回执标 unverified_region）。
+         *
+         *   · contentVerified：地址本身就是内容/版本（错了字就匹配不上/句柄过期）；
+         *   · structural：按符号名定位，文件漂移后仍能命中同名符号；
+         *   · coordinate：按坐标/线索定位，未观察过的文件上无基准可校 —— 默认不设闸，
+         *     需 `require_observation` 强制。
+         */
+        addressSafety: {
+          contentVerified: ['old', 'handle'],
+          structural: ['target'],
+          coordinate: ['lines', 'start_line', 'end_line', 'line_cue', 'anchor'],
+          coordinateNeedsObservation: false,
+        },
         /**
          * 写安全能力按**入口**分：CLI/MCP 的 envelope 才有工作区锁；
          * DSH 壳只经过引擎的陈旧闸门与回读校验，不能跟着宣称同一组能力。
@@ -83,12 +100,19 @@ export function buildCapabilities() {
     commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools tx', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
     langs: Object.keys(LANGS).sort(),
     langsCount: Object.keys(LANGS).length,
+    // 可读可写的编码（实测过的探测 + 回编码）。非 UTF-8 不再拒绝；不可逆/猜不准时**写**拒绝。
+    textEncodings: [...SUPPORTED_ENCODINGS],
+    // `map` 能给出结构目录的文档/配置类型（代码语言看 `langs`）。
+    docKinds: ['markdown', 'json', 'yaml', 'toml'],
     limits: {
       multiTargetsMax: MT_MAX_TARGETS,
       multiTargetPool: MT_POOL,
       defaultPruneBudget: DEFAULT_PRUNE_BUDGET,
       envelopeAllowance: DEFAULT_ENVELOPE_ALLOWANCE,
       contentBudget: CONTENT_BUDGET,
+      // `full` = up to budget（反馈 D5）：能被 `budget` 顶大，但没有“一次给全”的保证。
+      defaultContentBudget: CONTENT_BUDGET,
+      maxContentBudget: null,
       handlesPerReceipt: HANDLE_MAX_PER_RECEIPT,
     },
     packaging: {

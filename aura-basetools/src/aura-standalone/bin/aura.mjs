@@ -87,15 +87,15 @@ const isBooleanFlag = (token) => typeof token === 'string' && BOOLEAN_FLAGS.has(
  */
 const COMMAND_FLAGS = {
   read: {
-    value: ['cwd', 'file', 'targets', 'mode', 'around', 'lines', 'start-line', 'end-line', 'search', 'since', 'context', 'kind', 'budget', 'max-chars', 'offset', 'limit'],
+    value: ['cwd', 'file', 'targets', 'mode', 'around', 'lines', 'start-line', 'end-line', 'search', 'since', 'context', 'kind', 'budget', 'max-chars', 'offset', 'limit', 'encoding'],
     bool: ['pretty'],
   },
   edit: {
-    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol', 'verify', 'tx'],
+    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol', 'verify', 'tx', 'encoding'],
     bool: ['pretty', 'dry-run', 'plan', 'replace-all', 'require-observation'],
   },
   write: {
-    value: ['cwd', 'file', 'content', 'eol', 'verify', 'tx'],
+    value: ['cwd', 'file', 'content', 'eol', 'verify', 'tx', 'encoding'],
     bool: ['pretty', 'dry-run', 'plan', 'no-overwrite', 'allow-unobserved'],
   },
   tx: { value: ['cwd', 'id', 'verify'], bool: ['pretty', 'json'] },
@@ -339,7 +339,8 @@ if (command === 'mcp') {
   process.exit(0)
 }
 
-const provider = openProvider(typeof flag('cwd') === 'string' ? flag('cwd') : process.cwd())
+const encodingFlag = typeof flag('encoding') === 'string' && flag('encoding').length > 0 ? flag('encoding') : undefined
+const provider = openProvider(typeof flag('cwd') === 'string' ? flag('cwd') : process.cwd(), { encoding: encodingFlag })
 
 if (command === 'tx') {
   const action = argv[1]
@@ -441,11 +442,29 @@ if (command === 'doctor') {
   probeWritable(cacheDir, 'cache-writable')
   probeWritable(path.join(cacheDir, 'locks'), 'lock-writable')
   const ok = checks.every((check) => check.ok)
+  /**
+   * strict 提示（不是检查项）：让“能不能把参数解析失败归零”这件事在装完就能看到。
+   *
+   * 工具侧不能替宿主开 strict（那是 provider/客户端配置），但能说清楚“我们的 schema 转得过去”
+   * 与“怎么开”。转换器导出在 `locator-lab/strict-schema.mjs`（`toStrictSchema` / `strictToolList`），
+   * 已随包发布（package.json 的 `./locator-lab/*`）。
+   *
+   * 为什么放在 doctor 而不是新开一个命令：doctor 是“装完跑一下”的那条路径，
+   * 而 strict 能不能开决定了“参数解析失败”是否还会中断任务。
+   */
+  const strict = {
+    compatible: true,
+    convert: 'aura-basetools/locator-lab/strict-schema.mjs',
+    deepseek: 'base_url=https://api.deepseek.com/beta + "strict": true on every function (server validates the schema)',
+    openai: 'strict: true (all properties required + additionalProperties:false)',
+    note: 'strict 让模型不可能输出非法 JSON；不开时工具侧只能降低概率（P1 发生在工具被调用之前）',
+  }
   const report = {
     ok,
     version: VERSION,
     node: process.versions.node,
     checks,
+    strict,
     ...(process.env.AURA_NO_LOCK === '1' ? { notes: ['AURA_NO_LOCK=1: workspace lock is disabled'] } : {}),
   }
   if (has('json')) {
@@ -454,6 +473,10 @@ if (command === 'doctor') {
   }
   process.stdout.write(`aura basetools doctor: ${ok ? 'ok' : 'FAILED'} (${VERSION}, node ${process.versions.node})\n`)
   for (const check of checks) process.stdout.write(`  ${check.ok ? '✓' : '✗'} ${check.id}: ${check.detail}\n`)
+  process.stdout.write(`  • strict: schemas 可转成 provider strict 变体（全 required + nullable + anyOf）——\n`)
+  process.stdout.write(`    DeepSeek: ${strict.deepseek}\n`)
+  process.stdout.write(`    OpenAI:   ${strict.openai}\n`)
+  process.stdout.write(`    转换器: ${strict.convert}｜不开 strict 时“参数不是合法 JSON”仍会中断任务（工具看不到那段字节）\n`)
   process.exit(ok ? 0 : 2)
 }
 
@@ -493,6 +516,7 @@ if (command === 'read' || command === 'outline') {
     limit: typeof flag('limit') === 'string' ? Number(flag('limit')) : undefined,
     // 光写 `--max-chars` 不带值时 flag() 回 true，Number(true)=1 会变成"预算 1 字符"这种怪值
     maxChars: typeof flag('max-chars') === 'string' ? Number(flag('max-chars')) : undefined,
+    encoding: encodingFlag,
   })
   emit(env, env.ok ? 0 : 2)
 }

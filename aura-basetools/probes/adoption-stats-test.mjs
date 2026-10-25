@@ -101,5 +101,32 @@ check(parseSince(undefined) === 0, '缺省 = 全部')
 check(parseSince('2026-09-21T07:26') === Date.parse('2026-09-21T07:26'), 'ISO 时间可解析')
 check(parseSince('昨天') === null, '解析不了返回 null（调用方据此报错退出）')
 
+process.stdout.write('\n=== 改名后的工具名（aura_basetools_*）===\n')
+// 0.11.0 起工具名加了 `basetools_` 前缀。夹具形状取自 v4 会话：读/编辑/整份写混用、mode 省略、
+// hunk 按内容寻址。只认旧名时，这一整段会被算成“没用过 aura”——而它恰好是新窗口的全部。
+const renamed = [
+  {
+    dir: 'agent-browser-bridge',
+    cwd: 'E:\\workspaces\\agent-browser-bridge',
+    mtime: 4,
+    text: '继续修',
+    calls: [
+      call('aura_basetools_read', { mode: 'lines', start_line: 1, end_line: 5 }),
+      call('aura_basetools_read'),
+      call('aura_basetools_edit', { hunks: [{ old: 'a', replace: 'b' }] }),
+      call('aura_basetools_write', { file_path: 'x', content: 'y' }, true),
+    ],
+  },
+]
+const renamedStats = summarize(renamed)
+check(renamedStats.sessions.aura === 1, `aura_basetools_* 会话计入 aura ${renamedStats.sessions.aura}`)
+check(renamedStats.readCalls === 2 && renamedStats.editCalls === 1, `read ${renamedStats.readCalls} / edit ${renamedStats.editCalls}`)
+check(
+  renamedStats.readModes.lines === 1 && renamedStats.readModes['(auto)'] === 1,
+  `mode 分布 ${JSON.stringify(renamedStats.readModes)}`,
+)
+check(renamedStats.editHunks.old === 1, `寻址 old ${renamedStats.editHunks.old}`)
+check(renamedStats.readErrors === 0 && renamedStats.editErrors === 0, '别名不改写失败判定')
+
 process.stdout.write(`\n--- ${failed === 0 ? '全部通过' : `${failed} 项失败`} ---\n`)
 process.exit(failed === 0 ? 0 : 1)

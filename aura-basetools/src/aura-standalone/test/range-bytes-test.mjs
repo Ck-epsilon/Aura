@@ -330,17 +330,20 @@ say('D 二进制：含 \\x00 与非法 UTF-8')
     check(e.code === 'FS_NOT_TEXT', `${name}：改的 code = FS_NOT_TEXT（实际 ${e.code}）`)
     check(fs.readFileSync(f.path).equals(orig), `${name}：拒绝之后磁盘逐字节不变`)
   }
-  // 非法 UTF-8（无 NUL）：TextDecoder(fatal) 自己的码浮上来（ERR_ENCODING_INVALID_ENCODED_DATA）。
-  // 判据只要求"结构化拒绝 + 磁盘不变"；码写死是为了钉住实际行为，避免它悄悄退化成一个 catch-all。
+  /**
+   * 无 NUL 的“非法 UTF-8”（0xFF 0xFE 在所有 CJK 编码里都非法、在 windows-1252 里合法）：
+   * 0.21 起**不再拒绝**，而是按候选编码解码（这里是 windows-1252），写回沿用同一编码。
+   * 逐字节保真仍然钉住：只有第 1 行变，中间那两个字节原样保留。
+   */
   const bad = utf8('alpha\n')
   const badBytes = Buffer.concat([bad, Buffer.from([0xff, 0xfe]), utf8('beta\n')])
   const f = write('invalid_utf8.dat', badBytes)
   const r = readFull(f.path)
-  check(r.ok === false && r.__exit === 2 && typeof r.code === 'string', `非法 UTF-8：读被结构化拒绝（exit=${r.__exit}，code=${r.code}）`)
-  check(r.code === 'ERR_ENCODING_INVALID_ENCODED_DATA', `非法 UTF-8：code = ERR_ENCODING_INVALID_ENCODED_DATA（实际 ${r.code}）`)
+  check(r.ok === true && r.encoding === 'windows-1252', `非 UTF-8：按 windows-1252 解码（encoding=${r.encoding}）`)
   const e = editLine(f.path, 1, 'x')
-  check(e.ok === false && e.__exit === 2 && e.code === 'ERR_ENCODING_INVALID_ENCODED_DATA', `非法 UTF-8：改被结构化拒绝（exit=${e.__exit}，code=${e.code}）`)
-  check(fs.readFileSync(f.path).equals(badBytes), '非法 UTF-8：拒绝之后磁盘逐字节不变')
+  check(e.ok === true && e.__exit === 0, `非 UTF-8：改成功（exit=${e.__exit}，code=${e.code}）`, JSON.stringify(e).slice(0, 160))
+  const disk = fs.readFileSync(f.path)
+  check(disk.subarray(0, 2).equals(utf8('x\n')) && disk.subarray(2).equals(badBytes.subarray(6)), '非 UTF-8：只有第 1 行变，0xFF 0xFE 原样保留')
 }
 
 // ── E Unicode ─────────────────────────────────────────────────────────────

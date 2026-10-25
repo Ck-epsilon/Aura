@@ -10,7 +10,7 @@
 
 ```bash
 mkdir /tmp/lab
-cp <repo>/src/locator-lab/{read-core,locator-api,struct-core,anchor-core,write-path,args,repo-map,handle-core}.mjs /tmp/lab/
+cp <repo>/src/locator-lab/{read-core,locator-api,struct-core,anchor-core,write-path,args,repo-map,handle-core,doc-structure}.mjs /tmp/lab/
 cp demo.mjs /tmp/lab/ && cd /tmp/lab && node demo.mjs
 ```
 

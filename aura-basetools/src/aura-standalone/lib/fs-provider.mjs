@@ -27,6 +27,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { probeEncoding, decodeBytes, encodeText, writeRefusal } from './encoding.mjs'
+import { recallEncoding, rememberEncoding } from './encoding-memory.mjs'
 
 const SAMPLE = 4096
 /** 小文件走全文哈希；大文件才退回头尾采样。 */
@@ -205,6 +207,10 @@ function resolveWriteTarget(target) {
 export function createNodeFsProvider(options = {}) {
   const root = path.resolve(options.resolveRoot ?? process.cwd())
   const abs = (p) => (path.isAbsolute(p) ? path.normalize(p) : path.resolve(root, p))
+  /** 显式编码（`--encoding` / MCP `encoding` / `AURA_ENCODING`）：只在“猜不准”的文件上用。 */
+  let encodingHint = options.encoding ?? process.env.AURA_ENCODING
+  /** 读时探测到的编码，写回时沿用（按绝对路径缓存）。 */
+  const probes = new Map()
   const configuredMax = options.maxTextBytes ?? Number(process.env.AURA_MAX_FILE_BYTES)
   const maxTextBytes = Number.isSafeInteger(configuredMax) && configuredMax > 0 ? configuredMax : DEFAULT_MAX_TEXT_BYTES
 
@@ -237,10 +243,39 @@ export function createNodeFsProvider(options = {}) {
     resolve: (p) => abs(p),
     stat,
     async readText(target) {
-      const buffer = readOrThrow(abs(target), maxTextBytes)
-      if (buffer.includes(0)) throw Object.assign(new Error(`cannot read "${target}": binary file`), { code: 'FS_NOT_TEXT' })
-      // 与 dsh-fs-local 同形：fatal 解码 + 默认 ignoreBOM（第一个 BOM 被吃掉，其余 U+FEFF 留在文本里）
-      return new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+      const file = abs(target)
+      const buffer = readOrThrow(file, maxTextBytes)
+      /**
+       * 多编码：自动探测（BOM → 合法 UTF-8 → 候选打分）。UTF-8 路径与支持多编码之前一致：
+       * 合法 UTF-8 一律走 utf-8，`decodeBytes` 同一个 TextDecoder，逐字节行为不变。
+       * 探测结果按绝对路径记住，`writeText` 用同一次探测回写（避免读一次写一次猜两次）。
+       */
+      const st = fs.statSync(file)
+      const effectiveHint = encodingHint ?? recallEncoding(file, st)
+      const probe = probeEncoding(buffer, { hint: effectiveHint })
+      if (probe.encoding === null) throw Object.assign(new Error(`cannot read "${target}": binary file`), { code: 'FS_NOT_TEXT' })
+      // 显式指定过一次就记住；记忆只是加速器，指纹对不上会自动失效。
+      if (encodingHint !== undefined) rememberEncoding(file, probe.encoding, st)
+      probes.set(file, probe)
+      return decodeBytes(buffer, probe)
+    },
+    /**
+     * 逐调用覆盖编码（MCP 的 `encoding` 参数）：同一进程长驻服务，不能靠环境变量。
+     * 传空值 = 清掉本次覆盖，回到环境变量/记忆。
+     */
+    setEncodingHint(hint) {
+      encodingHint = typeof hint === 'string' && hint.length > 0 ? hint : process.env.AURA_ENCODING
+    },
+    /**
+     * 可选方法：把文本编码成**这个文件将要用到的字节**（写后校验用它）。
+     *
+     * 引擎的 `verifyWriteBack` 不能假设 UTF-8——GBK/UTF-16 文件写下去的是别的字节；
+     * 让提供方回答“你会写成什么”，校验才是同一份事实。DSH 提供方没有这个方法时回退到 UTF-8。
+     */
+    encodeFor(target, content) {
+      const file = abs(target)
+      const probe = probes.get(file) ?? { encoding: 'utf-8', bom: [], confidence: 'high', roundTrip: true, readOnly: false, explicit: false }
+      return encodeText(content, probe)
     },
     async readByteRange(target, range) {
       const file = abs(target)
@@ -308,7 +343,24 @@ export function createNodeFsProvider(options = {}) {
     },
     async writeText(target, content, expected) {
       const display = target
-      const bytes = Buffer.byteLength(content)
+      const file = abs(target)
+      /**
+       * 回写编码 = 读时那次探测（没读过的新文件按 UTF-8）。
+       * “猜不准就不写”（`ENCODING_AMBIGUOUS`）与“不可逆就不写”（`ENCODING_NOT_ROUNDTRIP_SAFE`）
+       * 都在这里拦住——调用方显式给 `encoding` 才能继续。
+       */
+      let probe = probes.get(file)
+      if (probe === undefined) {
+        probe = fs.existsSync(file)
+          ? probeEncoding(fs.readFileSync(file), { hint: encodingHint })
+          : { encoding: 'utf-8', bom: [], confidence: 'high', roundTrip: true, readOnly: false, explicit: false }
+      }
+      const refusal = writeRefusal(probe)
+      if (refusal !== null) {
+        throw Object.assign(new Error(`cannot patch "${display}": ${refusal.reason} — nothing was written`), { code: refusal.code, encoding: probe.encoding })
+      }
+      const buffer = encodeText(content, probe)
+      const bytes = buffer.length
       if (bytes > maxTextBytes) {
         throw Object.assign(
           new Error(`cannot patch "${display}": content is ${bytes} bytes, over the ${maxTextBytes}-byte text limit`),
@@ -344,11 +396,13 @@ export function createNodeFsProvider(options = {}) {
           }
         }
       }
-      writeAtomic(resolved.file, content, {
+      writeAtomic(resolved.file, buffer, {
         mode: resolved.exists ? resolved.stat.mode & 0o7777 : null,
         beforeRename,
       })
       const after = fs.statSync(resolved.file)
+      // 写完刷新记忆的指纹：否则下一次读到旧 stamp，记忆会被当成失效而回到“猜”。
+      if (probe.encoding !== 'utf-8') rememberEncoding(resolved.file, probe.encoding, after)
       return { version: fingerprintFile(resolved.file, after) }
     },
   }

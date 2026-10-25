@@ -16,6 +16,8 @@ import { createNodeFsProvider, DEFAULT_MAX_TEXT_BYTES } from './fs-provider.mjs'
 import { withWorkspaceLock } from './workspace-lock.mjs'
 import { createTransaction, getTransactionMeta, openTransaction } from './transaction-store.mjs'
 import { createDiskStore } from './observation-store.mjs'
+import { probeEncoding, decodeBytes } from './encoding.mjs'
+import { recallEncoding, rememberEncoding } from './encoding-memory.mjs'
 
 /**
  * ── 引擎位置：两种布局各一个候选，选一次之后就冻住 ─────────────────────────────
@@ -140,6 +142,7 @@ export function capabilitiesEnvelope() {
  * 「谁去定位引擎」的地方（少一处 = 少一处会在另一种布局下红的引用）。
  */
 export const readWith = readCore.readWith
+export const MODES = readCore.MODES
 export const setObservationStore = readCore.setObservationStore
 export const BYTE_ORDER_MARK_BYTES = readCore.BYTE_ORDER_MARK_BYTES
 export const collectRepoMap = repoMap.collectRepoMap
@@ -277,13 +280,13 @@ export function installDiskObservations() {
   installed = true
 }
 
-export function openProvider(resolveRoot) {
+export function openProvider(resolveRoot, options = {}) {
   installDiskObservations()
-  return createNodeFsProvider({ resolveRoot })
+  return createNodeFsProvider({ resolveRoot, ...options })
 }
 
 /** 与提供方同形地读一份文件：fatal 解码 + 第一个 BOM 不进字符串；二进制拒绝。 */
-export function readFileBytes(displayPath) {
+export function readFileBytes(displayPath, { encoding: hint } = {}) {
   let stat
   try {
     stat = fs.statSync(displayPath)
@@ -303,18 +306,34 @@ export function readFileBytes(displayPath) {
     }
   }
   const bytes = fs.readFileSync(displayPath)
-  if (bytes.includes(0)) {
-    return { error: { ok: false, error: `cannot read "${displayPath}": binary file`, code: 'FS_NOT_TEXT' } }
-  }
-  const byteOrderMark = bytes.length >= BYTE_ORDER_MARK_BYTES.length && BYTE_ORDER_MARK_BYTES.every((b, i) => bytes[i] === b)
   /**
-   * C55：解码失败原来直接抛裸 `TypeError`（`The encoded data was not valid for encoding utf-8`），
-   * 一路浮到 CLI/MCP 就只剩这一句——不说哪个文件、不说下一步。现在在这里换成可执行的拒绝。
-   * 码**原样保留**（`ERR_ENCODING_INVALID_ENCODED_DATA`）：调用方与既有判据靠它区分
-   * 「不是 UTF-8」与别的工具级故障（`range-bytes-test` 段D 就钉着它）。
+   * 多编码（2026-10-25 反馈第一条）：BOM → 合法 UTF-8 → 候选打分；
+   * 合法 UTF-8 一律走 utf-8，与支持多编码之前的字节行为完全一致。
+   * 猜不准（medium/low）仍可读，但回执会把 `encoding` 与 `encoding_confidence` 一并给出，
+   * 写回那侧会拒绝——不让“猜错的编码”变成“写错的盘”。
    */
+  /**
+   * 提示的优先级：本次调用 > 环境变量 > 文件级记忆（指纹对得上才用）。
+   * 显式给过（调用参数或环境变量）就记住——下次同一文件不必再设。
+   */
+  const explicitHint = hint ?? process.env.AURA_ENCODING
+  const effectiveHint = explicitHint ?? recallEncoding(displayPath, stat)
+  const probe = probeEncoding(bytes, { hint: effectiveHint })
+  if (explicitHint !== undefined) rememberEncoding(displayPath, probe.encoding, stat)
+  if (probe.encoding === null) {
+    // 两个分支分开：含 NUL 的二进制仍说 “binary file”（既有判据靠这句话），
+    // 否则是“解不出来”（理论上只剩 UTF-32 之外的怪字节）。
+    const isBinary = bytes.includes(0)
+    return {
+      error: {
+        ok: false,
+        error: isBinary ? `cannot read "${displayPath}": binary file` : `cannot read "${displayPath}": undecodable text`,
+        code: 'FS_NOT_TEXT',
+      },
+    }
+  }
   try {
-    return { source: new TextDecoder('utf-8', { fatal: true }).decode(bytes), byteOrderMark }
+    return { source: decodeBytes(bytes, probe), byteOrderMark: probe.bom.length > 0, encoding: probe, size: stat.size }
   } catch (error) {
     return {
       error: {
@@ -370,7 +389,7 @@ export async function readEnvelope(provider, args) {
       )
       return { ok: true, ...env }
     }
-    const got = readFileBytes(displayPath)
+    const got = readFileBytes(displayPath, { encoding: args.encoding })
     if (got.error !== undefined) return got.error
     const request = normalizeReadRequest(args, got.source.split(/\r?\n/).length)
     if (request.ok !== true) return request
@@ -387,9 +406,26 @@ export async function readEnvelope(provider, args) {
       ...(kind === undefined ? {} : { kind }),
       ...(budget === undefined ? {} : { budget }),
       byteOrderMark: got.byteOrderMark,
+      // probe 用的元信息：文件真实字节数与探测到的编码（DSH 面没有这两个，probe 会降级）。
+      fileSize: got.size,
+      sourceEncoding: got.encoding?.encoding,
       filePath: displayPath,
     })
-    return { ok: true, ...env }
+    /**
+     * 编码随回执回去：`encoding` 是探测结果，`encoding_confidence` 只在非 UTF-8 时给——
+     * 中/低置信度意味着“读得到但写回会被拒”，调用方要带显式 `encoding` 才能继续。
+     */
+    const receipt = { ok: true, ...env }
+    /**
+     * 只给**非 UTF-8**：UTF-8 回执与支持多编码之前逐字节相同（既有判据/金样靠这条等式），
+     * 而不是给每一份回执都塞一个 `encoding: "utf-8"`。
+     */
+    if (got.encoding !== undefined && got.encoding.encoding !== 'utf-8') {
+      receipt.encoding = got.encoding.encoding
+      receipt.encoding_confidence = got.encoding.confidence
+      if (got.encoding.explicit === true) receipt.encoding_source = 'explicit'
+    }
+    return receipt
   } catch (error) {
     /**
      * C55：非 UTF-8 也走这条 catch（解码确实发生在这里的上游）。单独分一支是必要的：

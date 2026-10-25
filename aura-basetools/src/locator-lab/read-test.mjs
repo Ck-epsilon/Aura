@@ -145,7 +145,9 @@ check(nf.code === 'READ_NOT_FOUND', `${nf.code}: ${nf.message}`)
 say('')
 say('=== 9. 无扩展名文件：map 降级而不是崩 ===')
 const plain = readWith('a\nb\nc\n', { filePath: 'x.unknown', mode: 'map' })
-check(plain.ok && typeof plain.note === 'string', `降级说明：${plain.note}`)
+// 说明从 `note` 改到 `text`（反馈 D8）：`metrics.chars` 量的是 `text` 的长度，
+// 只给 `note` 时 chars 会报 0，与“这条回执里明明写了 7411 chars”自相矛盾。
+check(plain.ok && typeof plain.text === 'string', `降级说明：${plain.text}`)
 check(plain.next !== undefined, `仍给续读指令：${plain.next}`)
 
 say('')

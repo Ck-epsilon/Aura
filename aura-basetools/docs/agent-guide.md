@@ -8,7 +8,9 @@
 | 你知道什么 | 用什么 | 备注 |
 |---|---|---|
 | 只想先看结构 / 符号 | `mode=map` | 大文件首选；输出有符号目录 |
-| 想要签名与少量正文 | `mode=digest` | 中等文件 |
+| 先判断值不值得读 | `mode=probe` | 行数/字节/行尾/编码/语言/结构规模，一行摘要、不发正文 |
+| 文档 / 配置（.md/.json/.yaml/.toml） | `mode=map` | 标题树 / 键路径 + 行号区间；下一步用 `mode=lines` 取一节 |
+| 想要签名与少量正文 | `mode=digest` | 中等文件；文档/配置返回结构目录（与 map 同源） |
 | 文件很小 / 要全文 | `mode=auto` | 引擎按宿主 `budget` 判断全文是否装得下；装得下直接给全文 |
 | 要某个函数体 | `mode=lines` 或 `mode=around <符号>` | 从 map/digest 的行号直接抄 |
 | 找某个词 | `mode=search` | 命中行号可直接用于下一次编辑 |
@@ -22,6 +24,10 @@
 不要自己猜 8 KiB——预算不是常数。
 
 ## 2. 改：地址从“最确定”到“最自然”
+
+先记一条**安全等级**（`capabilities` 的 `addressSafety` 同源）：`old` 是内容地址、`handle` 绑定版本，
+两者自带校验；`target` 是结构定位；`lines` / `line_cue` / `anchor` 只是坐标/线索——**未读过的文件也能写**，
+回执会标 `unverified_region: true`，要强制先读用 `require_observation`（`--require-observation`）。
 
 优先顺序（越靠前越不容易错）：
 
@@ -83,6 +89,28 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
   因此 `old` 不要带首/尾换行：片段层会把它们去掉（`replace_all` 直接拒绝这种形状，
   避免 `old:"a\n"` 退化成在 `banana` 里也命中）。
 
+### 2.3 JSON/JSONC：把转义面压到最小
+
+改 JSON 文件时，模型要写的每个 `"` 都会变成 `\"`；`old` 与 `replace` 加起来，约一半字符是转义。
+实测过一次真实的失败：一条 552 字符的 edit 在收尾处少了一个 `}`，模型输出的 tool 参数在第 549 位
+解析失败，**整轮任务中止**（工具一次都没被调用）。因此改 JSON/JSONC 时：
+
+- **优先 `lines` / `start_line`+`end_line` 定位，不要 `old`**：`replace` 只放新文本，转义面积减半；
+- **单 hunk 可以平铺在顶层**（`{file_path, start_line, end_line, replace}`），不必包进 `hunks: […]`：
+  少一层 `}` / `]`，收尾处就少一个出错点；
+- hunk 尽量小（一次一块），别把整个文件塞进 `replace`。
+
+这几条改变的是**模型写 JSON 的难度**，不是工具的能力边界——两种形状工具都收。
+
+### 2.4 编码：非 UTF-8 也能改，但“能读”不等于“能写”
+
+- 自动探测：UTF-8、UTF-16LE/BE（BOM）、GB18030（GBK）、Shift_JIS、EUC-KR、Big5、Windows-1252。
+  回执里的 `encoding` 是探测结果；非 UTF-8 还会给 `encoding_confidence`。
+- 写回用**读时那次探测的编码**，未改动的行逐字节保留。
+- 猜不准（medium/low）或编码不可逆时，**写会被拒绝**（`ENCODING_AMBIGUOUS` / `ENCODING_NOT_ROUNDTRIP_SAFE`）；
+  用 `AURA_ENCODING=gb18030`（或服务配置的 env）显式指定即可继续。
+- 目标编码表示不了的字符（如 GBK 里没有的扩展区汉字）⇒ `ENCODING_UNREPRESENTABLE`，零写入。
+
 ## 3. 看回执：不要回读，直接用句柄
 
 成功回执的 `applied[]` 每项包含：
@@ -118,6 +146,7 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
 - 0.14.0 移除了公开 `--transaction` / `undo` / `transactions`（642 个会话中 0 次使用）。
 - 写失败仍会自动回滚已落地的目标；事务日志是内部实现，不需要调用方操作。
 - 同一工作区的并发写由锁串行化；`AURA_NO_LOCK=1` 只用于明确知道没有并发者的场景。
+- **跨调用事务不是隔离**：`tx begin` 后带 `--tx` 的写入**立刻落盘**（`tx status` 仍是 pending），外部进程能看到新内容；`rollback` 才按 afterVersion 恢复。要“改完再验证再提交”，把 `verify` 放在 `tx commit --verify`。
 - **跨调用事务**：`tx begin` → 多次 `edit/write --tx <id>` → `tx commit --id <id> [--verify]`；
   失败/外部改动/verify 失败都可 `tx rollback --id <id>`。commit 前做 afterVersion 校验与三方合并；
   非重叠外部改动自动合并，重叠/不可合并为 `TX_CONFLICT`（零写入）。
@@ -136,3 +165,11 @@ DSH 面提供 `aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_wr
 - 地址对不上就拒绝；歧义不猜；失败不写盘。
 - 写后回读校验；`write_verify.level` 说明是字节级还是文本级。
 - 发布物必须等于被测物（`build/post-publish-check.mjs`）。
+
+## 8. 参数总是写坏：让 provider 强制 strict
+
+`MALFORMED_RESPONSE`（tool 参数不是合法 JSON）发生在**工具被调用之前**：工具收不到字节，也兜不住。
+能归零的是 provider 的约束解码：DeepSeek `/beta` + 每个 function `"strict": true`；OpenAI `strict: true`。
+本包的 schema 可直接转换（`locator-lab/strict-schema.mjs` 的 `toStrictSchema` / `strictToolList`），
+`aura basetools doctor` 会打出 recipe。不开 strict 时能做的只有降低概率：
+JSON/JSONC 用 `lines` 定位、hunk 拆小（见 2.3）。

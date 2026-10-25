@@ -30,8 +30,10 @@ import process from 'node:process'
 const SERVER_INSTRUCTIONS = [
   'Prefer the aura_basetools_* tools over built-in Read/Edit/Write for file work when they are available.',
   'Read with aura_basetools_read; edit with aura_basetools_edit; create or overwrite with aura_basetools_write.',
+  'Keep tool arguments small — long, deeply nested JSON is what the provider\'s stream parser fails on (MALFORMED_RESPONSE). For a single change pass the hunk FLAT at the top level (`old`+`replace`, or `start_line`+`end_line`+`replace`, or a `handle` from a previous read + `replace`); use `hunks: [...]` only for several changes. If you already hold a `handle`, do not repeat the old text in `old`.',
   'For changes spanning multiple calls use aura_basetools_tx begin -> edit/write with transaction -> commit; rollback on failure.',
   'These tools preserve BOM and per-line endings, gate only the addressed region for staleness, verify writes, and keep multi-target edits atomic.',
+  'If your client can enforce provider-side strict tool schemas (DeepSeek `/beta` + `strict: true` per function, OpenAI strict), enable it: strict decoding makes malformed tool-call JSON impossible instead of merely rarer. The schemas convert cleanly with `locator-lab/strict-schema.mjs` (toStrictSchema / strictToolList); `aura basetools doctor` prints the recipe.',
 ].join(' ')
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
@@ -46,12 +48,15 @@ import {
   commitTransactionEnvelope,
   rollbackTransactionEnvelope,
   statusTransactionEnvelope,
+  MODES,
   assertReadTargets,
   assertEditTargets,
   assertTargetShape,
   assertKnownArgs,
   MT_READ_ELEMENT_KEYS,
   MT_EDIT_ELEMENT_KEYS,
+  // 平铺形状的拼装规则与 DSH 壳 / CLI 共用这一份（`locator-lab/args.mjs` 的 `flatHunk`）。
+  flatHunk,
 } from '../lib/ops.mjs'
 
 // 版本从包自己的 package.json 读：写死过一次，结果 0.4.0 的服务对外还报 0.2.1。
@@ -89,12 +94,19 @@ const TARGETS_SCHEMA = {
     '一次调用、逐项回执、输出按输入序；一个目标失败不连坐其余（写侧例外：先全部规划，任一规划失败 ⇒ 一个字都不写）。',
 }
 
+/**
+ * 为什么 `lines` 用 `anyOf` 而不是 `oneOf`：
+ *   四个分支按 `type` 互斥，语义完全等价；但 `oneOf` 在部分 provider 的严格模式里不受支持
+ *   （DeepSeek strict / OpenAI strict 只认 `anyOf`），而 MCP 这一面是**多 agent 共用**的。
+ *   DSH 适配器保留 `oneOf` —— 它的参数校验器认这个、静默忽略 `anyOf`（见 `aura-edit/index.js`）。
+ */
+
 const HUNK_SCHEMA = {
   type: 'object',
   properties: {
     target: { type: 'string', description: '符号名，如 `toTodoList` 或 `function:apply`；跳过全部文本匹配' },
     lines: {
-      oneOf: [
+      anyOf: [
         { type: 'array' },
         { type: 'string' },
         { type: 'integer' },
@@ -109,7 +121,7 @@ const HUNK_SCHEMA = {
     old: {
       type: 'string',
       description:
-        '内容地址：你正在替换的**逐字原文**（+ 可选 context 消歧）。给了它，坐标/符号名降为提示；引擎按内容定位，不唯一时拒绝并给候选。',
+        '内容地址：你正在替换的**逐字原文**（+ 可选 context 消歧）。给了它，坐标/符号名降为提示；引擎按内容定位，不唯一时拒绝并给候选。手里已有上次回执的 `handle` 时优先用 handle + replace —— 不必把旧文本再抄一遍，参数更短。',
     },
     context: { type: 'string', description: '与 old 同用：紧邻被替换区域的原文，只在 old 多处命中时用来消歧。' },
     /**
@@ -161,19 +173,19 @@ const TOOLS = [
   {
     name: 'aura_basetools_read',
     description:
-      'Read a file the way you actually need it. Modes: map (symbol directory), digest (interface only), full, around, lines, search, changed. `auto` picks one for you. Prefer this over reading the whole file.',
+      'Read a file the way you actually need it. Modes: probe (metadata only: lines, bytes, line endings, encoding, language, structure size — no content), map (symbol/section directory), digest (interface only), full (up to the content budget, not necessarily the whole file), around, lines, search, changed. `auto` picks one for you. Prefer this over reading the whole file.',
     inputSchema: {
       type: 'object',
       properties: {
         file_path: { type: 'string', description: '要读的文件路径（绝对或相对 cwd）' },
         mode: {
           type: 'string',
-          enum: ['map', 'digest', 'full', 'around', 'lines', 'search', 'changed'],
+      enum: ['auto', ...MODES],
           description: '省略时按你给的参数自动判断：行区间→lines、around→around、search→search、since→changed',
         },
         around: { type: 'string', description: 'mode=around：以该符号或短语为中心开窗' },
         lines: {
-          oneOf: [
+          anyOf: [
             { type: 'array' },
             { type: 'string' },
             { type: 'integer' },
@@ -187,6 +199,7 @@ const TOOLS = [
         context: { type: 'integer', description: 'mode=around：上下各留几行（默认 8）' },
         kind: { type: 'string', description: 'mode=map：只保留某一类符号（function / class / …）' },
         budget: { type: 'integer', description: '宿主剪枝阈值（字符）；省略用默认 8192' },
+        encoding: { type: 'string', description: '源编码覆盖（默认自动探测）：gb18030 / shift_jis / euc-kr / big5 / utf-16le / utf-16be / windows-1252。只对本次调用生效；显式指定过一次后会被记住（文件未被外部改动时）。' },
         since: { type: 'string', description: 'mode=changed：上次回执里的 version 令牌' },
         max_chars: { type: 'integer' },
         offset: { type: 'integer', description: '与 limit 同用：0-based 行偏移（内置 Read 的分页形状）；与 lines 互斥' },
@@ -205,12 +218,16 @@ const TOOLS = [
   {
     name: 'aura_basetools_edit',
     description:
-      'Edit or create a UTF-8 text file with hunks in one call. Address each hunk by target (symbol), lines, line_cue, anchor, or old (verbatim content + optional context). With `old`, set `replace_all: true` to replace every non-overlapping occurrence. Writes back byte-for-byte (BOM and per-line endings preserved), refuses a hunk whose addressed region changed since your last read, and reads the file back to verify. All hunks must locate or nothing is written.',
+      'Edit or create a text file in one call. PREFER THE FLAT FORM for a single change: put the hunk fields at the top level (`old`+`replace`, or `start_line`/`end_line`+`replace`, or `handle` from a previous read + `replace`) and omit `hunks` entirely — one JSON object instead of an array of objects, which is smaller and survives the provider\'s stream parser more reliably. Use `hunks: [...]` only when a call changes several places. Address each hunk by target (symbol), lines, line_cue, anchor, handle, or old (verbatim content + optional context). With `old`, set `replace_all: true` to replace every non-overlapping occurrence. Writes back byte-for-byte (BOM and per-line endings preserved), refuses a hunk whose addressed region changed since your last read, and reads the file back to verify. All hunks must locate or nothing is written. A single hunk may also be passed flat at the top level (`file_path` + the hunk fields) instead of wrapped in `hunks: [...]`. JSON/JSONC edits: prefer `lines`/`start_line`+`end_line` and put only the new text in `replace` — re-typing the old text doubles the escaped quotes/newlines the call must carry.',
     inputSchema: {
       type: 'object',
       properties: {
         file_path: { type: 'string' },
-        hunks: { type: 'array', items: HUNK_SCHEMA },
+        hunks: {
+          type: 'array',
+          items: HUNK_SCHEMA,
+          description: '多次修改时用；**单处修改请用平铺形式**（把 hunk 字段直接放顶层、不传 hunks）：一个对象比“对象数组”少一层嵌套，参数更短、更不容易在流式解码时坏掉。',
+        },
         dry_run: { type: 'boolean', description: '只定位不落盘' },
         require_observation: {
           type: 'boolean',
@@ -220,9 +237,18 @@ const TOOLS = [
           type: 'string',
           description: '写后验证命令（显式给出才执行；在 workspace 根下、受超时/输出上限约束）。非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED。不自动发现/执行仓库脚本。',
         },
-        transaction: { type: 'string', description: '跨调用事务 id（tx begin 返回）；本次修改追加到该事务，不立即 commit' },
+        transaction: { type: 'string', description: '跨调用事务 id（tx begin 返回）；本次修改追加到该事务的回滚日志。**写入立即可见**（tx 不是隔离事务，pending 期间盘上已是新字节），commit 只做 afterVersion 校验与可选 verify' },
         create: { type: 'string', description: '文件不存在时用它创建（整份内容）' },
+        encoding: { type: 'string', description: '源编码覆盖（默认自动探测）；猜不准时写会拒绝，用它显式指定。只对本次调用生效。' },
         targets: TARGETS_SCHEMA,
+        /**
+         * 平铺形状：单个 hunk 的键**也**声明在顶层（与 DSH 壳、CLI 同一份容错）。
+         *
+         * 此前只有 DSH 壳声明了这些键：同一份载荷 `{file_path, start_line, end_line, replace}`
+         * 在 DSH 面被执行、在 MCP 面被未知参数守卫拒掉——而 MCP 正是 Codex/Claude Code/Cursor/ZCode
+         * 共用的那一面。声明与实装现在同源（拼装仍走 `flatHunk`，不另写一份判据）。
+         */
+        ...HUNK_SCHEMA.properties,
       },
       /**
        * `hunks` **不在 required 里**：`create` 就是在建一个新文件，那时没有 hunk 可给。
@@ -247,6 +273,7 @@ const TOOLS = [
       properties: {
         file_path: { type: 'string', description: '要写的文件路径（绝对或相对 cwd）；不存在则创建' },
         content: { type: 'string', description: '整份内容；覆盖已有文件时替换全部行' },
+        encoding: { type: 'string', description: '源编码覆盖（默认自动探测）；写回沿用该编码。只对本次调用生效。' },
         dry_run: { type: 'boolean', description: '只规划不落盘：新建报 create，覆盖校验换行与字节数' },
         no_overwrite: { type: 'boolean', description: '文件已存在时拒绝（WRITE_EXISTS）' },
         allow_unobserved: {
@@ -260,9 +287,9 @@ const TOOLS = [
         },
         verify: {
           type: 'string',
-          description: '写后验证命令（显式给出才执行；非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED）。',
+          description: '写后验证命令（显式给出才执行；在**工作区根目录**执行；无超时参数——MCP 传输上限约 30s，慢命令不要放进来；非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED）。',
         },
-        transaction: { type: 'string', description: '跨调用事务 id（tx begin 返回）；本次修改追加到该事务，不立即 commit' },
+        transaction: { type: 'string', description: '跨调用事务 id（tx begin 返回）；本次修改追加到该事务的回滚日志。**写入立即可见**（tx 不是隔离事务），commit 只做 afterVersion 校验与可选 verify' },
       },
       required: ['file_path', 'content'],
     },
@@ -270,13 +297,13 @@ const TOOLS = [
   {
     name: 'aura_basetools_tx',
     description:
-      'Begin, commit, rollback, or inspect a cross-call transaction. Begin returns an id; pass it to edit/write `transaction` to append changes; commit checks each written file was not changed externally and can run `verify`; rollback restores all files.',
+      'Begin, commit, rollback, or inspect a cross-call transaction. Begin returns an id; pass it to edit/write `transaction` to append changes. Writes are visible immediately: a transaction is a cross-file ROLLBACK JOURNAL, not isolation — while it is pending the file on disk already holds the new bytes. `commit` checks each written file was not changed externally and can run `verify`; `rollback` restores all files.',
     inputSchema: {
       type: 'object',
       properties: {
         action: { type: 'string', enum: ['begin', 'commit', 'rollback', 'status'] },
         transaction: { type: 'string', description: 'tx begin 返回的事务 id（begin 时不需要）' },
-        verify: { type: 'string', description: 'commit 时的写后验证命令；失败 ⇒ 整个事务回滚' },
+        verify: { type: 'string', description: 'commit 时的写后验证命令（在**工作区根目录**执行、无超时参数；MCP 传输上限约 30s）；失败 ⇒ 整个事务回滚' },
       },
       required: ['action'],
     },
@@ -416,6 +443,11 @@ async function callTool(provider, name, args = {}) {
       }
     }
   }
+  /**
+   * 逐调用编码覆盖（0.21）：长驻进程里 provider 是同一个，环境变量没法按调用改。
+   * 不传时复位到环境变量——不能把上一次调用的 hint 泄漏给下一次。
+   */
+  if (typeof provider.setEncodingHint === 'function') provider.setEncodingHint(args.encoding)
   if (name === 'aura_basetools_tx') {
     const action = args.action
     if (action === 'begin') return beginTransactionEnvelope(provider)
@@ -445,7 +477,10 @@ async function callTool(provider, name, args = {}) {
      * 多目标形状不走这一条：每个 target 自带 hunks/create（契约 §2.2）。
      */
     const creating = typeof args.create === 'string'
-    if (!Array.isArray(args.hunks) && !creating) {
+    // 平铺形状（单 hunk 直接写在顶层）：拼装规则只认 `flatHunk` 那一份，不在 bin 里另写。
+    const flat = Array.isArray(args.hunks) ? null : flatHunk(args)
+    const hunks = Array.isArray(args.hunks) ? args.hunks : flat === null ? [] : [flat]
+    if (hunks.length === 0 && !creating) {
       return {
         ok: false,
         error: 'aura_basetools_edit 需要 hunks 数组，或 create（整份内容建文件）二选一；只建文件时直接给 create 即可',
@@ -454,7 +489,7 @@ async function callTool(provider, name, args = {}) {
     }
     return await editEnvelope(provider, {
       file: args.file_path,
-      hunks: Array.isArray(args.hunks) ? args.hunks : [],
+      hunks,
       dryRun: args.dry_run === true,
       create: creating ? args.create : undefined,
       ...(args.require_observation === true ? { requireObservation: true } : {}),

@@ -3099,7 +3099,13 @@ async function verifyWriteBack(service, target, written, displayPath, signal) {
   let actual
   try {
     if (level === 'bytes') {
-      expected = new TextEncoder().encode(written)
+      /**
+       * 期望字节由**提供方**回答（可选 `encodeFor`）：非 UTF-8 存储下，引擎不能假设
+       * `TextEncoder` 就是落盘字节。没有这个方法的提供方（DSH 壳）仍走 UTF-8，行为不变。
+       */
+      expected = typeof service.encodeFor === 'function'
+        ? Buffer.from(await service.encodeFor(target, written))
+        : new TextEncoder().encode(written)
       actual = await service.readByteRange(
         target,
         { offset: 0, length: expected.length + READBACK_PROBE_EXTRA_BYTES },
@@ -3190,14 +3196,25 @@ function errorCodeOf(error) {
  *
  * @throws PatchError('PATCH_UNOBSERVED')
  */
-export function requireObservedRevision({ displayPath, identityKey, content, byteOrderMark = false }) {
+export function requireObservedRevision({ displayPath, identityKey, content, byteOrderMark = false, allowBlindHint = false }) {
   const ledgerKey = ledgerIdentityKey(displayPath, identityKey)
   const observation = latestObservation(ledgerKey, { source: content })
   const currentToken = contentToken(content, byteOrderMark)
   if (observation !== null && observation.version === currentToken) return
   const changed = observation !== null
+  /**
+   * 回执里直接给**下一次调用**，而不是只说“先读”：实测 5 天内 22 次 PATCH_UNOBSERVED，
+   * 每次都要模型自己挑读法（多半选 full，5k+ 字符）。这里按当前内容的体量挑一个装得下预算
+   * 的模式；整份覆写还可以走已有的显式逃生口 `allow_unobserved`，把“读一遍再写”折成
+   * “一次带标记的写”——代价（unverified_region）写在回执里，而不是藏在 schema 描述里。
+   */
+  const readHint = content.length <= 6000 ? 'full' : 'map'
   throw new PatchError(
-    `cannot patch "${displayPath}": ${changed ? 'the file changed since your last read' : 'this file has not been read in this session'} — read it first (aura_basetools_read), then retry${changed ? ' against the current revision' : ''} — nothing was written`,
+    `cannot patch "${displayPath}": ${changed ? 'the file changed since your last read' : 'this file has not been read in this session'} — read it first (aura_basetools_read), then retry${changed ? ' against the current revision' : ''} — nothing was written` +
+      `\nnext: aura_basetools_read { file_path: "${displayPath}", mode: "${readHint}" } — then retry` +
+      (allowBlindHint
+        ? `\n      or pass allow_unobserved: true if this is a deliberate whole-file overwrite; the receipt will be marked unverified_region`
+        : ''),
     'PATCH_UNOBSERVED',
     {
       reason: changed ? 'changed-since-read' : 'never-read',
@@ -3273,6 +3290,8 @@ async function planEditToProvider(provider, request) {
       ...(request.identityKey === undefined ? {} : { identityKey: request.identityKey }),
       content,
       byteOrderMark: byteOrderMarks > 0,
+      // 只有整份覆写才有显式逃生口（`allow_unobserved`）；edit 的严格模式不提供它。
+      allowBlindHint: typeof request.wholeFile === 'string',
     })
   }
   /**

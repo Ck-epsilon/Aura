@@ -370,6 +370,28 @@ say('=== 兼容：既有 mode 语义不变，首读回执与本层不存在时�
   check(autoB.auto !== undefined && autoB.mode === 'full', 'K11 增量回执仍然带着 auto 的选择理由（模型看得见工具的决定）')
 }
 
+// ── D4（2026-10-25 反馈）：截断基准 + 显式更大 budget ⇒ 必须给正文 ──────────
+//
+// 旧行为：首读被预算截断后，同一会话里再用更大的 `budget` 读 `full`，仍走 no-change，
+// 只回一句“去用 lines 拿剩下的”（实测 401 行文件第二次只拿到 155 字符且 `truncated: false`）。
+// 账本里那份是**半份**，就不能当“你已经有全文”用。
+say('')
+say('=== L. 截断基准 + 显式更大 budget ⇒ 给正文，不再谎报 no-change ===')
+{
+  const file = 'inc-d4-budget.js'
+  const big = Array.from({ length: 400 }, (_, i) => `export const d4_${String(i).padStart(3, '0')} = ${i}; // padding padding padding`).join('\n') + '\n'
+  const first = readWith(big, { filePath: file, mode: 'full' })
+  check(first.metrics?.truncated === true, 'L1 首读被默认预算截断（truncated=true）', String(first.metrics?.truncated))
+  const second = readWith(big, { filePath: file, mode: 'full', budget: 60000 })
+  check(
+    typeof second.text === 'string' && second.text.length > (first.text ?? '').length * 2,
+    'L2 第二次给正文（而不是一句提示）',
+    `chars=${(second.text ?? '').length}（首读 ${(first.text ?? '').length}）`,
+  )
+  check(second.metrics?.truncated === false, 'L3 第二次不再处于截断态', String(second.metrics?.truncated))
+  check(!/no change since baseline/.test(second.text ?? ''), 'L4 正文不是那句 no-change 提示语', String(second.text ?? '').slice(0, 80))
+}
+
 // ── 汇总 ────────────────────────────────────────────────────────────────────
 const failed = results.filter((r) => !r.ok)
 say('')

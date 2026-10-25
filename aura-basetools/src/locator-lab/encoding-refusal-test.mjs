@@ -54,6 +54,7 @@ import { fileURLToPath } from 'node:url'
 import { contextServices } from './mock-ctx.mjs'
 import { openProvider, readEnvelope, editEnvelope } from '../aura-standalone/lib/ops.mjs'
 import { observationsPath } from '../aura-standalone/lib/observation-store.mjs'
+import { probeEncoding } from '../aura-standalone/lib/encoding.mjs'
 
 const say = (m) => fs.writeSync(1, `${m}\n`)
 const results = []
@@ -293,31 +294,25 @@ const writeTexts = {}
     )
   }
 
+  /**
+   * 0.21 起：独立面（CLI/MCP 共用 ops.mjs）**支持非 UTF-8**，所以这里不再是拒绝，
+   * 而是解码 + 在回执里点名编码。拒绝仍留在 DSH 面：宿主只递 UTF-8 文本。
+   */
   const readEnv = await readEnvelope(provider, { file: gbkPath })
-  check(readEnv.ok === false, 'A/读·独立面 readEnvelope：仍然**拒绝**（ok:false，不是 ok:true 带 outcome）')
   check(
-    readEnv.code === 'ERR_ENCODING_INVALID_ENCODED_DATA' && !FORBIDDEN_VERDICTS.includes(readEnv.outcome),
-    'A/读·独立面 readEnvelope：码仍是 ERR_ENCODING_INVALID_ENCODED_DATA（没有退化成 catch-all）',
-    `code=${readEnv.code} outcome=${readEnv.outcome}`,
+    readEnv.ok === true && readEnv.encoding === 'gb18030',
+    'A/读·独立面：非 UTF-8 成功解码并标 encoding=gb18030',
+    JSON.stringify({ ok: readEnv.ok, encoding: readEnv.encoding, code: readEnv.code }),
   )
-  checkRefusal('A/读·独立面', String(readEnv.error ?? ''), { verb: 'read', path: gbkPath, tool: 'aura_basetools_read' })
-  readTexts.standalone = String(readEnv.error ?? '')
+  check(String(readEnv.text ?? '').includes('中文'), 'A/读·独立面：正文是正确的中文（不是乱码）', String(readEnv.text ?? '').slice(0, 40))
 
   const readCli = runCli(['basetools', 'read', '--file', gbkPath])
-  check(readCli.status === 2 && readCli.env?.ok === false, 'A/读·CLI 真进程：exit=2 且 ok:false（结构化拒绝）', `exit=${readCli.status}`)
-  checkRefusal('A/读·CLI 真进程', String(readCli.env?.error ?? ''), { verb: 'read', path: gbkPath, tool: 'aura_basetools_read' })
   check(
-    String(readCli.env?.error ?? '') === readTexts.standalone,
-    'A/读·CLI 真进程与 readEnvelope 是同一句话（同一个面只有一份文案）',
+    readCli.status === 0 && readCli.env?.ok === true && readCli.env?.encoding === 'gb18030',
+    'A/读·CLI 真进程：exit=0、回执带 encoding=gb18030',
+    `exit=${readCli.status}`,
   )
-
-  // 三面渲染出来的那一句必须**逐字相同**：同一条判据、同一句话，抄漏一处这里就红。
-  const renderedRead = [readTexts.raw, readTexts.local, readTexts.standalone]
-  check(
-    renderedRead.every((t) => t === renderedRead[0]),
-    'A/读·三面（DSH 读壳两种后端形状 + 独立面）渲染出的拒绝正文逐字相同',
-    renderedRead.every((t) => t === renderedRead[0]) ? '' : renderedRead.map((t) => t.length).join(' / '),
-  )
+  check(String(readCli.env?.text ?? '').includes('中文'), 'A/读·CLI 真进程：正文是正确的中文')
 
   const hunks = [{ start_line: 1, end_line: 1, replace: 'export const a = 9;' }]
   for (const shape of ['raw', 'local']) {
@@ -331,29 +326,29 @@ const writeTexts = {}
     checkRefusal(`A/写·${shape}`, writeTexts[shape], { verb: 'patch', path: gbkPath, tool: 'aura_basetools_edit' })
   }
 
-  const writeEnv = await editEnvelope(provider, { file: gbkPath, hunks })
-  check(writeEnv.ok === false, 'A/写·独立面 editEnvelope：仍然**拒绝**（ok:false）')
+  // 独立面写：在**副本**上改（原文件留给段B 的“拒绝即不写”断言）。
+  // 改的是**第 2 行**（纯 ASCII），第 1 行的中文必须保留——否则文件变成纯 ASCII，
+  // “改后仍是 GBK”就成了一句没有信息量的断言。
+  const copyHunks = [{ start_line: 2, end_line: 2, replace: 'export function g() {' }]
+  const copy = write('gbk-copy.mjs', GBK_SRC)
+  const writeEnv = await editEnvelope(provider, { file: copy, hunks: copyHunks })
   check(
-    writeEnv.code === 'ERR_ENCODING_INVALID_ENCODED_DATA',
-    'A/写·独立面 editEnvelope：码仍是 ERR_ENCODING_INVALID_ENCODED_DATA',
-    `code=${writeEnv.code}`,
+    writeEnv.ok === true,
+    'A/写·独立面：GBK 文件可改（写回同一编码）',
+    JSON.stringify({ ok: writeEnv.ok, code: writeEnv.code, error: String(writeEnv.error ?? '').slice(0, 80) }),
   )
-  checkRefusal('A/写·独立面', String(writeEnv.error ?? ''), { verb: 'patch', path: gbkPath, tool: 'aura_basetools_edit' })
-  writeTexts.standalone = String(writeEnv.error ?? '')
+  const afterCopy = fs.readFileSync(copy)
+  check(afterCopy.includes(GBK_ZHONGWEN), 'A/写·独立面：含中文的第 1 行字节被逐字节保留')
+  check(probeEncoding(afterCopy).encoding === 'gb18030', 'A/写·独立面：改后仍是 GBK', probeEncoding(afterCopy).encoding)
 
-  const writeCli = runCli(['basetools', 'edit', '--file', gbkPath, '--lines', '1', '--replace', 'export const a = 9;'])
-  check(writeCli.status === 2 && writeCli.env?.ok === false, 'A/写·CLI 真进程：exit=2 且 ok:false', `exit=${writeCli.status}`)
-  checkRefusal('A/写·CLI 真进程', String(writeCli.env?.error ?? ''), { verb: 'patch', path: gbkPath, tool: 'aura_basetools_edit' })
+  const writeCli = runCli(['basetools', 'edit', '--file', copy, '--lines', '2', '--replace', 'export function g() {'])
+  check(writeCli.status === 0 && writeCli.env?.ok === true, 'A/写·CLI 真进程：GBK 文件可改（exit=0）', `exit=${writeCli.status}`)
 
-  // 预演也走同一条读：它必须先读到内容才能规划 hunk，所以也必须给同一句话。
+  // 预演：DSH 壳仍然拒绝（它拿到的只有宿主解码后的文本，非 UTF-8 根本到不了这层）。
   const dry = await runShell(editPlugin, 'raw', { file_path: gbkPath, hunks, dry_run: true })
-  check(dry.threw === true, 'A/写·dry_run 预演：同样被可执行地拒绝（预演不能报"没事"）')
+  check(dry.threw === true, 'A/写·dry_run 预演：DSH 面同样被可执行地拒绝（预演不能报"没事"）')
 
-  const renderedWrite = [writeTexts.raw, writeTexts.local, writeTexts.standalone]
-  check(
-    renderedWrite.every((t) => t === renderedWrite[0]),
-    'A/写·三面（DSH 写壳两种后端形状 + 独立面）渲染出的拒绝正文逐字相同',
-  )
+  check(writeTexts.raw === writeTexts.local, 'A/写·DSH 两种后端形状渲染出的拒绝正文逐字相同')
   check(
     readTexts.raw !== writeTexts.raw && writeTexts.raw.includes('cannot patch'),
     'A/写侧的正文与读侧**不是**同一句（cannot patch vs cannot read；动词不同，判据同一份）',

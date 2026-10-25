@@ -1,10 +1,10 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**0.20.0（已发布；安装只走 npm）**
-> 发布提交：monorepo `da055a0`；tag `aura-basetools-v0.20.0`
+> 当前版本：**0.21.0（已发布到 npm；安装只走 npm）**
+> 发布提交：本地 `d31e58c`（本检出没有 remote，尚未推送 / 打 tag）
 > 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
-> npm：`aura-basetools@0.20.0`、`aura-basetools-dsh@0.20.0` 已发布
-> GitHub Release：`aura-basetools-v0.20.0`
+> npm：`aura-basetools@0.21.0`、`aura-basetools-dsh@0.21.0` 已发布（registry.npmjs.org）
+> GitHub Release：**未发布** —— 本检出无 `origin`；需在 monorepo 检出里推送并建 Release
 
 ---
 

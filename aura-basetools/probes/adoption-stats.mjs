@@ -23,7 +23,8 @@
 import { pathToFileURL } from 'node:url'
 import { iterateSessionsDetailed, readSessionsDetailed, tallyOf } from './session-log.mjs'
 
-export const AURA = /^aura_(read|edit)$/
+// `aura_basetools_read` 是 0.11.0 改名后的同一件调用；只认旧名会让新窗口的采用率归零。
+export const AURA = /^aura_(?:basetools_)?(read|edit)$/
 export const BUILTIN = /^(read|edit|write)$/
 
 /** 自测会话的判据：workdir 就在工具自己树里，或命令/开场白明显是在测这套工具。 */
@@ -57,6 +58,9 @@ export function parseSince(argv) {
 const bump = (map, key) => {
   map[key] = (map[key] ?? 0) + 1
 }
+
+/** 归一化工具名：改名前后是同一种调用（`aura_basetools_read` ⇒ `aura_read`）。 */
+const kindOf = (name) => (name.startsWith('aura_basetools_') ? `aura_${name.slice('aura_basetools_'.length)}` : name)
 
 /**
  * 寻址方式：按引擎的互斥优先级归类。
@@ -99,14 +103,15 @@ export function summarize(rows, options = {}) {
   for (const row of real) {
     for (const call of row.calls) {
       const args = call.args ?? {}
-      if (call.name === 'aura_read') {
+      const kind = kindOf(call.name)
+      if (kind === 'aura_read') {
         readCalls += 1
         if (call.isError) readErrors += 1
         bump(readModes, typeof args.mode === 'string' && args.mode.length > 0 ? args.mode : '(auto)')
         for (const key of ['lines', 'around', 'search', 'since', 'kind', 'context']) {
           if (args[key] !== undefined) bump(readParams, key)
         }
-      } else if (call.name === 'aura_edit') {
+      } else if (kind === 'aura_edit') {
         editCalls += 1
         if (call.isError) editErrors += 1
         if (args.dry_run === true) {
@@ -187,11 +192,12 @@ function streamReport(since, includeMeta, json) {
       if (AURA.test(call.name)) hasAura = true
       if (BUILTIN.test(call.name)) hasBuiltin = true
       const args = call.args ?? {}
-      if (call.name === 'aura_read') {
+      const kind = kindOf(call.name)
+      if (kind === 'aura_read') {
         readCalls += 1
         if (call.isError) readErrors += 1
         bump(readModes, typeof args.mode === 'string' && args.mode.length > 0 ? args.mode : '(auto)')
-      } else if (call.name === 'aura_edit') {
+      } else if (kind === 'aura_edit') {
         editCalls += 1
         if (call.isError) editErrors += 1
         if (args.dry_run === true) editDryRun += 1

@@ -169,10 +169,15 @@ say('B 覆写：整份替换，BOM / 既有行尾 / 尾换行精确')
   const atMissing = json(run(['basetools', 'write', '--file', 'at-missing-out.txt', '--content', '@missing-content.txt']))
   check(atMissing.ok === false && atMissing.code === 'USAGE' && !fs.existsSync(file('at-missing-out.txt')), 'B28 --content @不存在 ⇒ JSON 回执（不是 Node 栈）', JSON.stringify(atMissing).slice(0, 160))
 
+  /**
+   * 0.21 起非 UTF-8 **可写**：`caf\xe9` 被探测成 windows-1252，写回沿用同一编码。
+   * 旧断言（拒绝）对应的是“只支持 UTF-8”的年代；拒绝现在只在“不可逆/猜不准/表示不了”时发生，
+   * 那三条分别在 `encoding-test` 的 E 段与 `encoding-refusal-test` 里。
+   */
   fs.writeFileSync(file('latin1.txt'), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]))
   const nonUtf8 = json(run(['basetools', 'write', '--file', 'latin1.txt', '--content', 'x\n', '--allow-unobserved']))
-  check(nonUtf8.ok === false && nonUtf8.code === 'ERR_ENCODING_INVALID_ENCODED_DATA' && /call aura_basetools_write/.test(String(nonUtf8.error)), 'B29 非 UTF-8 覆写给可执行拒绝（点名 aura_basetools_write）', JSON.stringify(nonUtf8).slice(0, 200))
-  check(fs.readFileSync(file('latin1.txt')).equals(Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a])), 'B30 非 UTF-8 拒绝时磁盘逐字节没变')
+  check(nonUtf8.ok === true, 'B29 非 UTF-8（windows-1252）覆写成功（不再拒绝）', JSON.stringify(nonUtf8).slice(0, 160))
+  check(fs.readFileSync(file('latin1.txt')).equals(Buffer.from([0x78, 0x0a])), 'B30 非 UTF-8 覆写：用同一编码写回（ASCII 子集）')
 
   fs.writeFileSync(file('stale-force.txt'), 'v1\n')
   prime('stale-force.txt')

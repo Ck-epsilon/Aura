@@ -8,6 +8,26 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.21.0：多编码 / 文档结构 / probe
+
+- **非 UTF-8 读写**：自动探测 UTF-8（含 BOM）/ UTF-16LE/BE / GB18030（GBK，含补充平面 4 字节）/
+  Shift_JIS / EUC-KR / Big5 / Windows-1252；写回沿用读时那次探测的编码，**未改动的行逐字节保留**；
+  不可逆或猜不准时拒绝写（`ENCODING_NOT_ROUNDTRIP_SAFE` / `ENCODING_AMBIGUOUS`），
+  目标编码表示不了的字符 ⇒ `ENCODING_UNREPRESENTABLE`，零写入。
+- **逐调用 `encoding`**（CLI `--encoding` / MCP `encoding`）+ **文件级记忆**：显式指定过一次后记住，
+  文件被外部改动（大小/mtime 变化）则记忆自动失效、回到探测。
+- **文档 / 配置结构**：`map` 对 `.md/.markdown/.mdx`（ATX + setext；多行段落、YAML front matter、
+  围栏代码块正确消歧）、`.json/.jsonc/.json5`（键路径含 `a[0].b`；无引号键 / 单引号 / 注释 / 尾逗号）、
+  `.yaml/.yml`、`.toml` 给出行号区间目录；`digest` 对文档返回同一张目录。
+- **`probe` 模式**：行数/字节/行尾/编码/语言/文档类型/结构规模，一行摘要、**不发正文**；
+  支持 `targets` 批量；`auto` 不会自动选它；不写“已交付”账本（probe 之后 `full` 仍给正文）。
+- **参数安全**：MCP 与 DSH 两个面的编辑说明都改为“单处修改用平铺形式、`hunks` 只用于多处”，
+  降低长嵌套 JSON 触发 `MALFORMED_RESPONSE` 的概率。根因在 provider 的流式解析（工具看不到那段字节），
+  要归零需宿主开启 strict 模式——`aura basetools doctor` 会打印配方与转换器路径。
+- 判据：encoding 34 条、doc-map 45 条、probe 21 条；全量闸 `node build/release-check.mjs` exit 0。
+- 已发布：npm `aura-basetools@0.21.0` / `aura-basetools-dsh@0.21.0`（registry.npmjs.org）。
+  GitHub Release **未发**：本检出没有 remote，需在 monorepo 检出里推送并建 `aura-basetools-v0.21.0`。
+
 ## 0.20.0：MCP 反向注入 + 客户端残留清理
 
 - MCP `initialize` 新增 `instructions`：明确要求优先 `aura_basetools_*`、用 `tx` 做跨调用事务；
