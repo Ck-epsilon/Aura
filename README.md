@@ -172,6 +172,24 @@ AuraArgus is not positioned as a replacement for general web search. It is appro
 
 AuraCardea does not claim to improve model quality. It changes the density and scanability of an existing turn, at the cost of coupling to DSH's chat DOM.
 
+### AuraBasetools: byte fidelity, not another editor
+
+Built-in file tools differ between agents; the right-hand column describes the common shape (single-file, UTF-8 text, whole-file write).
+
+| Dimension | AuraBasetools | Typical built-in Read / Edit |
+|---|---|---|
+| Encodings | UTF-8 (with BOM), UTF-16, GB18030/GBK, Shift_JIS, EUC-KR, Big5, Windows-1252; writes back in the file's own encoding | UTF-8 text; other encodings are mojibake or refused |
+| Byte fidelity | BOM and per-line endings preserved; bytes outside the edit untouched; refuses when the file cannot be reproduced byte-for-byte | Whole-file rewrite; normalization depends on the tool |
+| Addressing | Content (`old`), symbol (`target`), byte range (`handle`), line range, unique cue, remembered anchor | Exact string or line numbers |
+| Staleness | Per-region gate: a region changed since your last read is refused | No gate, or a whole-file timestamp check |
+| Read shape | `map` / `digest` / `around` / `lines` / `search` / `changed` / `probe` | Whole file, or offset + limit |
+| Write verification | Read-back byte comparison; a mismatch reports the first differing byte | Usually none |
+| Multiple changes | Several hunks in one call, all-or-nothing; `targets` for several files | One replacement per call |
+| Failure output | Structured code, candidates, and a next step | Free-form error text |
+| Dependencies | Zero runtime dependencies | Built into the host |
+
+AuraBasetools is not a code generator or a repository index. It is appropriate when the caller needs byte-exact edits, files that are not UTF-8, or an auditable write path; for bulk refactors and repo-wide search, dedicated tools remain better.
+
 ---
 
 ## Repository access
