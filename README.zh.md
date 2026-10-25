@@ -2,6 +2,7 @@
 
 [![aura-argus on npm](https://img.shields.io/npm/v/aura-argus?label=aura-argus&color=2f81f7)](https://www.npmjs.com/package/aura-argus)
 [![aura-cardea on npm](https://img.shields.io/npm/v/aura-cardea?label=aura-cardea&color=2f81f7)](https://www.npmjs.com/package/aura-cardea)
+[![aura-basetools on npm](https://img.shields.io/npm/v/aura-basetools?label=aura-basetools&color=2f81f7)](https://www.npmjs.com/package/aura-basetools)
 [![license: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
 [![node: >=20](https://img.shields.io/badge/node-%E2%89%A520-339933)](https://nodejs.org/)
 
@@ -12,7 +13,7 @@ Aura 是一个多包仓库（monorepo），用于维护一组可独立安装的�
 以下约束是刻意保留的：
 
 - **本地优先。** 不强制依赖云端账号；除工具显式抓取某个来源外，数据留在本机。
-- **尽可能无 key。** AuraArgus 与 AuraCardea 均不需要 API key。
+- **尽可能无 key。** AuraArgus、AuraCardea 与 AuraBasetools 均不需要 API key。
 - **可被 agent 调用。** 在适用处提供 CLI、HTTP、MCP 与库接口。
 - **MIT。** 代码可读、可修改、可自托管。
 
@@ -85,6 +86,25 @@ dsh plugin --profile web add aura-cardea
 
 *AuraCardea 在 DSH 0.2.x 中运行（公开 npm 包）。一轮中的工具调用、思考、编辑与读取按类折叠；类别行显示计数、失败标记与耗时。*
 
+### AuraBasetools — 面向 agent 的字节保真读写
+
+AuraBasetools 是给编码 agent 用的读 / 改 / 写引擎，承诺**字节不变**。读取按意图取景 —— `map`、`digest`、`around`、`lines`、`search`、`changed`，以及只给元信息的 `probe` —— 每次调用只返回相关那部分，而不是整份文件。编辑按内容（`old`）、符号（`target`）、字节区间（`handle`）或行号寻址；被寻址区域在读后被外部改过就拒绝，落盘后回读逐字节校验。
+
+- **编码：** UTF-8（含/不含 BOM）、UTF-16LE/BE、GB18030/GBK（含 4 字节补充平面）、Shift_JIS、EUC-KR、Big5、Windows-1252。写回沿用文件自身编码，编辑区域之外的字节原样保留；不可逆或猜不准的编码一律拒绝，不做猜测。
+- **结构：** 65 种代码扩展名，外加文档与配置（`.md` 的 ATX 与 setext 标题、`.json`/`.jsonc`/`.json5` 的键路径、`.yaml`、`.toml`）。
+- 零运行时依赖；Node.js ≥ 20；Windows、macOS、Linux。
+- CLI 与 MCP stdio；`aura-basetools-dsh` 提供 DeepSeek Harness 壳（`aura_basetools_*` 工具）。
+- npm：[`aura-basetools`](https://www.npmjs.com/package/aura-basetools)、[`aura-basetools-dsh`](https://www.npmjs.com/package/aura-basetools-dsh)
+- 源码：[`aura-basetools/`](aura-basetools/README.md)
+
+```bash
+npx -y --package aura-basetools aura basetools mcp   # MCP 服务器，零安装
+npm i -g aura-basetools                              # CLI
+dsh plugin --profile web add aura-basetools-dsh      # DSH 插件
+```
+
+**适用范围。** AuraBasetools 是文件层，不是搜索引擎也不是 agent：它不决定改什么、不生成补丁、不建仓库索引。DSH 面只能拿到宿主解码后的文本，非 UTF-8 文件要走 CLI 或 MCP。它给的最强保证在字节层：只要不能逐字节重现，就拒绝写入。
+
 ---
 
 ## 自测结果
@@ -103,6 +123,8 @@ dsh plugin --profile web add aura-cardea
 | | 公开 profile 安装（`dsh plugin ... aura-cardea@1.1.0`） | 包以 `aura-cardea` 解析；bundle 元数据存在 |
 | | 重启后的 DSH UI | 公开 bundle 已加载；折叠视图已验证（见上方截图） |
 | | 重启后的 DSH MCP + web provider | MCP `search` 返回注册源证据；`web_search` 返回同一官方源 |
+
+**AuraBasetools `0.21.0`**（2026-10-25 验证）：`node build/release-check.mjs` exit 0（全量套件，含 encoding 34、doc-map 45、probe 21），`node build/post-publish-check.mjs --registry --version 0.21.0` 24 / 24，发布物与本地 dist 逐文件一致。
 
 AuraArgus 的 2 项 soft 检查因网页回退为显式开启而默认停用；它们与硬检查分开报告，不计入通过数。
 
@@ -164,7 +186,7 @@ cd Aura
 git sparse-checkout set aura-cardea
 ```
 
-将 `aura-cardea` 替换为 `aura-argus` 即可获取另一个包。
+将 `aura-cardea` 替换为 `aura-argus` 或 `aura-basetools` 即可获取其它包。
 
 ### degit
 
@@ -177,6 +199,7 @@ npx degit Ck-epsilon/Aura/aura-cardea aura-cardea
 ```bash
 npm i -g aura-argus
 npm i aura-cardea
+npm i -g aura-basetools
 ```
 
 ---
@@ -191,6 +214,7 @@ Aura/
   docs/assets/
   aura-argus/          # 检索层：CLI / HTTP / MCP / Node 库
   aura-cardea/         # DSH Web 客户端插件
+  aura-basetools/      # 字节保真读写：CLI / MCP / DSH 插件
 ```
 
 每个包均可独立发布，其 manifest 指回本仓库：
@@ -207,7 +231,7 @@ Aura/
 
 ## 约定
 
-- **npm 名称：** `aura-<product>`（`aura-argus`、`aura-cardea`）。
+- **npm 名称：** `aura-<product>`（`aura-argus`、`aura-cardea`、`aura-basetools`）。
 - **产品名称：** 文案与界面使用 `AuraXxx`。
 - **版本：** 每个包独立 semver；推荐 tag 形如 `aura-cardea-v1.1.0`。
 - **DSH 包：** 同时声明 `dsh.bundle` 与 `dsh.client`，并以 `engines.dsh` 标注支持的 DSH 范围。
@@ -222,8 +246,9 @@ Aura/
 |---|---|---|---|
 | AuraArgus | `0.1.2` | Node.js ≥ 20 | 默认仅注册表；网页回退需显式开启 |
 | AuraCardea | `1.1.0` | DSH 0.2.x Web | bundle + client；可手动或经市场安装 |
+| AuraBasetools | `0.21.0` | Node.js ≥ 20；插件需 DSH 0.2.x | CLI + MCP + DSH 壳；多编码、结构目录、probe 模式 |
 
-当前没有从本仓库发布其他包。
+每个包独立版本、独立发布；当前版本以各自 README 为准。
 
 ---
 

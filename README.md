@@ -2,6 +2,7 @@
 
 [![aura-argus on npm](https://img.shields.io/npm/v/aura-argus?label=aura-argus&color=2f81f7)](https://www.npmjs.com/package/aura-argus)
 [![aura-cardea on npm](https://img.shields.io/npm/v/aura-cardea?label=aura-cardea&color=2f81f7)](https://www.npmjs.com/package/aura-cardea)
+[![aura-basetools on npm](https://img.shields.io/npm/v/aura-basetools?label=aura-basetools&color=2f81f7)](https://www.npmjs.com/package/aura-basetools)
 [![license: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
 [![node: >=20](https://img.shields.io/badge/node-%E2%89%A520-339933)](https://nodejs.org/)
 
@@ -12,7 +13,7 @@ Aura is a monorepo for independently installable tools. It is a distribution and
 The shared constraints are deliberate:
 
 - **Local-first.** No mandatory cloud account; data stays on the machine unless a tool explicitly retrieves a source.
-- **Keyless where possible.** AuraArgus and AuraCardea require no API key.
+- **Keyless where possible.** AuraArgus, AuraCardea, and AuraBasetools require no API key.
 - **Agent-callable.** CLI, HTTP, MCP, and library surfaces are provided where they make sense.
 - **MIT.** The code is readable, modifiable, and self-hostable.
 
@@ -85,6 +86,25 @@ Restart `dsh web`. When the package is installed as a bundle through a configure
 
 *AuraCardea running in DSH 0.2.x from the published npm package. One turn's tool calls, reasoning, edits, and reads are folded by kind; each category row carries counts, failure markers, and duration.*
 
+### AuraBasetools — byte-fidelity file tools for agents
+
+AuraBasetools is a read / edit / write engine for coding agents that keeps bytes intact. Reads are intent-shaped — `map`, `digest`, `around`, `lines`, `search`, `changed`, plus a metadata-only `probe` — so a call returns the part that matters instead of the whole file. Edits address content (`old`), symbols (`target`), byte ranges (`handle`), or lines; stale regions are refused, and the file is read back to verify what landed.
+
+- **Encodings:** UTF-8 (with or without BOM), UTF-16LE/BE, GB18030/GBK (including the 4-byte supplementary range), Shift_JIS, EUC-KR, Big5, Windows-1252. Writes go back in the file's own encoding and bytes outside the edit are preserved; ambiguous or non-reversible encodings are refused instead of guessed.
+- **Structure:** 65 code extensions, plus documents and configs (`.md` with ATX and setext headings, `.json`/`.jsonc`/`.json5` key paths, `.yaml`, `.toml`).
+- Zero runtime dependencies; Node.js ≥ 20; Windows, macOS, and Linux.
+- CLI and MCP stdio; `aura-basetools-dsh` adds the DeepSeek Harness shell (`aura_basetools_*` tools).
+- npm: [`aura-basetools`](https://www.npmjs.com/package/aura-basetools), [`aura-basetools-dsh`](https://www.npmjs.com/package/aura-basetools-dsh)
+- Source: [`aura-basetools/`](aura-basetools/README.md)
+
+```bash
+npx -y --package aura-basetools aura basetools mcp   # MCP server, zero install
+npm i -g aura-basetools                              # CLI
+dsh plugin --profile web add aura-basetools-dsh      # DSH plugin
+```
+
+**Scope.** AuraBasetools is a file layer, not a search engine or an agent: it does not decide what to edit, generate patches, or index a repository. On the DSH surface it sees host-decoded text only, so non-UTF-8 files are handled through the CLI or MCP. The strongest guarantee it makes is byte-level: if a file cannot be reproduced byte-for-byte, the write is refused.
+
 ---
 
 ## Verification
@@ -103,6 +123,8 @@ Last verified: **2026-10-22**. Network-dependent checks are not part of CI. The 
 | | Public profile install (`dsh plugin ... aura-cardea@1.1.0`) | package resolves as `aura-cardea`; bundle metadata present |
 | | DSH UI after restart | public bundle loaded; folded view verified (screenshot above) |
 | | DSH MCP + web provider after restart | MCP `search` returned registry evidence; `web_search` returned the same official source |
+
+**AuraBasetools `0.21.0`** (verified 2026-10-25): `node build/release-check.mjs` exited 0 (full suite; encoding 34, doc-map 45, probe 21 among the assertions), and `node build/post-publish-check.mjs --registry --version 0.21.0` passed 24 / 24 with the published files byte-identical to the local dist.
 
 Two AuraArgus soft checks are intentionally disabled because web fallback is opt-in; they are reported separately from the hard suite and are not counted as passes.
 
@@ -164,7 +186,7 @@ cd Aura
 git sparse-checkout set aura-cardea
 ```
 
-Replace `aura-cardea` with `aura-argus` for the other package.
+Replace `aura-cardea` with `aura-argus` or `aura-basetools` for another package.
 
 ### degit
 
@@ -177,6 +199,7 @@ npx degit Ck-epsilon/Aura/aura-cardea aura-cardea
 ```bash
 npm i -g aura-argus
 npm i aura-cardea
+npm i -g aura-basetools
 ```
 
 ---
@@ -191,6 +214,7 @@ Aura/
   docs/assets/
   aura-argus/          # retrieval: CLI / HTTP / MCP / Node library
   aura-cardea/         # DSH web client plugin
+  aura-basetools/      # byte-fidelity read/edit: CLI / MCP / DSH plugin
 ```
 
 Each package is independently publishable. Its manifest points back to this repository:
@@ -207,7 +231,7 @@ Each package is independently publishable. Its manifest points back to this repo
 
 ## Conventions
 
-- **npm name:** `aura-<product>` (`aura-argus`, `aura-cardea`).
+- **npm name:** `aura-<product>` (`aura-argus`, `aura-cardea`, `aura-basetools`).
 - **Product name:** `AuraXxx` in prose and UI.
 - **Versioning:** independent semver per package; recommended tags are `aura-cardea-v1.1.0`.
 - **DSH packages:** declare both `dsh.bundle` and `dsh.client`; use `engines.dsh` for the supported DSH range.
@@ -222,8 +246,9 @@ Each package is independently publishable. Its manifest points back to this repo
 |---|---|---|---|
 | AuraArgus | `0.1.2` | Node.js ≥ 20 | Registry-only by default; web fallback is opt-in |
 | AuraCardea | `1.1.0` | DSH 0.2.x web | Bundle + client; manual or market installation |
+| AuraBasetools | `0.21.0` | Node.js ≥ 20; DSH 0.2.x for the plugin | CLI + MCP + DSH shell; multi-encoding, structure maps, probe mode |
 
-No additional packages are published from this repository at this time.
+Each package is versioned and released independently; see its README for the current version.
 
 ---
 
@@ -232,4 +257,4 @@ No additional packages are published from this repository at this time.
 Original code in this repository is released under the MIT License; see [`LICENSE`](LICENSE) and each package's `LICENSE` file.
 
 Third-party names, trademarks, and works referenced by a package remain the property of their respective owners. The MIT license covers original code only and does not grant any license to third-party intellectual property.
-- [aura-basetools](aura-basetools/README.md) — byte-fidelity read/edit engine with write transactions and undo; CLI and MCP.
+
