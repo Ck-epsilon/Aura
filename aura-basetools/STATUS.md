@@ -1,8 +1,9 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**1.0.0（本地构建；尚未发布到 npm，发布需授权）**
-> 工作树：本轮改动未提交；全量闸 `node build/release-check.mjs` **exit 0**
-> npm：registry 仍是 `0.23.0`；本地 `dist/npm` 为 `1.0.0`
+> 当前版本：**1.0.0（已发布到 npm；GitHub release `aura-basetools-v1.0.0`）**
+> 工作树：发布提交已落盘（见 `git log`；monorepo `Ck-epsilon/Aura` 同名 tag）
+> npm：`aura-basetools@1.0.0`、`aura-basetools-dsh@1.0.0`（registry.npmjs.org）
+> GitHub：`Ck-epsilon/Aura` 的 `aura-basetools/` 子目录，tag `aura-basetools-v1.0.0`
 > 1.0.0：公开面收成 `aura_basetools_read` + `aura_basetools_apply`；entity-first、目录 grep、图片读、单元层归档
 > 闸读数：57 件闸内实跑 + 拆包 75/75 + src↔dist 33 文件逐字节一致
 > 性能（本机 CLI，10k 行）：entity read p50 187 ms / apply 289 ms / read+apply 474 ms；仓库 grep 200 ms（102 文件）；图片元数据 106 ms

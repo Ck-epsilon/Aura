@@ -28,7 +28,8 @@
   仓库 grep 200 ms（102 文件）、图片元数据 106 ms。CLI 数字含 Node 冷启动，MCP/DSH 常驻进程不走这段。
 - **文档**：`docs/README.npm-core.md` / `docs/README.npm-dsh.md` 工具表与编码/图片边界改为两工具实况；
   `docs/测试分层.md` 改成三层。
-- **版本**：源码与本地 `dist` 为 1.0.0；**未发布到 npm**（registry 仍是 0.23.0，发布需授权）。
+- **发布**：`aura-basetools@1.0.0`、`aura-basetools-dsh@1.0.0`（registry.npmjs.org）；GitHub release
+  `aura-basetools-v1.0.0`（monorepo `Ck-epsilon/Aura` 的 `aura-basetools/` 子目录）。
 
 ## 0.23.0：结构地址 / 结构句柄 / 双重编码修复 / convert 全面
 

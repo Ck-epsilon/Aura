@@ -335,5 +335,5 @@ npm 官方源发**两个包**（构建在 `dist/npm/`，由 `make-bundle.mjs --p
 `src/` 下四个目录互相是**相对引用**，必须整体搬动，单个搬会断链。DSH 侧的 `@deepseek-ai/dsh-tools` /
 `@deepseek-ai/schemastery` 等 peer 依赖靠向上查找 `node_modules` 解析，新位置仍在仓库根之下，照常解析。
 
-本机 Codex 的 MCP 注册指向 `dist/aura-basetools/bin/aura-mcp.mjs`（绝对路径）；重建 dist 不会改变这个路径，但
-**再搬项目目录就要同步改注册**：`codex mcp remove aura && codex mcp add aura -- node <新路径>\bin\aura-mcp.mjs`。
+本机 Codex / zcode 的 MCP 注册指向 **npm 全局安装**的 `...node_modules/aura-basetools/bin/aura.mjs`（不是本仓 dist）；
+升级走 `npm i -g aura-basetools@<版本> --registry=https://registry.npmjs.org`，重启客户端后新会话生效。
