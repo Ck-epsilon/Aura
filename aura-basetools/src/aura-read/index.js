@@ -32,6 +32,12 @@ import { readWith, readManyWith, MODES, BYTE_ORDER_MARK_BYTES, startsWithByteOrd
 import { MT_READ_ELEMENT_KEYS, asLinePair, assertKnownArgs, assertReadTargets, assertTargetShape, inferReadMode, lineRangeOf, normalizeReadRequest } from '../locator-lab/args.mjs'
 // 仓库级地图（T26）：引擎驱动遍历，本文件只把 ctx.fs 的两个原始能力接上去。
 import { collectRepoMap } from '../locator-lab/repo-map.mjs'
+// 实体视图（0.23）：解析选择器 → 定义 + 引用 + 证据；本文件只接 ctx.fs 与观测。
+import { entityView } from '../locator-lab/entity-core.mjs'
+import { langOf } from '../locator-lab/struct-core.mjs'
+// 目录 grep 与图片头解析同在引擎里；壳层不重写遍历、magic 或预算。
+import { searchRepo } from '../locator-lab/repo-search.mjs'
+import { imageInfo, isImagePath } from '../locator-lab/image-info.mjs'
 
 export const name = 'dsh-tool-aura-read'
 
@@ -150,6 +156,20 @@ export const PASSTHROUGH_FIELDS = [
   'targets',
   'summary',
   'entries',
+  /**
+   * 0.23 实体读 / 目录 grep / 图片：三组按情形出现的字段。
+   * 与 schema 仍是同一份名单（`aura-read-schema-test` 逐字段比对）。
+   */
+  'entity',
+  'definition',
+  'references',
+  'evidence',
+  'mime',
+  'width',
+  'height',
+  'animated',
+  'attachment',
+  'image_data_omitted',
 ]
 
 /**
@@ -180,6 +200,12 @@ export const READ_ARG_KEYS = [
   'structure_handle',
   // fs-contract-v2 §2.1：多目标形状。它与 `file_path` **互斥**（判据只有一份：`assertReadTargets`）。
   'targets',
+  // 0.23：实体选择器，以及目录 grep 的请求面（与 MCP/CLI 同名同义）。
+  'entity',
+  'regex',
+  'glob',
+  'case_sensitive',
+  'max_results',
 ]
 
 /**
@@ -201,6 +227,58 @@ async function fileStartsWithByteOrderMark(fsService, target, signal) {
   const head = await fsService.readByteRange(target, { offset: 0, length: BYTE_ORDER_MARK_BYTES.length }, signal)
   return startsWithByteOrderMark(head)
 }
+
+// ── 0.23 entity / image receipt shapes ─────────────────────────────────────
+
+/** Struct-core candidates ({name,kind,startLine,endLine}) → the one receipt shape ({line,text}). */
+function entityCandidatesOf(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((c) => c !== null && typeof c === 'object' && Number.isInteger(c.startLine))
+    .map((c) => ({ line: c.startLine, text: `${c.kind ?? 'symbol'} ${c.name ?? ''}`.trim() }))
+}
+
+/** `enclosing: null` is normalized away so the receipt schema stays strictly typed. */
+function entityRecordOf(entity) {
+  return {
+    id: entity.id,
+    file: typeof entity.file === 'string' ? entity.file : '',
+    kind: entity.kind,
+    name: entity.name,
+    ...(entity.enclosing === null || entity.enclosing === undefined ? {} : { enclosing: entity.enclosing }),
+    startLine: entity.startLine,
+    endLine: entity.endLine,
+    signature: entity.signature,
+    structureTarget: entity.structureTarget,
+    evidence: { contentHash: entity.evidence.contentHash, spanHash: entity.evidence.spanHash },
+  }
+}
+
+/** Ambiguity / not-found come back as a normal read receipt carrying the candidates. */
+function entityFailureReceipt(displayPath, view) {
+  const outcome = view.code === 'ENTITY_AMBIGUOUS' ? 'needs_choice' : 'not_found'
+  const candidates = entityCandidatesOf(view.candidates)
+  const next =
+    outcome === 'needs_choice'
+      ? 'more than one symbol matches — pass a qualified selector (Outer/Inner) or one of the candidate lines'
+      : 'no such symbol in this file — read it with mode=map to see what is there'
+  return {
+    path: displayPath,
+    mode: 'entity',
+    outcome,
+    code: view.code,
+    ...(candidates.length === 0 ? {} : { candidates }),
+    next,
+    text: renderEnvelope({ ok: false, code: view.code, message: view.message, candidates, next }),
+  }
+}
+
+/** Image bytes are capped before reading; metadata is always returned. */
+function imageByteCap() {
+  const configured = Number(globalThis.process?.env?.AURA_MAX_IMAGE_BYTES)
+  return Number.isSafeInteger(configured) && configured > 0 ? configured : 2 * 1024 * 1024
+}
+
 
 // ── C55：非 UTF-8 文件 ⇒ 可执行的拒绝 ──────────────────────────────────────
 
@@ -547,6 +625,10 @@ export function apply(ctx) {
             // “模型会想到它”是两回事：指导文本是模型最先读的一段，不提就等着它一次一个文件。
             // 措辞仍是命令式，与上下文同形；放在兜底条件**之前**，让“何时该用内置 read”仍是最后一句。
             'When several files are needed — or several places in files you are about to change — pass `targets` instead of calling once per file: one call, one receipt per target, output in input order, and a missing file does not fail the rest.',
+            // 实体/目录 grep/图片：三条新入口都靠一句话让模型想到（参数表里有 ≠ 会用）。
+            'To change one definition, pass `entity` (e.g. `function:apply`) instead of reading the whole file: it returns the body, its same-file references, and the evidence `aura_basetools_apply` needs.',
+            'Pass a directory path with `search` (plus `regex`, `glob`, `case_sensitive`, `max_results`) for repository-wide grep instead of reading files one by one.',
+            'Images return dimensions and format; the image itself is attached when the host has an attachment store.',
             // 兜底条件写明白：不写会让模型在确实需要内置工具时犹豫（超大窗口 / aura 直接拒读）。
             'The built-in `read` remains only for what aura_basetools_read cannot do: a raw window larger than one reply, or a file aura_basetools_read refuses.',
           ].join(' '),
@@ -567,6 +649,7 @@ export function apply(ctx) {
         '`changed` (what differs since a previous read — pass `since=<version>`). ' +
         'Output never exceeds what the pipeline preserves, and anything dropped is reported in `omitted` with a `next` hint. ' +
         'Prefer `map` first when you do not yet know the file; then `around` or `lines` for the part you will edit. ' +
+        'Pass `entity` to read one definition, its references and the evidence `aura_basetools_apply` needs; pass a directory path with `search` for repository-wide grep; image paths return format and dimensions (plus the image when the host has an attachment store). ' +
         'To read several files (or several ranges) in one call, pass `targets` — an array of the same single-target arguments.',
       parameters: {
         /**
@@ -660,7 +743,30 @@ export function apply(ctx) {
         },
         search: {
           type: 'string',
-          description: 'mode=search: a substring to find across the file.',
+          description:
+            'mode=search: a substring to find across the file. On a directory path it runs a repository-wide grep instead (recursive, ignores node_modules/.git, skips binaries).',
+        },
+        // 0.23：实体选择器与目录 grep 的请求面。与 MCP/CLI 同名同义；判据全在引擎里。
+        entity: {
+          oneOf: [{ type: 'string' }, { type: 'object', additionalProperties: true }],
+          description:
+            'Entity selector (`function:apply`, `Class/method`, or {kind,name,file}): return one definition, its same-file references and the evidence to pass to aura_basetools_apply.',
+        },
+        regex: {
+          type: 'boolean',
+          description: 'Directory grep: treat `search` as a regular expression (default: literal substring).',
+        },
+        glob: {
+          type: 'string',
+          description: 'Directory grep: only scan relative paths matching this glob (e.g. `src/**/*.ts`; without `/` it matches the basename).',
+        },
+        case_sensitive: {
+          type: 'boolean',
+          description: 'Directory grep: case-sensitive match (default true; false ignores case).',
+        },
+        max_results: {
+          type: 'integer',
+          description: 'Directory grep: maximum matching lines to return (default 200, cap 1000).',
         },
         max_chars: {
           type: 'integer',
@@ -775,6 +881,79 @@ export function apply(ctx) {
               },
             },
             symbols: { type: 'integer' },
+            // 0.23 实体读：定义 + 引用 + 证据（形状与 entity-core 的视图逐字段一致）。
+            entity: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                id: { type: 'string', required: true },
+                file: { type: 'string', required: true },
+                kind: { type: 'string', required: true },
+                name: { type: 'string', required: true },
+                enclosing: { type: 'string' },
+                startLine: { type: 'integer', required: true },
+                endLine: { type: 'integer', required: true },
+                signature: { type: 'string', required: true },
+                structureTarget: { type: 'string', required: true },
+                evidence: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    contentHash: { type: 'string', required: true },
+                    spanHash: { type: 'string', required: true },
+                  },
+                },
+              },
+            },
+            definition: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                signature: { type: 'string', required: true },
+                body: { type: 'string', required: true },
+                startLine: { type: 'integer', required: true },
+                endLine: { type: 'integer', required: true },
+              },
+            },
+            references: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  line: { type: 'integer', required: true },
+                  text: { type: 'string', required: true },
+                  resolution: { type: 'string', required: true },
+                },
+              },
+            },
+            evidence: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                version: { type: 'string', required: true },
+                contentHash: { type: 'string', required: true },
+                spanHash: { type: 'string', required: true },
+              },
+            },
+            // 0.23 图片读：header-only 元信息；字节只在附件服务在场且未超上限时以 attachment 交付。
+            mime: { type: 'string' },
+            width: { type: 'integer' },
+            height: { type: 'integer' },
+            animated: { type: 'boolean' },
+            attachment: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                attachmentId: { type: 'string', required: true },
+                mediaType: { type: 'string', required: true },
+                bytes: { type: 'integer' },
+                width: { type: 'integer' },
+                height: { type: 'integer' },
+                name: { type: 'string' },
+              },
+            },
+            image_data_omitted: { type: 'string' },
             // probe（0.21）：元信息字段，按模式出现（见 PASSTHROUGH_FIELDS 里的注释）。
             bytes: { type: 'integer' },
             lineEndings: { type: 'string', enum: ['lf', 'crlf', 'mixed'] },
@@ -959,7 +1138,24 @@ export function apply(ctx) {
             },
           },
         },
-        render: (_args, value) => [{ type: 'text', text: value.text }],
+        // 图片：附件在场就同时给 image block 与元信息文本；否则只给元信息（image_data_omitted 说明原因）。
+        render: (_args, value) =>
+          value?.attachment === undefined
+            ? [{ type: 'text', text: value.text }]
+            : [
+                { type: 'image', attachment: value.attachment },
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    path: value.path,
+                    mime: value.mime,
+                    bytes: value.bytes,
+                    width: value.width,
+                    height: value.height,
+                    ...(value.animated === undefined ? {} : { animated: value.animated }),
+                  }),
+                },
+              ],
       },
       async execute(args, exec) {
         /**
@@ -1007,9 +1203,6 @@ export function apply(ctx) {
           ctx.emit('fs/observed', target, { kind: 'absent' }, exec)
           throw new Error(`cannot read "${target.displayPath}": not found`)
         }
-        if (info.type === 'directory' && shape.paginate) {
-          throw Object.assign(new Error('offset/limit applies to files; a directory is returned as a repo map — drop pagination'), { code: 'READ_BAD_ARGS' })
-        }
         /**
          * 目录：**不读文件，直接给一张仓库地图**（T26）。
          *
@@ -1023,11 +1216,44 @@ export function apply(ctx) {
          */
         const dirChildren = info.type === 'directory' ? await ctx.fs.listDir(target, exec.signal) : undefined
         if (dirChildren !== undefined) {
+          // 目录 + 查询词 ⇒ 仓库级 grep（先于地图；判据只有这两条）。
+          const query = typeof args.search === 'string' && args.search.length > 0 ? args.search : undefined
+          if (query !== undefined) {
+            const env = await searchRepo(
+              {
+                listChildren: (dir) => ctx.fs.listDir(dir, exec.signal),
+                readText: (fileTarget) => ctx.fs.readText(fileTarget, exec.signal),
+              },
+              target,
+              {
+                query,
+                regex: args.regex === true,
+                glob: args.glob,
+                context: args.context,
+                limit: args.max_results ?? 200,
+                caseSensitive: args.case_sensitive !== false,
+                budget: args.budget,
+              },
+            )
+            // grep 的参数/根目录故障是工具级拒绝；命中的排版与预算已在引擎里定稿。
+            if (env.ok !== true) throw Object.assign(new Error(`${env.code}: ${env.message}`), { code: env.code })
+            return {
+              path: target.displayPath,
+              mode: 'grep',
+              outcome: 'applied',
+              ...(env.omitted === undefined ? {} : { omitted: env.omitted }),
+              text: env.text,
+            }
+          }
           const dirCeiling = (() => {
             const pruner = ctx.get('toolResultPruner')
             const threshold = pruner?.config?.thresholdChars
             return Number.isInteger(threshold) && threshold > 0 ? threshold : undefined
           })()
+          // grep 优先于地图，也就不受分页参数影响（与 standalone readEnvelope 同一条顺序）。
+          if (shape.paginate) {
+            throw Object.assign(new Error('offset/limit applies to files; a directory is returned as a repo map — drop pagination'), { code: 'READ_BAD_ARGS' })
+          }
           const env = await collectRepoMap(
             {
               listChildren: (dir) => ctx.fs.listDir(dir, exec.signal),
@@ -1049,6 +1275,76 @@ export function apply(ctx) {
               PASSTHROUGH_FIELDS.filter((k) => env[k] !== undefined).map((k) => [k, env[k]]),
             ),
             text: env.text,
+          }
+        }
+        /**
+         * 0.23 图片：按扩展名先行，只读头部字节（或整份，未超上限时）。
+         * 在 readText 之前分岔——图片没有可寻址的文本，解码拒绝会盖住尺寸回执。
+         */
+        if (isImagePath(target.displayPath)) {
+          const cap = imageByteCap()
+          const size = Number.isFinite(info.size) ? info.size : 0
+          // A tiny cap must not blind the header probe: metadata reads stop at 64 KiB,
+          // while the payload (attachment) is only offered when the whole file fits under the cap.
+          const headerBytes = 64 * 1024
+          const length = size > cap ? Math.min(size, Math.max(cap, headerBytes)) : size > 0 ? size : Math.min(cap, headerBytes)
+          const raw =
+            typeof ctx.fs.readByteRange === 'function'
+              ? await ctx.fs.readByteRange(target, { offset: 0, length }, exec.signal)
+              : await ctx.fs.readBytes(target, exec.signal, cap)
+          const meta = imageInfo(raw)
+          if (meta.ok !== true) {
+            throw Object.assign(new Error(`cannot read "${target.displayPath}" as an image: ${meta.message ?? 'not a recognized image'}`), {
+              code: meta.code,
+              cause: meta,
+            })
+          }
+          const metaFields = {
+            path: target.displayPath,
+            mode: 'image',
+            outcome: 'applied',
+            mime: meta.mime,
+            bytes: size,
+            width: meta.width,
+            height: meta.height,
+            ...(meta.animated === undefined ? {} : { animated: meta.animated }),
+            ...(info.version === undefined ? {} : { version: info.version }),
+          }
+          const summary = `${target.displayPath}: image ${meta.mime}, ${meta.width}x${meta.height} px, ${size} bytes`
+          // 一次图片读同样是一次合法观测（元信息也没读到文本，但文件确实被看过）。
+          ctx.emit('fs/observed', target, { kind: 'present', version: info.version }, exec)
+          // 超上限 ⇒ 只回元信息；否则附件服务在场就存一份，不在场就如实说省略了什么。
+          if (size > cap) return { ...metaFields, image_data_omitted: `over the ${cap}-byte cap`, text: summary }
+          const attachments = ctx.get('attachments')
+          if (typeof attachments?.saveImage !== 'function') {
+            return { ...metaFields, image_data_omitted: 'no attachment service mounted', text: summary }
+          }
+          try {
+            const ref = await attachments.saveImage({
+              data: Buffer.from(raw),
+              mediaType: meta.mime,
+              name: target.displayPath.split(/[\\/]/).pop(),
+            })
+            if (typeof ref?.attachmentId !== 'string') throw new Error('attachment store returned no attachmentId')
+            return {
+              ...metaFields,
+              attachment: {
+                attachmentId: ref.attachmentId,
+                mediaType: ref.mediaType ?? meta.mime,
+                bytes: Number.isFinite(ref.bytes) ? ref.bytes : size,
+                width: Number.isFinite(ref.width) ? ref.width : meta.width,
+                height: Number.isFinite(ref.height) ? ref.height : meta.height,
+                ...(typeof ref.name === 'string' ? { name: ref.name } : {}),
+              },
+              text: summary,
+            }
+          } catch (error) {
+            // 存储拒绝不吞成一张空回执：元信息照给，省略原因写明。
+            return {
+              ...metaFields,
+              image_data_omitted: `attachment store refused: ${String(error?.message ?? error)}`,
+              text: summary,
+            }
           }
         }
         /**
@@ -1076,6 +1372,44 @@ export function apply(ctx) {
         // BOM 只存在于字节里（readText 会在解码时丢掉它）——版本令牌要能区分只差 BOM 的两个文件，
         // 就必须把这个事实从字节里取出来交给引擎。
         const byteOrderMark = await fileStartsWithByteOrderMark(ctx.fs, target, exec.signal)
+        /**
+         * 0.23 实体读：选择器在场 ⇒ 定义 + 引用 + 证据，而不是整份文件。
+         * 歧义/找不到走结果通道并带候选；成功时用同一份 source 记一次跨度观测（version 来自 readWith）。
+         */
+        if (args.entity !== undefined && args.entity !== null) {
+          const view = entityView({
+            filePath: target.displayPath,
+            source,
+            lang: langOf(target.displayPath),
+            selector: args.entity,
+            budget: args.budget,
+          })
+          if (view.ok !== true) return entityFailureReceipt(target.displayPath, view)
+          const observation = readWith(source, {
+            mode: 'lines',
+            lines: [view.entity.startLine, view.entity.endLine],
+            filePath: target.displayPath,
+            ...(typeof target.targetKey === 'string' && target.targetKey.length > 0
+              ? { identityKey: target.targetKey }
+              : {}),
+            byteOrderMark,
+          })
+          if (observation.ok === false) throw new Error(`${observation.code}: ${observation.message}`)
+          ctx.emit('fs/observed', target, { kind: 'present', version: info.version }, exec)
+          return {
+            path: target.displayPath,
+            mode: 'entity',
+            totalLines: observation.totalLines,
+            outcome: 'applied',
+            version: observation.version,
+            entity: entityRecordOf(view.entity),
+            definition: view.definition,
+            references: view.references,
+            evidence: { ...view.evidence, version: observation.version },
+            ...(view.omitted === undefined ? {} : { omitted: view.omitted }),
+            text: view.text,
+          }
+        }
         /**
          * 第二遍收敛：拿到总行数后才能做 offset 越界与尾行截断。
          * 与单目标 `readEnvelope`、targets 元素**同一个**判定器。

@@ -28,37 +28,36 @@ const check = (label, ok, detail = '') => {
 
 const cap = buildCapabilities()
 const read = cap.tools.find((tool) => tool.name === 'aura_basetools_read')
-const edit = cap.tools.find((tool) => tool.name === 'aura_basetools_edit')
-const write = cap.tools.find((tool) => tool.name === 'aura_basetools_write')
+const apply = cap.tools.find((tool) => tool.name === 'aura_basetools_apply')
 
 say('=== A. 工具 / 读模式 / 地址档 ===')
-check('A1 三个工具都在', read !== undefined && edit !== undefined && write !== undefined, cap.tools.map((tool) => tool.name).join(','))
+check('A1 两个工具都在', read !== undefined && apply !== undefined && cap.tools.length === 2, cap.tools.map((tool) => tool.name).join(','))
 check('A2 读模式 = auto + MODES', JSON.stringify(read?.modes) === JSON.stringify(['auto', ...MODES]), JSON.stringify(read?.modes))
 for (const kind of ['target', 'lines', 'line_cue', 'anchor', 'old', 'context', 'handle', 'position']) {
-  check(`A3 地址档含 ${kind}`, edit?.addressKinds.includes(kind), JSON.stringify(edit?.addressKinds))
+  check(`A3 地址档含 ${kind}`, apply?.addressKinds.includes(kind), JSON.stringify(apply?.addressKinds))
 }
-check('A4 地址档与 FLAT_ADDRESS_KEYS 同源', FLAT_ADDRESS_KEYS.every((key) => edit?.addressKinds.includes(key)), FLAT_ADDRESS_KEYS.join(','))
-check('A4b 编辑选项含 replace_all', edit?.options?.includes('replace_all'), JSON.stringify(edit?.options))
-check('A4c 编辑选项含 require_observation；write 覆写默认带观察闸', edit?.options?.includes('require_observation') && write?.writeSafety?.cli?.includes('observation-gate') && write?.writeSafety?.mcp?.includes('observation-gate'), JSON.stringify({ options: edit?.options, write: write?.writeSafety }))
-check('A4d write 选项含 eol', write?.options?.includes('eol'), JSON.stringify(write?.options))
-check('A4e aura_basetools_write 在 DSH 面也宣称观察闸/区域闸/回读（不宣称事务/undo/锁）', write?.writeSafety?.dsh?.includes('observation-gate') && write.writeSafety.dsh.includes('stale-region-gate') && write.writeSafety.dsh.includes('byte-verify') && !write.writeSafety.dsh.includes('transaction') && !write.writeSafety.dsh.includes('undo') && !write.writeSafety.dsh.includes('workspace-lock'), JSON.stringify(write?.writeSafety))
+check('A4 地址档与 FLAT_ADDRESS_KEYS 同源', FLAT_ADDRESS_KEYS.every((key) => apply?.addressKinds.includes(key)), FLAT_ADDRESS_KEYS.join(','))
+check('A4b apply 选项含 replace_all', apply?.options?.includes('replace_all'), JSON.stringify(apply?.options))
+check('A4c apply 选项含 require_observation；写入口默认带观察闸', apply?.options?.includes('require_observation') && apply?.writeSafety?.cli?.includes('observation-gate') && apply?.writeSafety?.mcp?.includes('observation-gate'), JSON.stringify({ options: apply?.options, safety: apply?.writeSafety }))
+check('A4d apply 含 write 操作且选项含 eol', apply?.operations?.includes('write') && apply?.options?.includes('eol'), JSON.stringify({ operations: apply?.operations, options: apply?.options }))
+check('A4e apply 在 DSH 面也宣称观察闸/区域闸/回读（不宣称事务/undo/锁）', apply?.writeSafety?.dsh?.includes('observation-gate') && apply.writeSafety.dsh.includes('stale-region-gate') && apply.writeSafety.dsh.includes('byte-verify') && !apply.writeSafety.dsh.includes('transaction') && !apply.writeSafety.dsh.includes('undo') && !apply.writeSafety.dsh.includes('workspace-lock'), JSON.stringify(apply?.writeSafety))
 check('A5 命令含 doctor', cap.commands.includes('basetools doctor'), cap.commands.join(','))
 check('A5b 命令含 capabilities（运行时命令与构建清单同源）', cap.commands.includes('basetools capabilities'), cap.commands.join(','))
-check('A5d 命令含 write（整份写入与内置 Write 对齐）', cap.commands.includes('basetools write'), cap.commands.join(','))
-check('A5c 0.14.0：CLI/MCP 不再宣称 transaction/undo，只保留 lock/闸/回读', Array.isArray(edit?.writeSafety?.dsh) && edit.writeSafety.dsh.includes('stale-region-gate') && !edit.writeSafety.dsh.includes('workspace-lock') && !edit.writeSafety.cli.includes('transaction') && !edit.writeSafety.cli.includes('undo') && edit.writeSafety.cli.includes('workspace-lock'), JSON.stringify(edit?.writeSafety))
+check('A5d 命令含 apply（唯一写入口）', cap.commands.includes('basetools apply'), cap.commands.join(','))
+check('A5c CLI/MCP 的 apply 宣称 lock/闸/回读，不宣称 undo', Array.isArray(apply?.writeSafety?.dsh) && apply.writeSafety.dsh.includes('stale-region-gate') && !apply.writeSafety.dsh.includes('workspace-lock') && !apply.writeSafety.cli.includes('undo') && apply.writeSafety.cli.includes('workspace-lock'), JSON.stringify(apply?.writeSafety))
 
 say('')
 say('=== B. 语言表与限制 ===')
 check('B1 languages 等于 LANGS 的键', JSON.stringify(cap.langs) === JSON.stringify(Object.keys(LANGS).sort()), `${cap.langs.length}`)
 // 反馈 D7/B1：寻址安全等级与文本编码是机器可读事实，不能只靠散文。
 {
-  const edit = cap.tools.find((tool) => tool.name === 'aura_basetools_edit')
+  const apply = cap.tools.find((tool) => tool.name === 'aura_basetools_apply')
   check(
     'A6 寻址安全等级与实测一致（coordinate 默认不设闸）',
-    edit?.addressSafety?.coordinate?.includes('lines') &&
-      edit?.addressSafety?.contentVerified?.includes('old') &&
-      edit.addressSafety.coordinateNeedsObservation === false,
-    JSON.stringify(edit?.addressSafety),
+    apply?.addressSafety?.coordinate?.includes('lines') &&
+      apply?.addressSafety?.contentVerified?.includes('old') &&
+      apply.addressSafety.coordinateNeedsObservation === false,
+    JSON.stringify(apply?.addressSafety),
   )
   check(
     'B7 文档/配置的结构目录类型已声明',

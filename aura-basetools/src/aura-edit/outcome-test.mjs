@@ -166,7 +166,7 @@ plugin.apply({
     throw Object.assign(new Error('edit requires reading first'), { code: 'FS_NOT_OBSERVED' })
   },
 })
-const tool = registered
+const tool = plugin.lastLegacyTools.edit
 const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
 
 /**

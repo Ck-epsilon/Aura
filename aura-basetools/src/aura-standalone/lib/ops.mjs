@@ -83,6 +83,10 @@ const writePath = await import(engineUrl('write-path.mjs'))
 const structCore = await import(engineUrl('struct-core.mjs'))
 const handleCore = await import(engineUrl('handle-core.mjs'))
 const preflight = await import(engineUrl('preflight.mjs'))
+// entity-first（1.0）：实体地址 / 仓库级 grep / 图片头解析。CLI 与 MCP 共用这一处绑定。
+const entityCore = await import(engineUrl('entity-core.mjs'))
+const repoSearch = await import(engineUrl('repo-search.mjs'))
+const imageCore = await import(engineUrl('image-info.mjs'))
 
 /**
  * 0.9.9：运行时可查询的能力清单（与 build/capabilities.mjs 同一份源码常量）。
@@ -92,35 +96,31 @@ export function capabilitiesEnvelope() {
   const langs = Object.keys(structCore.LANGS).sort()
   return {
     tools: [
-      { name: 'aura_basetools_read', modes: ['auto', ...readCore.MODES] },
       {
-        name: 'aura_basetools_edit',
+        name: 'aura_basetools_read',
+        modes: ['auto', ...readCore.MODES],
+        reads: ['text', 'directory', 'image'],
+        views: ['map', 'digest', 'full', 'around', 'lines', 'search', 'changed', 'probe', 'entity', 'grep', 'image'],
+      },
+      {
+        name: 'aura_basetools_apply',
+        operations: ['replace-body', 'rename', 'patch', 'write', 'convert', 'tx'],
+        options: ['evidence', 'dry_run', 'verify', 'transaction', 'replace_all', 'require_observation', 'retry', 'eol', 'no_overwrite', 'allow_unobserved'],
         addressKinds: [...new Set([...engineArgs.FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
-        options: ['replace_all', 'require_observation', 'verify'],
-        writeSafety: {
-          cli: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
-          mcp: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
-          dsh: ['stale-region-gate', 'byte-verify'],
+        addressSafety: {
+          contentVerified: ['old', 'handle'],
+          structural: ['target', 'structure', 'entity'],
+          coordinate: ['lines', 'start_line', 'end_line', 'line_cue', 'anchor'],
+          coordinateNeedsObservation: false,
         },
-      },
-      {
-        name: 'aura_basetools_tx',
-        actions: ['begin', 'commit', 'rollback', 'status'],
-        options: ['verify'],
-      },
-      {
-        name: 'aura_basetools_write',
-        operations: ['create', 'overwrite'],
-        options: ['eol', 'verify'],
         writeSafety: {
           cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
           mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          // DSH 壳没有工作区锁；它经过引擎的区域闸、严格新鲜度与回读校验。
           dsh: ['stale-region-gate', 'observation-gate', 'byte-verify'],
         },
       },
     ],
-    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools tx', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
+    commands: ['basetools read', 'basetools apply', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
     langs,
     langsCount: langs.length,
     limits: {
@@ -522,16 +522,38 @@ export async function readEnvelope(provider, args) {
     const displayPath = provider.resolve(file)
     const info = provider.stat(displayPath)
     if (info === undefined) return { ok: false, error: `cannot read "${file}": not found`, code: 'FS_NOT_FOUND' }
-    if (info.type === 'directory' && requestShape.paginate) {
-      return { ok: false, error: 'offset/limit applies to files; a directory is returned as a repo map — drop pagination', code: 'READ_BAD_ARGS' }
-    }
     /**
-     * 目录：给一张仓库地图（T26）。判据只有“它是目录”这一条，不需要调用方多填参数。
-     *
-     * 引擎驱动遍历（`collectRepoMap`），本函数只把 node:fs 侧的两个原始能力接上去——
-     * 与 DSH 壳共用同一份判据（忽略规则、候选排序、预算都在引擎里）。
+     * ── 目录：仓库级 grep（`search` / `pattern` 在场）优先于仓库地图 ─────────────
+     * 判据只有“目录 + 有查询词”两条；遍历/忽略规则/预算/上限都在引擎 `repo-search.mjs`。
+     * 非 grep 目录仍走下面的仓库地图，并保留原有的分页拒绝。
      */
     if (info.type === 'directory') {
+      const query = typeof search === 'string' && search.length > 0 ? search : args.pattern
+      if (typeof query === 'string' && query.length > 0) {
+        const env = await repoSearch.searchRepo(
+          { listChildren: (dir) => provider.listDir(dir), readText: (target) => provider.readText(target) },
+          displayPath,
+          {
+            query,
+            regex: args.regex === true,
+            glob: args.glob,
+            context: args.context,
+            limit: args.max_results ?? 200,
+            caseSensitive: args.case_sensitive !== false,
+            budget: args.budget,
+          },
+        )
+        return env.ok === true ? { ok: true, ...env } : env
+      }
+      if (requestShape.paginate) {
+        return { ok: false, error: 'offset/limit applies to files; a directory is returned as a repo map — drop pagination', code: 'READ_BAD_ARGS' }
+      }
+      /**
+       * 目录：给一张仓库地图（T26）。判据只有“它是目录”这一条，不需要调用方多填参数。
+       *
+       * 引擎驱动遍历（`collectRepoMap`），本函数只把 node:fs 侧的两个原始能力接上去——
+       * 与 DSH 壳共用同一份判据（忽略规则、候选排序、预算都在引擎里）。
+       */
       const env = await collectRepoMap(
         {
           listChildren: (dir) => provider.listDir(dir),
@@ -544,6 +566,80 @@ export async function readEnvelope(provider, args) {
         { rootPath: displayPath },
       )
       return { ok: true, ...env }
+    }
+    /**
+     * ── 图片：按扩展名先行，只读头部字节 ─────────────────────────────────────
+     * 图片没有可寻址的文本；在 `readFileBytes` 之前分岔，免得二进制/非 UTF-8 拒绝盖住尺寸回执。
+     * 超过上限（`AURA_MAX_IMAGE_BYTES`，默认 2 MiB）只回元数据，绝不把字节塞进回执。
+     */
+    if (imageCore.isImagePath(displayPath)) {
+      const configuredCap = Number(process.env.AURA_MAX_IMAGE_BYTES)
+      const cap = Number.isSafeInteger(configuredCap) && configuredCap > 0 ? configuredCap : 2 * 1024 * 1024
+      const size = Number.isFinite(info.size) ? info.size : 0
+      const raw = await provider.readByteRange(displayPath, { offset: 0, length: Math.min(size, cap) })
+      const buffer = Buffer.from(raw)
+      const meta = imageCore.imageInfo(buffer)
+      if (meta.ok !== true) {
+        return {
+          ok: false,
+          code: meta.code,
+          error: meta.message ?? `cannot read "${displayPath}": not a recognized image`,
+          ...(meta.message === undefined ? {} : { message: meta.message }),
+        }
+      }
+      const receipt = {
+        ok: true,
+        mode: 'image',
+        file: displayPath,
+        mime: meta.mime,
+        bytes: size,
+        width: meta.width,
+        height: meta.height,
+        ...(meta.animated === undefined ? {} : { animated: meta.animated }),
+        ...(info.version === undefined ? {} : { version: info.version }),
+      }
+      if (size > cap) return { ...receipt, image_data_omitted: 'over cap' }
+      return { ...receipt, image: { data: buffer.toString('base64'), mimeType: meta.mime } }
+    }
+    /**
+     * ── 实体读：`entity` 在场 ⇒ 实体视图 + 该跨度的新鲜观测 ─────────────────
+     * 歧义/找不到原样透传（`ENTITY_AMBIGUOUS` / `ENTITY_NOT_FOUND` + candidates）。
+     */
+    if (args.entity !== undefined && args.entity !== null) {
+      const gotEntity = readFileBytes(displayPath, { encoding: args.encoding })
+      if (gotEntity.error !== undefined) return gotEntity.error
+      const lang = structCore.langOf(displayPath)
+      const view = entityCore.entityView({
+        filePath: displayPath,
+        source: gotEntity.source,
+        lang,
+        selector: args.entity,
+        budget: args.budget,
+      })
+      if (view.ok !== true) return view
+      const observed = readWith(gotEntity.source, {
+        mode: 'lines',
+        lines: [view.entity.startLine, view.entity.endLine],
+        filePath: displayPath,
+        byteOrderMark: gotEntity.byteOrderMark,
+      })
+      if (observed.ok === false) return observed
+      const receipt = {
+        ok: true,
+        ...observed,
+        mode: 'entity',
+        entity: view.entity,
+        definition: view.definition,
+        references: view.references,
+        evidence: { ...view.evidence, version: observed.version },
+        text: view.text,
+      }
+      if (gotEntity.encoding !== undefined && gotEntity.encoding.encoding !== 'utf-8') {
+        receipt.encoding = gotEntity.encoding.encoding
+        receipt.encoding_confidence = gotEntity.encoding.confidence
+        if (gotEntity.encoding.explicit === true) receipt.encoding_source = 'explicit'
+      }
+      return receipt
     }
     const got = readFileBytes(displayPath, { encoding: args.encoding })
     if (got.error !== undefined) return got.error
@@ -844,6 +940,140 @@ export async function editEnvelope(provider, request) {
     })
   } catch (error) {
     return transactionError(error)
+  }
+}
+
+/**
+ * `apply` 的操作推断（唯一一份）：显式 op 优先；否则按在场字段判定。
+ * 语句顺序即优先级；新增操作时只改这里。
+ */
+function inferApplyOp(args) {
+  if (typeof args.action === 'string') return 'tx'
+  if (typeof args.to === 'string') return 'convert'
+  if (typeof args.content === 'string') return 'write'
+  if (Array.isArray(args.targets)) return 'patch'
+  if (Array.isArray(args.hunks) || typeof args.create === 'string') return 'patch'
+  if (args.entity !== undefined && typeof args.new_name === 'string') return 'rename'
+  if (args.entity !== undefined) return 'replace-body'
+  return undefined
+}
+
+/**
+ * `applyEnvelope`（`aura_basetools_apply`）—— 唯一写入口。
+ * op=replace-body|rename 走实体；patch/write/convert/tx 分别转发到既有实现；
+ * 实体路径自带新鲜观测，调用方不必先 read。
+ */
+export async function applyEnvelope(provider, args = {}) {
+  const {
+    file, entity, op, change, newName, scope, evidence, dryRun, verify, transaction, expect, encoding,
+    hunks, create, content, noOverwrite, allowUnobserved, eol, to, from, bom, repairDoubleEncoding, action,
+    requireObservation, retry, targets,
+  } = args
+  const operation = op ?? inferApplyOp(args)
+  try {
+    if (operation === 'tx') {
+      if (action === 'begin') return beginTransactionEnvelope(provider)
+      if (action === 'commit') return await commitTransactionEnvelope(provider, { id: transaction, verify })
+      if (action === 'rollback') return await rollbackTransactionEnvelope(provider, { id: transaction })
+      if (action === 'status') return statusTransactionEnvelope(provider, { id: transaction })
+      return { ok: false, error: 'apply op=tx needs action = begin | commit | rollback | status', code: 'APPLY_BAD_ARGS' }
+    }
+    if (operation === 'write') {
+      return await writeEnvelope(provider, {
+        file, content, dryRun, noOverwrite: noOverwrite === true, allowUnobserved: allowUnobserved === true,
+        eol: typeof eol === 'string' ? eol : 'auto', verify, transaction,
+      })
+    }
+    if (operation === 'convert') {
+      return await convertEnvelope(provider, {
+        file, to, from, bom: typeof bom === 'string' ? bom : 'keep', eol: typeof eol === 'string' ? eol : 'keep',
+        dryRun, repairDoubleEncoding: repairDoubleEncoding === true,
+      })
+    }
+    if (operation === 'patch') {
+      if (Array.isArray(targets)) {
+        return await editManyEnvelope(provider, { targets, dryRun, requireObservation, retry, verify, transaction })
+      }
+      return await editEnvelope(provider, {
+        file, hunks: Array.isArray(hunks) ? hunks : [], create, dryRun, requireObservation, retry, verify, transaction,
+      })
+    }
+    if (operation !== 'replace-body' && operation !== 'rename') {
+      return { ok: false, error: `unknown apply op ${JSON.stringify(operation)}; expected replace-body | rename | patch | write | convert | tx`, code: 'APPLY_BAD_ARGS' }
+    }
+    if (typeof file !== 'string' || file.length === 0) {
+      return { ok: false, error: 'apply needs a file path', code: 'APPLY_BAD_ARGS' }
+    }
+    if (entity === undefined || entity === null) {
+      return { ok: false, error: 'apply needs an entity selector', code: 'APPLY_BAD_ARGS' }
+    }
+    const displayPath = provider.resolve(file)
+    const info = provider.stat(displayPath)
+    if (info === undefined) return { ok: false, error: `cannot apply "${file}": not found`, code: 'FS_NOT_FOUND' }
+    if (info.type !== 'file') return { ok: false, error: `cannot apply "${file}": not a regular file`, code: 'FS_NOT_REGULAR_FILE' }
+    const got = readFileBytes(displayPath, { encoding })
+    if (got.error !== undefined) return got.error
+    const source = got.source
+    const lang = structCore.langOf(displayPath)
+    /**
+     * ── 解析与证据：歧义/找不到原样透传；证据过期在**任何规划之前**拒绝 ─────────
+     */
+    const view = entityCore.entityView({ filePath: displayPath, source, lang, selector: entity })
+    if (view.ok !== true) return view
+    if (evidence !== null && typeof evidence === 'object') {
+      const hasSpan = evidence.spanHash !== undefined && evidence.spanHash !== null
+      const spanChanged = hasSpan && evidence.spanHash !== view.evidence.spanHash
+      const contentOnly = !hasSpan && evidence.contentHash !== undefined && evidence.contentHash !== null
+      const contentChanged = contentOnly && evidence.contentHash !== view.evidence.contentHash
+      if (spanChanged || contentChanged) {
+        return { ok: false, code: 'PATCH_ENTITY_STALE', error: 'entity changed since evidence; re-read it', entity: view.entity, evidence: view.evidence }
+      }
+    }
+    /**
+     * ── hunk 规划：正文替换走结构地址；重命名只换 ident 词元（注释/字符串不动） ──
+     */
+    let hunksForEntity
+    if (operation === 'replace-body') {
+      if (typeof change !== 'string') {
+        return { ok: false, error: 'replace-body needs `change` as a string', code: 'APPLY_BAD_ARGS' }
+      }
+      const hunk = entityCore.entityToStructureHunk(view.entity, change)
+      hunksForEntity = [typeof expect === 'string' ? { ...hunk, expect } : hunk]
+    } else if (operation === 'rename') {
+      const renamed = entityCore.entityRenameHunks({ source, lang, name: view.entity.name, newName, scope: scope ?? 'file' })
+      if (renamed.ok !== true) {
+        return { ok: false, code: renamed.code, error: renamed.message, candidates: renamed.candidates ?? [] }
+      }
+      hunksForEntity = renamed.hunks
+    } else {
+      return { ok: false, error: `unknown op ${JSON.stringify(operation)}; expected replace-body or rename`, code: 'APPLY_BAD_ARGS' }
+    }
+    /**
+     * ── 自动观测：apply 自己建立“刚读过这一版”的基准，调用方不必先 read ────────
+     */
+    const observation = readWith(source, {
+      mode: 'lines',
+      lines: [view.entity.startLine, view.entity.endLine],
+      filePath: displayPath,
+      byteOrderMark: got.byteOrderMark,
+    })
+    if (observation.ok === false) return observation
+    const entityEvidence = { ...view.evidence, version: observation.version }
+    const editEnv = await editEnvelope(provider, { file, hunks: hunksForEntity, dryRun, verify, transaction, requireObservation: true })
+    if (editEnv.ok !== true) return editEnv
+    return {
+      ...editEnv,
+      entity: { id: view.entity.id, kind: view.entity.kind, name: view.entity.name, startLine: view.entity.startLine, endLine: view.entity.endLine },
+      evidence: entityEvidence,
+      auto_observed: true,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message ?? error),
+      code: error?.code ?? 'IO_ERROR',
+      ...errorEvidence(error),
+    }
   }
 }
 

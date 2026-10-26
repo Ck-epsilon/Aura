@@ -91,11 +91,19 @@ const mcpByName = Object.fromEntries(mcp.map((tool) => [tool.name, tool]))
 
 console.log('=== 1. 工具名（DSH 有的，MCP 必须有） ===')
 const dshNames = Object.keys(dshByName).sort()
-check(dshNames.length >= 3, `DSH 注册了 ${dshNames.length} 个工具：${dshNames.join(', ')}`)
+check(
+  dshNames.length === 2 && dshNames.join(',') === 'aura_basetools_apply,aura_basetools_read',
+  `DSH 公开面 ${dshNames.length} 个工具：${dshNames.join(', ')}`,
+  dshNames.join(','),
+)
 for (const name of dshNames) {
   check(mcpByName[name] !== undefined, `${name} 在 MCP 面存在`)
 }
-check(mcpByName.aura_basetools_tx !== undefined && dshByName.aura_basetools_tx === undefined, 'tx 只在 MCP/CLI 面（文档化不对称）')
+check(
+  mcpByName.aura_basetools_apply?.inputSchema?.properties?.op?.enum?.includes('tx') === true &&
+    dshByName.aura_basetools_apply?.parameters?.properties?.op?.enum?.includes('tx') === true,
+  'tx 是 apply 的 op（不再是独立工具；DSH 声明后在运行期拒绝）',
+)
 
 console.log('\n=== 2. 顶层参数键（差异必须只有文档化清单） ===')
 for (const name of dshNames) {
@@ -110,19 +118,20 @@ for (const name of dshNames) {
   check(unexpectedMcpOnly.length === 0, `${name}：MCP 多出的键都在文档化清单里`, unexpectedMcpOnly.length > 0 ? `未登记：${unexpectedMcpOnly.join(', ')}（MCP-only 已登记：${expectedMcpOnly.join(', ') || '无'}）` : '')
 }
 
-console.log('\n=== 3. hunk 字段（数组形与平铺形共用同一张表） ===')
+console.log('\n=== 3. hunk 字段（apply 的 patch 逃生口，两面同一张表） ===')
 {
-  const a = Object.keys(mcpByName.aura_basetools_edit?.inputSchema?.properties?.hunks?.items?.properties ?? {}).sort()
-  const b = Object.keys(dshByName.aura_basetools_edit?.parameters?.properties?.hunks?.items?.properties ?? {}).sort()
+  const a = Object.keys(mcpByName.aura_basetools_apply?.inputSchema?.properties?.hunks?.items?.properties ?? {}).sort()
+  const b = Object.keys(dshByName.aura_basetools_apply?.parameters?.properties?.hunks?.items?.properties ?? {}).sort()
   check(a.length > 0 && JSON.stringify(a) === JSON.stringify(b), `hunk 字段两面相等（${a.length} 个）`, `mcp=${a.join(',')} | dsh=${b.join(',')}`)
 }
 
-console.log('\n=== 4. 平铺键：DSH 顶层的每个 hunk 键，MCP 顶层也有 ===')
+console.log('\n=== 4. apply 的实体/批处理键两面都在 ===')
 {
-  const hunkKeys = Object.keys(dshByName.aura_basetools_edit?.parameters?.properties?.hunks?.items?.properties ?? {})
-  const mcpTop = new Set(Object.keys(mcpByName.aura_basetools_edit?.inputSchema?.properties ?? {}))
-  const missing = hunkKeys.filter((key) => !mcpTop.has(key))
-  check(missing.length === 0, `MCP 顶层声明了全部 ${hunkKeys.length} 个平铺键`, missing.length > 0 ? `缺：${missing.join(', ')}` : '')
+  const mcpApply = new Set(Object.keys(mcpByName.aura_basetools_apply?.inputSchema?.properties ?? {}))
+  const dshApply = new Set(Object.keys(dshByName.aura_basetools_apply?.parameters?.properties ?? {}))
+  const keys = ['op', 'file_path', 'entity', 'change', 'new_name', 'evidence', 'hunks', 'targets', 'content', 'to', 'action']
+  const missing = keys.filter((key) => !mcpApply.has(key) || !dshApply.has(key))
+  check(missing.length === 0, `apply 两面的实体/批处理键都在（${keys.length} 个）`, missing.join(', '))
 }
 
 /**

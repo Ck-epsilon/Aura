@@ -31,7 +31,7 @@ check(/full-gate:/.test(workflow) && /runs-on:\s*ubuntu-latest/.test(workflow), 
 check(/node-version:\s*22/.test(workflow), 'A2 full-gate 用 Node 22')
 check(/node build\/release-check\.mjs/.test(workflow), 'A3 full-gate 真跑 release-check')
 check(/smoke:/.test(workflow) && /node:\s*\[18,\s*20\]/.test(workflow), 'A4 smoke 覆盖 Node 18 / 20')
-check(/aura-mcp\.mjs/.test(workflow) && /aura_basetools_read/.test(workflow) && /aura_basetools_write/.test(workflow), 'A5 smoke 含 MCP 握手与读写')
+check(/aura-mcp\.mjs/.test(workflow) && /aura_basetools_read/.test(workflow) && /aura_basetools_apply/.test(workflow), 'A5 smoke 含 MCP 握手与读写')
 check(/aura\.mjs basetools (read|edit|write)/.test(workflow), 'A5b smoke 用 `aura basetools <verb>` 命名空间')
 check(/@deepseek-ai\/dsh-tools@0\.2\.1-rc\.2/.test(workflow), 'A6 full-gate 安装宿主 peer（公开包，锁定版本）')
 

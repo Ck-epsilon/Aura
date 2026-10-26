@@ -47,7 +47,7 @@ say('=== A. 正常环境 ===')
   const ids = (report?.checks ?? []).map((c) => c.id)
   check('A3 六项检查都在', ['node', 'version', 'mcp-bin', 'mcp-handshake', 'cache-writable', 'lock-writable'].every((id) => ids.includes(id)), ids.join(','))
   check('A4 所有检查项通过', (report?.checks ?? []).every((c) => c.ok === true), JSON.stringify((report?.checks ?? []).filter((c) => !c.ok)))
-  check('A5 MCP 握手列出两个工具', /aura_basetools_read/.test(JSON.stringify(report?.checks)) && /aura_basetools_edit/.test(JSON.stringify(report?.checks)))
+  check('A5 MCP 握手列出两个工具', /aura_basetools_read/.test(JSON.stringify(report?.checks)) && /aura_basetools_apply/.test(JSON.stringify(report?.checks)))
   check('A6 缓存目录真的被创建', fs.existsSync(cache), cache)
   // strict 是“提示”而不是“检查项”：工具侧开不了它（那是 provider 配置），但装完就应该看得到怎么开。
   check(

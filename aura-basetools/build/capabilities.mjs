@@ -48,59 +48,31 @@ export function buildCapabilities() {
     version,
     generatedAt: new Date().toISOString(),
     tools: [
-      { name: 'aura_basetools_read', modes: ['auto', ...MODES] },
       {
-        name: 'aura_basetools_edit',
+        name: 'aura_basetools_read',
+        modes: ['auto', ...MODES],
+        reads: ['text', 'directory', 'image'],
+        views: ['map', 'digest', 'full', 'around', 'lines', 'search', 'changed', 'probe', 'entity', 'grep', 'image'],
+      },
+      {
+        name: 'aura_basetools_apply',
+        operations: ['replace-body', 'rename', 'patch', 'write', 'convert', 'tx'],
+        options: ['evidence', 'dry_run', 'verify', 'transaction', 'replace_all', 'require_observation', 'retry', 'eol', 'no_overwrite', 'allow_unobserved'],
         addressKinds: [...new Set([...FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
-        options: ['replace_all', 'require_observation', 'retry', 'verify'],
-        /**
-         * 寻址安全等级（反馈 D7）：机器可读地说明“哪种地址自带校验”。
-         * 旧清单只有按**入口**分的 writeSafety，读起来像“写都被 gate”，
-         * 而 line 寻址在未观察过的文件上确实不设闸（回执标 unverified_region）。
-         *
-         *   · contentVerified：地址本身就是内容/版本（错了字就匹配不上/句柄过期）；
-         *   · structural：按符号名定位，文件漂移后仍能命中同名符号；
-         *   · coordinate：按坐标/线索定位，未观察过的文件上无基准可校 —— 默认不设闸，
-         *     需 `require_observation` 强制。
-         */
         addressSafety: {
           contentVerified: ['old', 'handle'],
-          structural: ['target', 'structure'],
+          structural: ['target', 'structure', 'entity'],
           coordinate: ['lines', 'start_line', 'end_line', 'line_cue', 'anchor'],
           coordinateNeedsObservation: false,
         },
-        /**
-         * 写安全能力按**入口**分：CLI/MCP 的 envelope 才有工作区锁；
-         * DSH 壳只经过引擎的陈旧闸门与回读校验，不能跟着宣称同一组能力。
-         * 0.14.0 移除了公开 undo/transactions；事务日志仅内部失败回滚。
-         */
-        writeSafety: {
-          cli: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
-          mcp: ['workspace-lock', 'stale-region-gate', 'byte-verify'],
-          dsh: ['stale-region-gate', 'byte-verify'],
-        },
-      },
-      {
-        name: 'aura_basetools_tx',
-        actions: ['begin', 'commit', 'rollback', 'status'],
-        options: ['verify'],
-      },
-      {
-        name: 'aura_basetools_convert',
-      },
-      {
-        name: 'aura_basetools_write',
-        operations: ['create', 'overwrite'],
-        options: ['eol', 'verify'],
         writeSafety: {
           cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
           mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          // DSH 壳没有工作区锁；它经过引擎的区域闸、严格新鲜度与回读校验。
           dsh: ['stale-region-gate', 'observation-gate', 'byte-verify'],
         },
       },
     ],
-    commands: ['basetools read', 'basetools edit', 'basetools write', 'basetools tx', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
+    commands: ['basetools read', 'basetools apply', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
     langs: Object.keys(LANGS).sort(),
     langsCount: Object.keys(LANGS).length,
     // 可读可写的编码（实测过的探测 + 回编码）。非 UTF-8 不再拒绝；不可逆/猜不准时**写**拒绝。

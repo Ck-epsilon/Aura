@@ -78,6 +78,9 @@ const mkCtx = () => ({
 })
 readPlugin.apply(mkCtx())
 editPlugin.apply(mkCtx())
+// Public surface is read+apply; this suite pins the legacy flat-hunk shape, so take the
+// unregistered edit descriptor from the test seam.
+editTool = editPlugin.lastLegacyTools.edit
 const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
 const read = (file, args = {}) => readTool.execute({ file_path: file, ...args }, exec)
 /** 直接喂原始入参：本套件测的就是"形状"，不能先替它归一。 */

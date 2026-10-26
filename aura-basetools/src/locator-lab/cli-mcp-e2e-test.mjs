@@ -48,7 +48,7 @@ if (!fs.existsSync(cli) || !fs.existsSync(mcp)) {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-'))
 /** 观测缓存放到测试目录：账本跨进程活着靠的就是它，不能污染 ~/.aura。 */
-const env = { ...process.env, AURA_CACHE_DIR: path.join(tmp, 'cache') }
+const env = { ...process.env, AURA_CACHE_DIR: path.join(tmp, 'cache'), AURA_TEST_EXPOSE_LEGACY: '1' }
 const runCli = (args, cwd = tmp) => {
   const res = spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 })
   let parsed = null
@@ -175,10 +175,10 @@ say('=== E. MCP：JSON-RPC over stdio 的整条往返 ===')
   check(byId.get(1)?.result?.serverInfo?.name === 'aura-basetools', 'E1 initialize 握手带回 serverInfo', JSON.stringify(byId.get(1)?.result?.serverInfo ?? null))
   const tools = byId.get(2)?.result?.tools?.map((t) => t.name) ?? []
   check(
-    ['aura_basetools_read', 'aura_basetools_edit', 'aura_basetools_write', 'aura_basetools_convert', 'aura_basetools_tx'].every((name) =>
+    ['aura_basetools_read', 'aura_basetools_edit', 'aura_basetools_apply', 'aura_basetools_write', 'aura_basetools_convert', 'aura_basetools_tx'].every((name) =>
       tools.includes(name),
     ),
-    'E2 tools/list 列出读/改/整写/转换/事务五个工具',
+    'E2 tools/list 列出读/改/实体写/整写/转换/事务六个工具',
     tools.join(','),
   )
   const readText = byId.get(3)?.result?.content?.[0]?.text ?? ''

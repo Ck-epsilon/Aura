@@ -36,6 +36,10 @@ export const ENGINE = [
   'preflight.mjs',
   // 文档/配置目录（0.21）：`read-core` 静态 import 它；漏打包 = 包内直接崩。
   'doc-structure.mjs',
+  // entity-first（1.0）：实体地址、仓库级搜索、图片头解析。read/apply 两条工具面共用。
+  'entity-core.mjs',
+  'repo-search.mjs',
+  'image-info.mjs',
 ]
 
 /** DSH 面：两个工具壳（宿主代码，走 ctx.fs）。 */

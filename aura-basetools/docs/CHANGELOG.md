@@ -1,4 +1,4 @@
-# aura-tools 版本变更表（0.6.2 → 0.13.0）
+# aura-tools 版本变更表（0.6.2 → 1.0.0）
 
 > **这份表是补记的**：`docs/aura-tools-<版本>.md` 只覆盖到 0.6.1，然后直接跳到 0.6.16/0.6.17；
 > 中间的 0.6.2–0.6.15 与 0.6.18 当时只写在交接单与工作单里。C72 收口审计把这 15 个版本的**一句话变更 + 读数**
@@ -7,6 +7,28 @@
 > - 详细施工记录：`.polaris/读写工具重做-交接单.md`（§三 波1–19、§八 句柄化、§九 多目标、§十 判定内联、§十二 回执准确化）
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
+
+## 1.0.0：entity-first · 两工具面 · 三层测试
+
+- **公开面收成两个工具**：`aura_basetools_read` + `aura_basetools_apply`（MCP/DSH）。旧 `edit` / `write` /
+  `convert` / `tx` 不再出现在 `tools/list`；它们只作为隐藏调用路径与测试缝存在
+  （`AURA_TEST_EXPOSE_LEGACY=1` 仅测试枚举 schema）。CLI 仍是 `aura basetools <verb>`，旧动词保留兼容。
+- **read 吸收三类读**：文件取景（原有模式）、`entity`（定义 + 同文件词法引用 + 证据）、目录 + `search`
+  （仓库级 grep，复用 repo-map 忽略规则，literal/regex/glob/context/预算）、图片（magic 头元数据 +
+  MCP image content / DSH attachment）。`repo-search.mjs`、`entity-core.mjs`、`image-info.mjs` 是新增引擎模块。
+- **apply 吸收全部写**：`replace-body` / `rename`（实体优先，证据过期 `PATCH_ENTITY_STALE` 零写入，
+  歧义 `ENTITY_AMBIGUOUS` 零写入）+ `patch` / `write` / `convert` / `tx` 操作；MCP/CLI 支持
+  transaction/verify，DSH 面明确拒绝这两项（没有事务日志）。
+- **测试策略**：只保留接口 / 集成 / 系统三层（56 套 `SUITES` + 拆包 = 57 件闸内实跑）；单元层从闸门移除并归档到
+  `docs/archive/unit-tests`（43 个文件，不运行、不发货）；`range-all` 从四套靶场收成三套。
+  新增 `entity-core` 安装级验收（实体读/apply/stale/rename/歧义/目录 grep/图片）与 `docs-surface`
+  （npm README 工具表 = 能力清单，堵住 0.23.0 已发生的契约漂移）。
+- **验证**：`node build/release-check.mjs` exit 0（57 件 + 拆包 75/75 + src↔dist 33 文件）；
+  `probes/entity-bench.mjs`：10k 行 CLI entity read p50 187 ms、apply 289 ms、read+apply 474 ms，
+  仓库 grep 200 ms（102 文件）、图片元数据 106 ms。CLI 数字含 Node 冷启动，MCP/DSH 常驻进程不走这段。
+- **文档**：`docs/README.npm-core.md` / `docs/README.npm-dsh.md` 工具表与编码/图片边界改为两工具实况；
+  `docs/测试分层.md` 改成三层。
+- **版本**：源码与本地 `dist` 为 1.0.0；**未发布到 npm**（registry 仍是 0.23.0，发布需授权）。
 
 ## 0.23.0：结构地址 / 结构句柄 / 双重编码修复 / convert 全面
 

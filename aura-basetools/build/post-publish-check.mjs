@@ -175,7 +175,7 @@ say('=== B. 真装：CLI / MCP 从装出来的那份能跑 ===')
   const tools = String(mcp.stdout ?? '').split('\n').flatMap((line) => {
     try { return JSON.parse(line).result?.tools?.map((t) => t.name) ?? [] } catch { return [] }
   })
-  check('装出来的 MCP 列出 aura_basetools_read / aura_basetools_edit', mcp.status === 0 && tools.includes('aura_basetools_read') && tools.includes('aura_basetools_edit'), `${mcp.status} ${tools.join(',') || '(none)'}`)
+  check('装出来的 MCP 列出 aura_basetools_read / aura_basetools_apply', mcp.status === 0 && tools.includes('aura_basetools_read') && tools.includes('aura_basetools_apply'), `${mcp.status} ${tools.join(',') || '(none)'}`)
 
   check('装出来的适配器含 dsh/ 钩子执行器', fs.existsSync(path.join(installedDsh, 'dsh', 'argv-shell.mjs')) && fs.existsSync(path.join(installedDsh, 'dsh', 'hook-inproc.mjs')))
   const adapters = ['aura-read', 'aura-edit'].map((name) => fs.readFileSync(path.join(installedDsh, name, 'index.js'), 'utf8'))

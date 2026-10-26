@@ -12,7 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 // 定位引擎住在 lab 层（框架无关），DSH 侧只剩编排——测试按这个分层取用。
 // 引擎层的歧义语义用 locateWith 直接验（它会抛错）；locate() 是包装，把错误变成结构化返回值。
-import { planHunks } from './index.js'
+import { lastLegacyTools, planHunks } from './index.js'
 import { indexFile, locateWith } from '../locator-lab/anchor-core.mjs'
 // 引擎的定位 API 本身也要断言：expect 的放松（C1）落在这一层，与 hunk 端到端**不是**同一道闸。
 import { locate } from '../locator-lab/locator-api.mjs'
@@ -35,12 +35,18 @@ console.log('')
 console.log('=== 2. 注册：用 mock ctx 跑 apply ===')
 let registered = null
 let writeTool = null
+let applyTool = null
+const registeredNames = []
 const events = []
 /** 收集提示段。systemPrompt 必须提供，否则注册指导那段代码根本不会执行。 */
 const sections = []
 const mockCtx = {
   // 与真实 Cordis 上下文同形（inject / get 都必须在场）——理由见 mock-ctx.mjs 的注释。
-  ...contextServices(),  tools: { register: (t) => (registered = t) },
+  ...contextServices(),  tools: { register: (t) => {
+    registered = t
+    if (t?.name === 'aura_basetools_apply') applyTool = t
+    if (t?.name !== undefined) registeredNames.push(t.name)
+  } },
   systemPrompt: { section: () => () => {} },
   emit: (...a) => events.push(a[0]),  waterfall: async (name) => {
     events.push(name)
@@ -49,7 +55,19 @@ const mockCtx = {
 }
 plugin.apply(mockCtx)
 check(registered !== null, 'apply 调用了 ctx.tools.register')
-check(registered?.name === 'aura_basetools_edit', `注册的工具名 = ${JSON.stringify(registered?.name)}`)
+check(registered?.name === 'aura_basetools_apply', `公开注册的工具名 = ${JSON.stringify(registered?.name)}`)
+// 旧 write/convert/edit 不再注册；测试从 lastLegacyTools 取它们的定义，继续跑同一批断言。
+check(
+  lastLegacyTools?.edit?.name === 'aura_basetools_edit' && lastLegacyTools?.write?.name === 'aura_basetools_write',
+  `旧工具仍可取用（${lastLegacyTools?.edit?.name} / ${lastLegacyTools?.write?.name}）`,
+)
+registered = lastLegacyTools.edit
+writeTool = lastLegacyTools.write
+// 本插件只注册 apply（read 在 aura-read 插件里，合计两个 DSH 工具）。
+check(
+  [...new Set(registeredNames)].sort().join(',') === 'aura_basetools_apply',
+  `本插件注册 ${new Set(registeredNames).size} 个工具 = ${[...new Set(registeredNames)].sort().join(', ')}`,
+)
 // defineTool 会把参数 DSL 编译成 JSON Schema：顶层是 {type, properties, required}
 const compiled = registered?.parameters ?? {}
 const paramKeys = Object.keys(compiled.properties ?? {})
@@ -133,6 +151,7 @@ const fsService = {
   readText: async (t) => fs.readFileSync(t.targetKey, 'utf8'),
   // 字节回读（aura_basetools_write 的 verifyWriteBack 会走它）：与真提供方同形，按区间返回 Buffer。
   readByteRange: async (t, r) => fs.readFileSync(t.targetKey).subarray(r.offset ?? 0, (r.offset ?? 0) + (r.length ?? 0)),
+  readBytes: async (t) => fs.readFileSync(t.targetKey),
   editText: async (t, req) => {
     const p = t.targetKey
     const current = fs.readFileSync(p, 'utf8')
@@ -169,6 +188,7 @@ const liveCtx = {
   ...contextServices(),  tools: {
     register: (t) => {
       if (t?.name === 'aura_basetools_write') writeTool = t
+      if (t?.name === 'aura_basetools_apply') applyTool = t
       // 保持 `registered` = 最后一个注册的工具（aura_basetools_edit）：既有断言与执行入口都读它。
       registered = t
     },
@@ -184,7 +204,9 @@ const liveCtx = {
 // （真实运行时每进程只 apply 一次；这里重跑只为在同一进程里测两个 ctx。）
 plugin.apply(liveCtx)
 check(registered !== null, '第二次 apply 重新注册（闭包指向带 fs 的 ctx）')
-check(registered?.name === 'aura_basetools_edit' && writeTool?.name === 'aura_basetools_write', `同一插件注册 aura_basetools_edit + aura_basetools_write（${registered?.name} / ${writeTool?.name}）`)
+registered = lastLegacyTools.edit
+writeTool = lastLegacyTools.write
+check(registered?.name === 'aura_basetools_edit' && writeTool?.name === 'aura_basetools_write', `旧工具定义仍可取用（${registered?.name} / ${writeTool?.name}）`)
 
 const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
 // 故意注入漂移：缩进少 2 格 + 行尾空格 + 改了一个词（真实模型最常见的三种手误）
@@ -506,6 +528,116 @@ check(
 )
 check(fs.readFileSync(addrTarget, 'utf8').includes('?? 0'), '被放宽的那一例真的落盘（不是只回了个 applied）')
 fs.rmSync(addrTmp, { recursive: true, force: true })
+
+console.log('')
+console.log('=== 10. aura_basetools_apply：实体地址的一步写入 ===')
+{
+  check(applyTool !== null && applyTool?.name === 'aura_basetools_apply', 'aura_basetools_apply 已注册')
+  const applyTmp = path.join(os.tmpdir(), `apply-load-${Date.now()}`)
+  fs.mkdirSync(applyTmp, { recursive: true })
+  const applyTarget = path.join(applyTmp, 'entity.js')
+  const APPLY_SRC = [
+    'export function alpha() {',
+    '  return 1',
+    '}',
+    '',
+    'export function beta() {',
+    '  return 2',
+    '}',
+    '',
+    'export const value = beta()',
+    '',
+  ].join('\n')
+  fs.writeFileSync(applyTarget, APPLY_SRC, 'utf8')
+
+  // 预演：拿证据、不动盘。
+  const preview = await applyTool.execute(
+    {
+      file_path: applyTarget,
+      entity: 'function:beta',
+      op: 'replace-body',
+      change: 'export function beta() {\n  return 20\n}',
+      dry_run: true,
+    },
+    exec,
+  )
+  check(preview.outcome === 'applied' && preview.dryRun === true, `预演 outcome=${preview.outcome} dryRun=${preview.dryRun}`)
+  check(preview.entity?.name === 'beta' && typeof preview.evidence?.spanHash === 'string', '回执带 entity 与 evidence（spanHash）')
+  check(preview.auto_observed === true, '回执标 auto_observed（apply 自己建立观测）')
+  check(fs.readFileSync(applyTarget, 'utf8') === APPLY_SRC, '预演不写盘')
+
+  // 真写：带上一轮的 evidence。
+  const landed = await applyTool.execute(
+    {
+      file_path: applyTarget,
+      entity: 'function:beta',
+      op: 'replace-body',
+      change: 'export function beta() {\n  return 20\n}',
+      evidence: preview.evidence,
+    },
+    exec,
+  )
+  const afterApply = fs.readFileSync(applyTarget, 'utf8')
+  check(landed.outcome === 'applied' && landed.ok === true, `真写 outcome=${landed.outcome}`)
+  check(afterApply.includes('return 20') && afterApply.includes('return 1'), '只有 beta 的正文被替换')
+  check(landed.evidence?.version !== undefined, '回执 evidence 带观测版本')
+
+  // 证据过期：实体在证据之后被改过 ⇒ PATCH_ENTITY_STALE，零写入。
+  const staleEvidence = (
+    await applyTool.execute(
+      { file_path: applyTarget, entity: 'function:alpha', op: 'replace-body', change: 'export function alpha() {\n  return 1\n}', dry_run: true },
+      exec,
+    )
+  ).evidence
+  fs.writeFileSync(applyTarget, fs.readFileSync(applyTarget, 'utf8').replace('return 1', 'return 100'), 'utf8')
+  const staleSource = fs.readFileSync(applyTarget, 'utf8')
+  const stale = await applyTool.execute(
+    { file_path: applyTarget, entity: 'function:alpha', op: 'replace-body', change: 'export function alpha() {\n  return 7\n}', evidence: staleEvidence },
+    exec,
+  )
+  check(stale.code === 'PATCH_ENTITY_STALE' && stale.ok === false, `证据过期 ⇒ ${stale.code}`)
+  check(stale.error === 'entity changed since evidence; re-read it', '拒绝正文点名了原因')
+  check(Array.isArray(stale.applied) && stale.applied.length === 0, 'applied 为空数组')
+  check(fs.readFileSync(applyTarget, 'utf8') === staleSource, '证据过期时零写入')
+
+  // 重命名：只换 ident 词元，调用点一起换。
+  const renamed = await applyTool.execute(
+    { file_path: applyTarget, entity: 'function:beta', op: 'rename', new_name: 'gamma', scope: 'file' },
+    exec,
+  )
+  const afterRename = fs.readFileSync(applyTarget, 'utf8')
+  check(renamed.outcome === 'applied', `重命名 outcome=${renamed.outcome}`)
+  check(afterRename.includes('function gamma()') && afterRename.includes('gamma()'), '声明与调用点都被改名')
+  check(!afterRename.includes('beta'), '旧名字已消失')
+
+  // 参数面：verify/transaction 本面没有，必须**明确拒绝**而不是静默忽略；拼错的键被守卫拒。
+  let verifyErr = null
+  try {
+    await applyTool.execute({ file_path: applyTarget, entity: 'function:gamma', op: 'rename', new_name: 'delta', verify: 'true' }, exec)
+  } catch (error) {
+    verifyErr = error
+  }
+  check(verifyErr?.code === 'APPLY_UNSUPPORTED_OPTION', `verify 在本面被明确拒绝（${verifyErr?.code}）`)
+  let typoErr = null
+  try {
+    await applyTool.execute({ file_path: applyTarget, entity: 'function:gamma', op: 'rename', newname: 'delta' }, exec)
+  } catch (error) {
+    typoErr = error
+  }
+  check(typoErr?.code === 'ARGS_UNKNOWN_KEY', `拼错的 newname 被未知参数守卫拒绝（${typoErr?.code}）`)
+
+  // 同一个 apply 的其余 op：write / patch / convert（旧工具定义仍在，apply 负责统一入口）。
+  const opFile = path.join(applyTmp, 'ops.txt')
+  const opWrite = await applyTool.execute({ file_path: opFile, op: 'write', content: 'one\ntwo\n' }, exec)
+  check(opWrite.ok === true && opWrite.outcome === 'applied' && fs.readFileSync(opFile, 'utf8') === 'one\ntwo\n', 'apply op=write 从 DSH 面落盘')
+  const opPatch = await applyTool.execute({ file_path: opFile, op: 'patch', hunks: [{ lines: [2, 2], replace: 'TWO' }] }, exec)
+  check(opPatch.ok === true && opPatch.outcome === 'applied' && fs.readFileSync(opFile, 'utf8').includes('TWO'), 'apply op=patch 从 DSH 面落盘')
+  const opUtf16 = path.join(applyTmp, 'utf16.txt')
+  fs.writeFileSync(opUtf16, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('hello\n', 'utf16le')]))
+  const opConvert = await applyTool.execute({ file_path: opUtf16, op: 'convert', to: 'utf-8', from: 'utf-16le' }, exec)
+  check(opConvert.ok === true && opConvert.outcome === 'applied' && fs.readFileSync(opUtf16, 'utf8').includes('hello'), 'apply op=convert 从 DSH 面转 UTF-8')
+  fs.rmSync(applyTmp, { recursive: true, force: true })
+}
 
 const failed = results.filter((r) => !r.ok)
 console.log('')

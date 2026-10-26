@@ -20,11 +20,8 @@ Requires a DSH host that provides `@deepseek-ai/dsh-tools`, `@deepseek-ai/dsh-sh
 
 ### Tools
 
-- `aura_basetools_read`
-- `aura_basetools_edit`
-- `aura_basetools_write`
-- `aura_basetools_undo`
-- `aura_basetools_transactions`
+- `aura_basetools_read` — text views, entity evidence, directory map/grep, image metadata/content
+- `aura_basetools_apply` — entity-first replace-body/rename + patch/write/convert/tx
 
 Built-in DSH `read` / `write` / `edit` / `read_image` remain enabled. Restart the DSH host after installation so the new tool names are registered.
 
@@ -57,11 +54,8 @@ dsh plugin --profile web add aura-basetools-dsh@{{VERSION}}
 
 ### 工具
 
-- `aura_basetools_read`
-- `aura_basetools_edit`
-- `aura_basetools_write`
-- `aura_basetools_undo`
-- `aura_basetools_transactions`
+- `aura_basetools_read` — text views, entity evidence, directory map/grep, image metadata/content
+- `aura_basetools_apply` — entity-first replace-body/rename + patch/write/convert/tx
 
 DSH 内置的 `read` / `write` / `edit` / `read_image` 保持启用。安装后需要重启 DSH 宿主，新工具名才会注册。
 

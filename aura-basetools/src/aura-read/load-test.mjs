@@ -56,7 +56,7 @@ check(registered?.name === 'aura_basetools_read', `注册的工具名 = ${JSON.s
 const params = Object.keys(registered?.parameters?.properties ?? {})
 check(
   // start_line/end_line 是后加的：行区间不用写数组语法，模型少一类写错的机会（2026-09-22）。
-  params.join(',') === 'file_path,targets,mode,around,lines,start_line,end_line,search,max_chars,budget,coverage,structure_handle,offset,limit,context,since,kind',
+  params.join(',') === 'file_path,targets,mode,around,lines,start_line,end_line,search,entity,regex,glob,case_sensitive,max_results,max_chars,budget,coverage,structure_handle,offset,limit,context,since,kind',
   `参数 = ${params.join(',')}`,
 )
 check(registered?.description?.includes('map'), '描述里点明了 map 模式')
@@ -393,6 +393,112 @@ check(autoCollapse.text.includes('smaller than the full text'), '护栏：回执
 fs.writeFileSync(bigTarget, synth(200), 'utf8')
 const auto200 = await registered.execute({ file_path: bigTarget }, bigExec)
 check(auto200.mode === 'digest', `200 函数（digest 可用）仍选 digest（实际 ${auto200.mode}）`)
+
+say('')
+say('=== 8. 0.23 实体读 / 目录 grep / 图片 ===')
+{
+  // 这一节要按路径读、按目录列、按字节读：mock 必须同形，否则测不到那三条路。
+  const featureCtx = {
+    ...liveCtx,
+    fs: {
+      resolve: async (p) => ({ displayPath: p, targetKey: p }),
+      stat: async (t) => {
+        if (!fs.existsSync(t.targetKey)) return undefined
+        const st = fs.statSync(t.targetKey)
+        return st.isDirectory() ? { type: 'directory', size: 0 } : { type: 'file', version, size: st.size }
+      },
+      readText: async (t) => fs.readFileSync(t.targetKey, 'utf8'),
+      readByteRange: async (t, r) =>
+        fs.readFileSync(t.targetKey).subarray(r.offset ?? 0, (r.offset ?? 0) + (r.length ?? 0)),
+      listDir: async (t) =>
+        fs.readdirSync(t.targetKey, { withFileTypes: true }).map((e) => {
+          const child = path.join(t.targetKey, e.name)
+          return {
+            name: e.name,
+            type: e.isDirectory() ? 'directory' : e.isFile() ? 'file' : 'other',
+            size: e.isFile() ? fs.statSync(child).size : undefined,
+            target: { displayPath: child, targetKey: child },
+          }
+        }),
+    },
+    get: () => undefined,
+    tools: { register: (t) => (registered = t), get: () => registered },
+    systemPrompt: { section: () => () => {} },
+  }
+  plugin.apply(featureCtx)
+
+  // 实体读：定义 + 引用 + 证据，正文是实体跨度而不是整份文件。
+  const entity = await run({ file_path: target, entity: 'function:total' })
+  check(entity.mode === 'entity' && entity.entity?.name === 'total', `实体读 mode=${entity.mode} name=${entity.entity?.name}`)
+  check(entity.definition?.body?.includes('sum += it.price'), 'definition 是该实体的正文')
+  check(typeof entity.evidence?.spanHash === 'string' && typeof entity.evidence?.version === 'string', 'evidence 带 spanHash 与 version')
+  check(Array.isArray(entity.references), '回执带 references 数组')
+
+  // 歧义：两个同名顶层函数 ⇒ needs_choice + 候选，而不是猜一个。
+  const dupTarget = path.join(tmp, 'dup.js')
+  fs.writeFileSync(dupTarget, ['export function dup() {', '  return 1', '}', '', 'export function dup() {', '  return 2', '}', ''].join('\n'), 'utf8')
+  const ambiguous = await run({ file_path: dupTarget, entity: 'function:dup' })
+  check(ambiguous.mode === 'entity' && ambiguous.outcome === 'needs_choice', `歧义 outcome=${ambiguous.outcome}`)
+  check(Array.isArray(ambiguous.candidates) && ambiguous.candidates.length >= 2, `歧义带 ${ambiguous.candidates?.length} 个候选`)
+
+  // 目录 grep：目录 + search ⇒ 仓库级命中；glob/case_sensitive 生效。
+  const grepDir = path.join(tmp, 'grep')
+  fs.mkdirSync(grepDir, { recursive: true })
+  fs.writeFileSync(path.join(grepDir, 'a.js'), 'const needle = 1\n', 'utf8')
+  fs.writeFileSync(path.join(grepDir, 'b.md'), 'NEEDLE elsewhere\n', 'utf8')
+  const grep = await run({ file_path: grepDir, search: 'needle' })
+  check(grep.mode === 'grep' && grep.text.includes('a.js:1:'), `目录 grep mode=${grep.mode}`)
+  check(!grep.text.includes('b.md'), '默认区分大小写：b.md 的 NEEDLE 不命中')
+  const grepInsensitive = await run({ file_path: grepDir, search: 'needle', case_sensitive: false, glob: '*.md' })
+  check(grepInsensitive.mode === 'grep' && grepInsensitive.text.includes('b.md:1:'), 'case_sensitive:false + glob 只命中 b.md')
+  const grepAsMap = await run({ file_path: grepDir })
+  check(grepAsMap.mode !== 'grep' && grepAsMap.text.includes('a.js'), '目录无查询词仍是仓库地图')
+
+  // 图片：header-only 元信息；没有附件服务时如实说明省略了字节。
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  )
+  const imageTarget = path.join(tmp, 'pixel.png')
+  fs.writeFileSync(imageTarget, png)
+  const image = await run({ file_path: imageTarget })
+  check(image.mode === 'image' && image.mime === 'image/png', `图片 mode=${image.mode} mime=${image.mime}`)
+  check(image.width === 1 && image.height === 1 && image.bytes === png.length, `图片尺寸 ${image.width}x${image.height} / ${image.bytes} bytes`)
+  check(image.attachment === undefined && typeof image.image_data_omitted === 'string', `无附件服务时省略字节：${image.image_data_omitted}`)
+
+  // 附件服务在场：字节存成 ImageAttachmentRef，render 同时给 image block 与元信息文本。
+  const saved = []
+  plugin.apply({
+    ...featureCtx,
+    get: (name) =>
+      name === 'attachments'
+        ? {
+            saveImage: async ({ data, mediaType, name }) => {
+              saved.push({ bytes: data.length, mediaType, name })
+              return { attachmentId: 'att-load-1', mediaType, bytes: data.length, width: 1, height: 1, name }
+            },
+          }
+        : undefined,
+  })
+  const attached = await run({ file_path: imageTarget })
+  check(attached.attachment?.attachmentId === 'att-load-1' && attached.image_data_omitted === undefined, '附件在场时回执带 attachment')
+  check(saved.length === 1 && saved[0].mediaType === 'image/png' && saved[0].name === 'pixel.png', 'saveImage 收到原始字节与媒体类型')
+  const blocks = registered.output.render({ file_path: imageTarget }, attached)
+  check(blocks.length === 2 && blocks[0].type === 'image' && blocks[0].attachment === attached.attachment, 'render 产出 image block + 文本')
+  check(blocks[1].type === 'text' && JSON.parse(blocks[1].text).width === 1, '文本 block 是元信息 JSON')
+
+  // 超过上限：只回元信息（不读整份字节、不调用附件服务）。
+  const priorCap = process.env.AURA_MAX_IMAGE_BYTES
+  process.env.AURA_MAX_IMAGE_BYTES = '10'
+  try {
+    const capped = await run({ file_path: imageTarget })
+    check(capped.attachment === undefined && String(capped.image_data_omitted).includes('10-byte cap'), `超过上限只回元信息：${capped.image_data_omitted}`)
+  } finally {
+    if (priorCap === undefined) delete process.env.AURA_MAX_IMAGE_BYTES
+    else process.env.AURA_MAX_IMAGE_BYTES = priorCap
+  }
+}
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 const failed = results.filter((r) => !r.ok)

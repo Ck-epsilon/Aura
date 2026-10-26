@@ -30,41 +30,50 @@
  */
 import { langOf } from './struct-core.mjs'
 
+/**
+ * 这些**目录**不看：既不下钻，自己也不进地图/搜索。
+ *
+ * 只放“几乎不可能是人类维护的源码”的那些：依赖树、版本控制元数据、缓存、虚拟环境、
+ * 编译中间产物（`target/` 是 Rust 的、`__pycache__` 是 Python 的、`site-packages` 是 virtualenv 的）。
+ *
+ * **刻意不放 `dist/` / `build/` / `out/`**：很多项目的**手写源码就在那儿**（尤其打包型前端），
+ * 把它们一律跳过会让地图凭空少一大块——而漏掉的模块在地图上表现为“不存在”，比多列几个目录坏得多。
+ * 宁可多列，不可少列：这张地图的读者是一个会真去读那些文件的 agent。
+ *
+ * 只在这里定义一次：`repo-map` 与 `repo-search` 都通过 {@link isIgnoredDir} 使用它。
+ */
+export const REPO_IGNORE_DIRS = new Set([
+  'node_modules',
+  '.git',
+  '.hg',
+  '.svn',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'env',
+  '.tox',
+  'target',
+  '.next',
+  '.nuxt',
+  '.cache',
+  'coverage',
+  '.pytest_cache',
+  '.mypy_cache',
+  '.ruff_cache',
+  'dist-info',
+  'site-packages',
+  '.idea',
+  '.vscode',
+])
+
+/** 目录是否跳过：忽略表 + 隐藏目录（`.github` 也不是源码目录）。 */
+export function isIgnoredDir(name) {
+  return typeof name === 'string' && (name.startsWith('.') || REPO_IGNORE_DIRS.has(name))
+}
+
 /** 目录遍历规范：宿主照着走，判据只有这一份。 */
 export const MAP_SPEC = {
-  /**
-   * 这些**目录**不看：既不下钻，自己也不进地图。
-   *
-   * 只放“几乎不可能是人类维护的源码”的那些：依赖树、版本控制元数据、缓存、虚拟环境、
-   * 编译中间产物（`target/` 是 Rust 的、`__pycache__` 是 Python 的、`site-packages` 是 virtualenv 的）。
-   *
-   * **刻意不放 `dist/` / `build/` / `out/`**：很多项目的**手写源码就在那儿**（尤其打包型前端），
-   * 把它们一律跳过会让地图凭空少一大块——而漏掉的模块在地图上表现为“不存在”，比多列几个目录坏得多。
-   * 宁可多列，不可少列：这张地图的读者是一个会真去读那些文件的 agent。
-   */
-  ignoreDirs: new Set([
-    'node_modules',
-    '.git',
-    '.hg',
-    '.svn',
-    '__pycache__',
-    '.venv',
-    'venv',
-    'env',
-    '.tox',
-    'target',
-    '.next',
-    '.nuxt',
-    '.cache',
-    'coverage',
-    '.pytest_cache',
-    '.mypy_cache',
-    '.ruff_cache',
-    'dist-info',
-    'site-packages',
-    '.idea',
-    '.vscode',
-  ]),
+  ignoreDirs: REPO_IGNORE_DIRS,
   /**
    * 哪些扩展名算“模块”。
    *
@@ -681,7 +690,7 @@ export async function collectRepoMap(adapter, root, options = {}) {
       if (child.name.startsWith('.')) continue
       const childRel = joinRel(dirRel, child.name)
       if (child.type === 'directory') {
-        if (MAP_SPEC.ignoreDirs.has(child.name)) continue
+        if (isIgnoredDir(child.name)) continue
         await walk(child.target, childRel, depth + 1)
         continue
       }

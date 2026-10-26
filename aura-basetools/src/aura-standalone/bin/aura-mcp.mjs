@@ -28,10 +28,11 @@ import process from 'node:process'
  * the client does not implement.
  */
 const SERVER_INSTRUCTIONS = [
-  'Prefer the aura_basetools_* tools over built-in Read/Edit/Write for file work when they are available.',
-  'Read with aura_basetools_read; edit with aura_basetools_edit; create or overwrite with aura_basetools_write.',
-  'Keep tool arguments small — long, deeply nested JSON is what the provider\'s stream parser fails on (MALFORMED_RESPONSE). For a single change pass the hunk FLAT at the top level (`old`+`replace`, or `start_line`+`end_line`+`replace`, or a `handle` from a previous read + `replace`); use `hunks: [...]` only for several changes. If you already hold a `handle`, do not repeat the old text in `old`.',
-  'For changes spanning multiple calls use aura_basetools_tx begin -> edit/write with transaction -> commit; rollback on failure.',
+  'Prefer the aura_basetools_* tools over built-in Read/Edit/Write/Grep for file work when they are available.',
+  'Read with aura_basetools_read: pass `entity` to view one definition + references, a directory path with `search` for repository-wide grep, or an image path for metadata + image content.',
+  'Write with aura_basetools_apply: op=replace-body or rename is the default for code (pass the `evidence` from an entity read; ambiguity or staleness writes nothing). op=patch (raw hunks), write (whole file), convert (encoding), and tx (cross-call transaction) cover the remaining write paths.',
+  'Keep tool arguments small — long, deeply nested JSON is what the provider\'s stream parser fails on (MALFORMED_RESPONSE). For a single raw change pass the hunk FLAT at the top level (`old`+`replace`, or `start_line`+`end_line`+`replace`, or a `handle` from a previous read + `replace`); use `hunks: [...]` only for several changes. If you already hold a `handle`, do not repeat the old text in `old`.',
+  'For changes spanning multiple calls use aura_basetools_apply with op=tx begin -> writes with transaction -> commit; rollback on failure.',
   'These tools preserve BOM and per-line endings, gate only the addressed region for staleness, verify writes, and keep multi-target edits atomic.',
   'If your client can enforce provider-side strict tool schemas (DeepSeek `/beta` + `strict: true` per function, OpenAI strict), enable it: strict decoding makes malformed tool-call JSON impossible instead of merely rarer. The schemas convert cleanly with `locator-lab/strict-schema.mjs` (toStrictSchema / strictToolList); `aura basetools doctor` prints the recipe.',
 ].join(' ')
@@ -40,6 +41,7 @@ import {
   openProvider,
   readEnvelope,
   editEnvelope,
+  applyEnvelope,
   writeEnvelope,
   convertEnvelope,
   // 多目标（fs-contract-v2）的引擎绑定：与单目标同一处（`lib/ops.mjs`），bin 里不另找引擎。
@@ -175,7 +177,7 @@ const HUNK_SCHEMA = {
   required: ['replace'],
 }
 
-const TOOLS = [
+const ALL_TOOLS = [
   {
     name: 'aura_basetools_read',
     description:
@@ -201,7 +203,19 @@ const TOOLS = [
         },
         start_line: { type: 'integer', description: 'mode=lines（推荐）：起始行，1-based，闭区间' },
         end_line: { type: 'integer', description: 'mode=lines（推荐）：结束行，1-based，闭区间；省略则等于 start_line' },
-        search: { type: 'string', description: 'mode=search：子串' },
+        search: {
+          type: 'string',
+          description:
+            '子串查询。传文件路径时是 mode=search；传**目录**路径时执行仓库级 grep（递归、忽略 node_modules/.git、跳过二进制与超限文件）。',
+        },
+        entity: {
+          anyOf: [{ type: 'string' }, { type: 'object' }],
+          description: '实体选择器（如 `function:apply`、`Class/method`，或 {kind,name,file}）：读一个定义 + 引用 + 证据，而不是整份文件。',
+        },
+        regex: { type: 'boolean', description: '目录 grep：把 search 当正则（默认按字面量子串）。' },
+        glob: { type: 'string', description: '目录 grep：只扫描匹配该 glob 的相对路径（如 `src/**/*.ts`；无 `/` 时匹配文件名）。' },
+        case_sensitive: { type: 'boolean', description: '目录 grep：区分大小写（默认 true；false = 忽略大小写）。' },
+        max_results: { type: 'integer', description: '目录 grep：最多返回多少条命中行（默认 200，上限 1000）。' },
         context: { type: 'integer', description: 'mode=around：上下各留几行（默认 8）' },
         kind: { type: 'string', description: 'mode=map：只保留某一类符号（function / class / …）' },
         budget: { type: 'integer', description: '宿主剪枝阈值（字符）；省略用默认 8192' },
@@ -286,6 +300,54 @@ const TOOLS = [
     },
   },
   {
+    name: 'aura_basetools_apply',
+    description:
+      'The single write tool. Default for code: op=replace-body (entity + change) or rename (entity + new_name); pass the evidence from an entity read and the tool resolves the entity, refuses ambiguity/staleness with zero writes, observes the current revision itself, writes atomically and verifies. ' +
+      'Same tool covers the old write paths as operations: op=patch (raw hunks/create; escape hatch), op=write (whole file), op=convert (encoding normalization; MCP supports all encodings), op=tx (cross-call transaction begin/commit/rollback/status). ' +
+      'Comments and string literals are never renamed. Omit `op` to infer it from the fields you pass.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: {
+          type: 'string',
+          enum: ['replace-body', 'rename', 'patch', 'write', 'convert', 'tx'],
+          description: '省略时按字段推断：entity+new_name→rename；entity→replace-body；hunks/create→patch；content→write；to→convert；action→tx',
+        },
+        file_path: { type: 'string', description: '要修改的文件路径（tx begin/status 可省略）' },
+        entity: {
+          anyOf: [{ type: 'string' }, { type: 'object' }],
+          description: '实体选择器：`function:apply`、`Class/method`，或 {kind,name,file}',
+        },
+        change: { type: 'string', description: 'replace-body：新的完整实体正文（含签名与结尾换行）' },
+        new_name: { type: 'string', description: 'rename：新名字' },
+        scope: { type: 'string', enum: ['span', 'file'], description: 'rename 的替换范围：span = 实体跨度，file = 整份文件（默认 file）' },
+        evidence: {
+          type: 'object',
+          description: '上次实体读回执里的 evidence（{spanHash, contentHash, version}）：与当前不一致 ⇒ PATCH_ENTITY_STALE，零写入',
+        },
+        expect: { type: 'string', description: 'replace-body：断言当前实体跨度应是什么；对不上则整个失败' },
+        hunks: { type: 'array', items: HUNK_SCHEMA, description: 'op=patch：原始 hunk 数组（逃生口；单处修改优先用平铺字段或实体 op）' },
+        targets: TARGETS_SCHEMA,
+        create: { type: 'string', description: 'op=patch：整份内容建文件' },
+        require_observation: { type: 'boolean', description: 'op=patch：要求本会话已读过该文件' },
+        retry: { type: 'boolean', description: 'op=patch：地址过期时按上次读到的原文重放' },
+        content: { type: 'string', description: 'op=write：整份 UTF-8 文本' },
+        no_overwrite: { type: 'boolean', description: 'op=write：文件已存在则拒绝' },
+        allow_unobserved: { type: 'boolean', description: 'op=write：允许未读即覆写（显式逃生口）' },
+        eol: { type: 'string', enum: ['auto', 'preserve', 'lf', 'crlf', 'keep'], description: 'op=write/convert：行尾策略' },
+        to: { type: 'string', description: 'op=convert：目标编码（如 utf-8 / gb18030）' },
+        from: { type: 'string', description: 'op=convert：源编码；省略时只接受合法 UTF-8' },
+        bom: { type: 'string', enum: ['keep', 'yes', 'no'], description: 'op=convert：BOM 策略' },
+        repair_double_encoding: { type: 'boolean', description: 'op=convert：修复可逆的双重编码' },
+        action: { type: 'string', enum: ['begin', 'commit', 'rollback', 'status'], description: 'op=tx：事务动作' },
+        transaction: { type: 'string', description: 'op=tx/写入：跨调用事务 id（begin 时不需要）' },
+        verify: { type: 'string', description: '写后验证命令（op=patch/write/tx commit；显式给出才执行）' },
+        dry_run: { type: 'boolean', description: '只规划不落盘（tx 与实体 op 不写）' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'aura_basetools_write',
     description:
       'Write a whole UTF-8 text file at once (create or overwrite), matching a plain Write tool. Preserves an existing file\'s BOM and line endings, goes through the same atomic write path as aura_basetools_edit, and reads the file back to verify bytes. Prefer aura_basetools_edit for partial changes.',
@@ -353,13 +415,20 @@ const TOOLS = [
 ]
 
 /**
+ * 模型可见面：两个工具。旧名字仍在 `ALL_TOOLS` 里，只保留隐藏调用路径给旧接口套件与兼容客户端；
+ * `AURA_TEST_EXPOSE_LEGACY=1` 只供测试枚举旧 schema，不进入生产提示。
+ */
+const PUBLIC_TOOL_NAMES = new Set(['aura_basetools_read', 'aura_basetools_apply'])
+const TOOLS = ALL_TOOLS.filter((tool) => PUBLIC_TOOL_NAMES.has(tool.name))
+
+/**
  * 每个工具接受的顶层键，**直接从注册面同一份 `inputSchema` 派生**。
  *
  * 不再手抄第二份名单：schema 加了字段而这里漏改，就会把合法调用拒掉；反过来则把拼错的键
  * 静默忽略（`dryrun: true` 会变成一次真写盘）。两种漂移都在这一行上消失。
  */
 const ALLOWED_BY_TOOL = new Map(
-  TOOLS.map((tool) => [tool.name, Object.keys(tool.inputSchema?.properties ?? {})]),
+  ALL_TOOLS.map((tool) => [tool.name, Object.keys(tool.inputSchema?.properties ?? {})]),
 )
 
 /** 未知键拒绝：走 normal envelope（`isError:true`），不让它变成写盘或挂死。 */
@@ -552,6 +621,35 @@ async function callTool(provider, name, args = {}) {
       ...(typeof args.transaction === 'string' ? { transaction: args.transaction } : {}),
     })
   }
+  if (name === 'aura_basetools_apply') {
+    return await applyEnvelope(provider, {
+      file: args.file_path,
+      entity: args.entity,
+      op: args.op,
+      change: args.change,
+      newName: args.new_name,
+      scope: args.scope,
+      evidence: args.evidence,
+      dryRun: args.dry_run === true,
+      verify: args.verify,
+      transaction: args.transaction,
+      expect: args.expect,
+      hunks: args.hunks,
+      targets: args.targets,
+      create: args.create,
+      content: args.content,
+      noOverwrite: args.no_overwrite === true,
+      allowUnobserved: args.allow_unobserved === true,
+      eol: args.eol,
+      to: args.to,
+      from: args.from,
+      bom: args.bom,
+      repairDoubleEncoding: args.repair_double_encoding === true,
+      action: args.action,
+      requireObservation: args.require_observation === true,
+      retry: args.retry === true,
+    })
+  }
   if (name === 'aura_basetools_write') {
     return await writeEnvelope(provider, {
       file: args.file_path,
@@ -610,7 +708,7 @@ export async function serve() {
         })
       }
       if (method === 'ping') return reply(id, {})
-      if (method === 'tools/list') return reply(id, { tools: TOOLS })
+      if (method === 'tools/list') return reply(id, { tools: process.env.AURA_TEST_EXPOSE_LEGACY === '1' ? ALL_TOOLS : TOOLS })
       if (method === 'tools/call') {
         let env
         const callArgs = toolArguments(params?.arguments)
@@ -637,8 +735,17 @@ export async function serve() {
           process.stderr.write(`aura-mcp: tools/call 抛出：${String(error?.stack ?? error)}\n`)
           env = { ok: false, error: String(error?.message ?? error), code: error?.code ?? 'TOOL_THREW' }
         }
+        // 图片：MCP 有原生 image content —— 元数据走文本、字节走 image，不把 base64 塞进 JSON。
+        let content = [{ type: 'text', text: JSON.stringify(env) }]
+        if (env.ok === true && env.image !== undefined) {
+          const { image, ...meta } = env
+          content = [
+            { type: 'image', data: image.data, mimeType: image.mimeType },
+            { type: 'text', text: JSON.stringify(meta) },
+          ]
+        }
         return reply(id, {
-          content: [{ type: 'text', text: JSON.stringify(env) }],
+          content,
           isError: env.ok !== true,
         })
       }

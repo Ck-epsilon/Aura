@@ -50,7 +50,7 @@ const shells = {}
  */
 const REQUIRED_EXPORTS = {
   'aura-read': ['name', 'inject', 'Config', 'apply', 'PASSTHROUGH_FIELDS', 'READ_ARG_KEYS'],
-  'aura-edit': ['name', 'inject', 'Config', 'apply', 'EDIT_ARG_KEYS'],
+  'aura-edit': ['name', 'inject', 'Config', 'apply', 'EDIT_ARG_KEYS', 'APPLY_ARG_KEYS'],
 }
 for (const dir of ['aura-read', 'aura-edit']) {
   const mod = await import(asUrl(path.join(pkgRoot, 'src', dir, 'index.js')))
@@ -107,7 +107,7 @@ const mkCtx = (registered, hidden) => ({
 const names = []
 const EXPECTED_TOOLS = {
   'aura-read': ['aura_basetools_read'],
-  'aura-edit': ['aura_basetools_convert', 'aura_basetools_edit', 'aura_basetools_write'],
+  'aura-edit': ['aura_basetools_apply'],
 }
 for (const dir of ['aura-read', 'aura-edit']) {
   const registered = []
@@ -119,8 +119,8 @@ for (const dir of ['aura-read', 'aura-edit']) {
   names.push(...tools.map((t) => t.name))
 }
 check(
-    names.sort().join(',') === 'aura_basetools_convert,aura_basetools_edit,aura_basetools_read,aura_basetools_write',
-    '四个工具名恰好是 read / edit / write / convert（模型与文档都按这些名字调）',
+    names.sort().join(',') === 'aura_basetools_apply,aura_basetools_read',
+    '两个工具名恰好是 read / apply（模型与文档都按这些名字调）',
     names.join(','),
   )
 
@@ -134,8 +134,10 @@ say('=== C. 参数键的唯一来源：守卫名单 == schema 声明 == 兼容�
   // 三处若不同源，症状是“schema 里有、守卫却拒”或反过来的静默丢参数。
   const readKeys = [...shells['aura-read'].READ_ARG_KEYS].sort()
   const editKeys = [...shells['aura-edit'].EDIT_ARG_KEYS].sort()
+  const applyKeys = [...shells['aura-edit'].APPLY_ARG_KEYS].sort()
   check(readKeys.includes('file_path') && readKeys.includes('mode'), 'aura_basetools_read 的名单含 file_path 与 mode', readKeys.join(','))
   check(editKeys.includes('file_path') && editKeys.includes('hunks'), 'aura_basetools_edit 的名单含 file_path 与 hunks', editKeys.join(','))
+  check(applyKeys.includes('file_path') && applyKeys.includes('entity'), 'aura_basetools_apply 的名单含 file_path 与 entity', applyKeys.join(','))
   // 平铺形状的地址键必须**在名单里**，否则守卫会拒掉模型真在用的形状
   //
   // 这份字面量是**手抄的第三方期望**（不从这里 import `FLAT_ADDRESS_KEYS` 派生）：派生就等于

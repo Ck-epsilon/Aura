@@ -55,15 +55,15 @@ jobs:
           f="$RUNNER_TEMP/smoke.txt"
           printf 'alpha\n' > "$f"
           node src/aura-standalone/bin/aura.mjs basetools read --file "$f" --mode full > /dev/null
-          node src/aura-standalone/bin/aura.mjs basetools edit --file "$f" --lines 1 --replace beta > /dev/null
+          node src/aura-standalone/bin/aura.mjs basetools apply --file "$f" --op patch --hunks '[{"lines":[1,1],"replace":"beta"}]' > /dev/null
           grep -q 'beta' "$f"
-          node src/aura-standalone/bin/aura.mjs basetools write --file "$RUNNER_TEMP/new.txt" --content $'hello\n' > /dev/null
+          node src/aura-standalone/bin/aura.mjs basetools apply --file "$RUNNER_TEMP/new.txt" --op write --content $'hello\n' --allow-unobserved > /dev/null
           printf '%s\n' \
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
             '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
             | node src/aura-standalone/bin/aura-mcp.mjs > "$RUNNER_TEMP/mcp.out"
           grep -q '"aura_basetools_read"' "$RUNNER_TEMP/mcp.out"
-          grep -q '"aura_basetools_write"' "$RUNNER_TEMP/mcp.out"
+          grep -q '"aura_basetools_apply"' "$RUNNER_TEMP/mcp.out"
 
   test:
     name: node-${{ matrix.node }} · ${{ matrix.os }}

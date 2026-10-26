@@ -233,7 +233,7 @@ const cache = path.join(tmp, 'cache') // 观测缓存：绝不写 ~/.aura
 // 扒一眼用户 home：运行前后各拍一张快照，任何新增都算测试污染（比测不出来更贵的事故）。
 const homeCache = path.join(os.homedir(), '.aura')
 const homeCacheBefore = fs.existsSync(homeCache) ? fs.readdirSync(homeCache).sort().join(',') : null
-const env = { ...process.env, AURA_CACHE_DIR: cache }
+const env = { ...process.env, AURA_CACHE_DIR: cache, AURA_TEST_EXPOSE_LEGACY: '1' }
 
 try {
   const mdPath = path.join(tmp, 'range.md')
@@ -462,14 +462,19 @@ try {
   }
   applyRead(ctx)
   editPlugin.apply(ctx)
-  const read = byName.get('aura_basetools_read')
+  const registered = new Map(byName)
+  // Public surface is read+apply; the flat/schema matrix below still targets the legacy edit
+  // descriptor through the test seam.
+  byName.set('aura_basetools_edit', editPlugin.lastLegacyTools.edit)
+  const read = registered.get('aura_basetools_read')
+  const apply = registered.get('aura_basetools_apply')
   const edit = byName.get('aura_basetools_edit')
   const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
   // 宿主要校验的参数里一定带 file_path（它是必填），所以校验形状时要把它补上——
   // 少了它就是"必填缺失"，13 种形状会一起红，而那不是形状的问题。
   const asHostArgs = (extra) => ({ file_path: mdPath, ...extra })
 
-  check('apply 注册出 aura_basetools_read 与 aura_basetools_edit', read !== undefined && edit !== undefined, [...byName.keys()].join(','))
+  check('apply 注册出 aura_basetools_read 与 aura_basetools_apply', read !== undefined && apply !== undefined, [...registered.keys()].join(','))
 
   // ── 声明层：宿主会在注册期与 execute 之前拿这份 schema 把关 ─────────────────────
   {

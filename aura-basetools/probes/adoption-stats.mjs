@@ -24,7 +24,8 @@ import { pathToFileURL } from 'node:url'
 import { iterateSessionsDetailed, readSessionsDetailed, tallyOf } from './session-log.mjs'
 
 // `aura_basetools_read` 是 0.11.0 改名后的同一件调用；只认旧名会让新窗口的采用率归零。
-export const AURA = /^aura_(?:basetools_)?(read|edit)$/
+// 1.0 起写入口是 `aura_basetools_apply`；旧 edit 仍作为隐藏缝存在，两者都算 aura。
+export const AURA = /^aura_(?:basetools_)?(read|edit|apply)$/
 export const BUILTIN = /^(read|edit|write)$/
 
 /** 自测会话的判据：workdir 就在工具自己树里，或命令/开场白明显是在测这套工具。 */
@@ -79,6 +80,31 @@ function addressOf(hunk) {
   return '(none)'
 }
 
+/** 1.0 的两工具面：read 的实际取景（entity/search 没有显式 mode）。 */
+const readModeOf = (args) =>
+  typeof args.mode === 'string' && args.mode.length > 0
+    ? args.mode
+    : args.entity !== undefined
+      ? 'entity'
+      : args.search !== undefined
+        ? 'search'
+        : '(auto)'
+
+/** 1.0 的 apply 操作推断（与 lib/ops.mjs 的 inferApplyOp 同一口径）。 */
+const applyOpOf = (args) =>
+  args.op ??
+  (args.action !== undefined
+    ? 'tx'
+    : Array.isArray(args.targets) || args.hunks !== undefined || args.create !== undefined
+      ? 'patch'
+      : typeof args.content === 'string'
+        ? 'write'
+        : typeof args.to === 'string'
+          ? 'convert'
+          : typeof args.new_name === 'string'
+            ? 'rename'
+            : 'replace-body')
+
 /**
  * 纯统计：输入会话行（`readSessionsDetailed` 的形状），输出全部数字。无 I/O、无打印，可单测。
  *
@@ -94,11 +120,17 @@ export function summarize(rows, options = {}) {
   const readParams = {}
   const editHunks = {}
   const editFlags = {}
+  const applyOps = {}
+  const applyHunks = {}
+  const applyFlags = {}
   let readCalls = 0
   let editCalls = 0
+  let applyCalls = 0
   let readErrors = 0
   let editErrors = 0
+  let applyErrors = 0
   let editDryRun = 0
+  let applyDryRun = 0
 
   for (const row of real) {
     for (const call of row.calls) {
@@ -107,7 +139,7 @@ export function summarize(rows, options = {}) {
       if (kind === 'aura_read') {
         readCalls += 1
         if (call.isError) readErrors += 1
-        bump(readModes, typeof args.mode === 'string' && args.mode.length > 0 ? args.mode : '(auto)')
+        bump(readModes, readModeOf(args))
         for (const key of ['lines', 'around', 'search', 'since', 'kind', 'context']) {
           if (args[key] !== undefined) bump(readParams, key)
         }
@@ -124,6 +156,23 @@ export function summarize(rows, options = {}) {
           if (hunk?.expect !== undefined) bump(editHunks, 'expect')
           if (hunk?.near !== undefined) bump(editHunks, 'near')
         }
+      } else if (kind === 'aura_apply') {
+        applyCalls += 1
+        if (call.isError) applyErrors += 1
+        bump(applyOps, applyOpOf(args))
+        if (args.dry_run === true) {
+          applyDryRun += 1
+          bump(applyFlags, 'dry_run')
+        }
+        if (args.entity !== undefined) bump(applyFlags, 'entity')
+        if (args.evidence !== undefined) bump(applyFlags, 'evidence')
+        if (args.verify !== undefined) bump(applyFlags, 'verify')
+        if (args.transaction !== undefined) bump(applyFlags, 'transaction')
+        for (const hunk of Array.isArray(args.hunks) ? args.hunks : []) {
+          bump(applyHunks, addressOf(hunk))
+          if (hunk?.expect !== undefined) bump(applyHunks, 'expect')
+          if (hunk?.near !== undefined) bump(applyHunks, 'near')
+        }
       }
     }
   }
@@ -131,7 +180,7 @@ export function summarize(rows, options = {}) {
   // 名字分布：本函数拿到的是**详列**（calls 是对象数组），而 session-log 的 tallyOf 吃的是
   // 名字数组。早先这里直接 `tallyOf(real)`，于是所有计数静默变成 0——测试第一次就抓到了。
   const tally = {}
-  for (const row of real) for (const call of row.calls) bump(tally, call.name)
+  for (const row of real) for (const call of row.calls) bump(tally, AURA.test(call.name) ? kindOf(call.name) : call.name)
 
   const used = (row, pattern) => row.calls.some((call) => pattern.test(call.name))
   const auraRows = real.filter((row) => used(row, AURA))
@@ -149,13 +198,19 @@ export function summarize(rows, options = {}) {
     tally,
     readCalls,
     editCalls,
+    applyCalls,
     readErrors,
     editErrors,
+    applyErrors,
     readModes,
     readParams,
     editHunks,
     editFlags,
+    applyOps,
+    applyHunks,
+    applyFlags,
     editDryRun,
+    applyDryRun,
     rows: real,
   }
 }
@@ -167,14 +222,20 @@ export function summarize(rows, options = {}) {
 function streamReport(since, includeMeta, json) {
   const readModes = {}
   const editHunks = {}
+  const applyOps = {}
+  const applyHunks = {}
+  const applyFlags = {}
   const tally = {}
   const sessions = { total: 0, raw: 0, aura: 0, auraOnly: 0, both: 0, builtinOnly: 0, selfExcluded: 0 }
   const recent = []
   let readCalls = 0
   let editCalls = 0
+  let applyCalls = 0
   let readErrors = 0
   let editErrors = 0
+  let applyErrors = 0
   let editDryRun = 0
+  let applyDryRun = 0
 
   for (const row of iterateSessionsDetailed(since)) {
     sessions.raw += 1
@@ -187,7 +248,8 @@ function streamReport(since, includeMeta, json) {
     let hasBuiltin = false
     const counts = {}
     for (const call of row.calls) {
-      tally[call.name] = (tally[call.name] ?? 0) + 1
+      const tallyName = AURA.test(call.name) ? kindOf(call.name) : call.name
+      tally[tallyName] = (tally[tallyName] ?? 0) + 1
       counts[call.name] = (counts[call.name] ?? 0) + 1
       if (AURA.test(call.name)) hasAura = true
       if (BUILTIN.test(call.name)) hasBuiltin = true
@@ -196,7 +258,7 @@ function streamReport(since, includeMeta, json) {
       if (kind === 'aura_read') {
         readCalls += 1
         if (call.isError) readErrors += 1
-        bump(readModes, typeof args.mode === 'string' && args.mode.length > 0 ? args.mode : '(auto)')
+        bump(readModes, readModeOf(args))
       } else if (kind === 'aura_edit') {
         editCalls += 1
         if (call.isError) editErrors += 1
@@ -205,6 +267,23 @@ function streamReport(since, includeMeta, json) {
           bump(editHunks, addressOf(hunk))
           if (hunk?.expect !== undefined) bump(editHunks, 'expect')
           if (hunk?.near !== undefined) bump(editHunks, 'near')
+        }
+      } else if (kind === 'aura_apply') {
+        applyCalls += 1
+        if (call.isError) applyErrors += 1
+        bump(applyOps, applyOpOf(args))
+        if (args.dry_run === true) {
+          applyDryRun += 1
+          bump(applyFlags, 'dry_run')
+        }
+        if (args.entity !== undefined) bump(applyFlags, 'entity')
+        if (args.evidence !== undefined) bump(applyFlags, 'evidence')
+        if (args.verify !== undefined) bump(applyFlags, 'verify')
+        if (args.transaction !== undefined) bump(applyFlags, 'transaction')
+        for (const hunk of Array.isArray(args.hunks) ? args.hunks : []) {
+          bump(applyHunks, addressOf(hunk))
+          if (hunk?.expect !== undefined) bump(applyHunks, 'expect')
+          if (hunk?.near !== undefined) bump(applyHunks, 'near')
         }
       }
     }
@@ -216,7 +295,7 @@ function streamReport(since, includeMeta, json) {
     if (recent.length > 10) recent.shift()
   }
 
-  const result = { sessions, readCalls, editCalls, readErrors, editErrors, readModes, editHunks, editDryRun, tally }
+  const result = { sessions, readCalls, editCalls, applyCalls, readErrors, editErrors, applyErrors, readModes, editHunks, applyOps, applyHunks, applyFlags, editDryRun, applyDryRun, tally }
   if (json) {
     process.stdout.write(`${JSON.stringify(result, null, 1)}\n`)
     return
@@ -238,6 +317,14 @@ function streamReport(since, includeMeta, json) {
     .filter(([k]) => !['expect', 'near'].includes(k))
     .reduce((a, [, v]) => a + v, 0)
   table('aura_edit 的寻址分布（按 hunk）', editHunks, hunkTotal, 'expect / near 是额外标志，不参与该分母')
+  say('')
+  say('=== aura_apply：调用与失败 ===')
+  say(`  调用 ${applyCalls} 次；失败 ${applyErrors} 次（${pct(applyErrors, applyCalls)}）；dry_run ${applyDryRun} 次`)
+  table('aura_apply 的 op 分布', applyOps, applyCalls)
+  const applyHunkTotal = Object.entries(applyHunks)
+    .filter(([k]) => !['expect', 'near'].includes(k))
+    .reduce((a, [, v]) => a + v, 0)
+  if (applyHunkTotal > 0) table('aura_apply 的 patch 寻址分布（按 hunk）', applyHunks, applyHunkTotal, 'expect / near 是额外标志，不参与该分母')
 }
 
 const pct = (part, whole) => (whole === 0 ? '—' : `${Math.round((100 * part) / whole)}%`)
@@ -285,8 +372,8 @@ function main() {
   say(`  只用 aura 的会话        : ${s.sessions.auraOnly}`)
 
   say('\n=== 调用次数 ===')
-  for (const name of ['aura_read', 'aura_edit', 'read', 'edit', 'write']) say(`  ${name.padEnd(12)} ${s.tally[name] ?? 0}`)
-  const auraTotal = (s.tally.aura_read ?? 0) + (s.tally.aura_edit ?? 0)
+  for (const name of ['aura_read', 'aura_edit', 'aura_apply', 'read', 'edit', 'write']) say(`  ${name.padEnd(12)} ${s.tally[name] ?? 0}`)
+  const auraTotal = (s.tally.aura_read ?? 0) + (s.tally.aura_edit ?? 0) + (s.tally.aura_apply ?? 0)
   const builtinTotal = (s.tally.read ?? 0) + (s.tally.edit ?? 0) + (s.tally.write ?? 0)
   say(`  ${'aura 合计'.padEnd(12)} ${auraTotal}\n  ${'内置合计'.padEnd(12)} ${builtinTotal}`)
 
@@ -301,6 +388,14 @@ function main() {
     .filter(([k]) => !['expect', 'near'].includes(k))
     .reduce((a, [, v]) => a + v, 0)
   table('aura_edit 的寻址分布（按 hunk）', s.editHunks, hunkTotal, 'expect / near 是额外标志，不参与该分母')
+
+  say('\n=== aura_apply：调用与失败 ===')
+  say(`  调用 ${s.applyCalls} 次；失败 ${s.applyErrors} 次（${pct(s.applyErrors, s.applyCalls)}）；dry_run ${s.applyDryRun} 次`)
+  table('aura_apply 的 op 分布', s.applyOps, s.applyCalls)
+  const applyHunkTotal = Object.entries(s.applyHunks)
+    .filter(([k]) => !['expect', 'near'].includes(k))
+    .reduce((a, [, v]) => a + v, 0)
+  if (applyHunkTotal > 0) table('aura_apply 的 patch 寻址分布（按 hunk）', s.applyHunks, applyHunkTotal, 'expect / near 是额外标志，不参与该分母')
 
   say('\n=== 最近 10 个会话用了什么 ===')
   for (const row of s.rows.slice(-10)) {

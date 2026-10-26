@@ -1,19 +1,17 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**0.23.0（已发布到 npm；安装只走 npm）**
-> 工作树：本分支提交后干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
-> npm：`aura-basetools@0.23.0`、`aura-basetools-dsh@0.23.0`（registry.npmjs.org）
-> GitHub Release：`aura-basetools-v0.23.0`（monorepo `Ck-epsilon/Aura`）
-> 0.23 新增：结构地址/结构句柄（symbol/section/key）、双重编码检测与修复、convert 上 MCP 与 DSH 面（DSH 目标 UTF-8）
+> 当前版本：**1.0.0（本地构建；尚未发布到 npm，发布需授权）**
+> 工作树：本轮改动未提交；全量闸 `node build/release-check.mjs` **exit 0**
+> npm：registry 仍是 `0.23.0`；本地 `dist/npm` 为 `1.0.0`
+> 1.0.0：公开面收成 `aura_basetools_read` + `aura_basetools_apply`；entity-first、目录 grep、图片读、单元层归档
+> 闸读数：57 件闸内实跑 + 拆包 75/75 + src↔dist 33 文件逐字节一致
+> 性能（本机 CLI，10k 行）：entity read p50 187 ms / apply 289 ms / read+apply 474 ms；仓库 grep 200 ms（102 文件）；图片元数据 106 ms
 
 ---
 
 ## 1. 一句话状态
 
-`aura-basetools` 已具备可直接替代内置文本 `Read` / `Edit` / `Write` 的读写能力：三个入口
-（MCP / DSH / CLI）共用同一份字节保真引擎，文本读写、整份写、`replace_all`、严格新鲜度、
-并发观测缓存和失败回滚回执都已落地并有回归测试。安装只走 npm
-（`npx` / `npm i -g` / `dsh plugin`）；自定义安装器与交付 zip 已在 0.13.2 移除。
+`aura-basetools` 用一个读工具和一个写工具覆盖文本、目录、图片与实体：`read` 给取景/证据/搜索/图片，`apply` 给实体优先写并把 patch/write/convert/tx 收进同一个入口。三个入口（MCP / DSH / CLI）共用同一份字节保真引擎；文本读写、整份写、严格新鲜度、并发观测缓存和失败回滚回执保留。安装只走 npm（`npx` / `npm i -g` / `dsh plugin`）。
 
 ---
 
@@ -23,13 +21,12 @@
 
 | 工具标识 | 作用 |
 |---|---|
-| `aura_basetools_read` | 按意图取景：`map` / `digest` / `full` / `around` / `lines` / `search` / `changed` / `auto` |
-| `aura_basetools_edit` | 按地址编辑；`old` + `replace_all`；0.14.0 起无 intent / 公开事务面 |
-| `aura_basetools_write` | 整文件新建/覆写；BOM/行尾保留；覆写默认要求先读 |
+| `aura_basetools_read` | 文本取景（`map`/`digest`/`full`/`around`/`lines`/`search`/`changed`/`probe`/`auto`）、`entity`（定义+引用+证据）、目录地图/仓库 grep、图片元数据/内容 |
+| `aura_basetools_apply` | 唯一写入口：`replace-body` / `rename`（实体优先），`patch` / `write` / `convert` / `tx`（旧路径收进 op）；证据校验、原子写、回读 |
 
-旧工具名 `aura_read` / `aura_edit` / `aura_write` / `aura_undo` / `aura_transactions`
-**不再作为 MCP/DSH API 暴露**。历史会话日志与 `failure-corpus.json` 仍保留旧名；
-`failure-replay` 等分析件同时识别旧名与新名。
+旧工具名 `aura_basetools_edit` / `write` / `convert` / `tx` 不再出现在公开 `tools/list`；它们只作为
+隐藏调用路径与测试缝存在（`AURA_TEST_EXPOSE_LEGACY=1` 仅测试用）。更老的 `aura_read` / `aura_edit`
+等只在历史日志与分析件里识别。
 
 ### 2.2 CLI
 
@@ -37,12 +34,15 @@
 
 ```bash
 aura basetools read  --file src/app.ts --mode map
-aura basetools edit  --file src/app.ts --hunks '[...]'
-aura basetools write --file new.ts --content @body.ts
+aura basetools read  --file src/app.ts --entity function:main
+aura basetools apply --file src/app.ts --entity function:main --op rename --new-name run
+aura basetools apply --file src/app.ts --op patch --hunks '[...]'
 aura basetools mcp
 aura basetools doctor
 aura basetools capabilities
 ```
+
+旧写动词（`edit` / `write` / `convert` / `tx`）保留为 CLI 兼容；agent 面只暴露 read + apply。
 
 - 顶层 `aura read` / `edit` / `write` / `mcp` / `doctor` /
   `capabilities` **不再作为别名执行**：返回 exit 1、`shape:"CLI_NAMESPACE_REQUIRED"`，

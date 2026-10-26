@@ -137,7 +137,7 @@ plugin.apply({
   emit: () => {},
   waterfall: async () => { throw Object.assign(new Error('edit requires reading first'), { code: 'FS_NOT_OBSERVED' }) },
 })
-const tool = registered
+const tool = plugin.lastLegacyTools.edit
 const exec = { agent: { session: { header: { cwd: TMP } } }, signal: undefined }
 
 /** 像框架那样跑一次：返回 ⇒ 取 render 出来的**那段文本**（模型唯一看得见的东西）。 */

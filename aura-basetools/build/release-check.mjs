@@ -42,11 +42,7 @@ const ranSuites = []
  * 环境依赖型（缺 peer / 缺 dist / 平台不支持硬链接）的其他套件跳过只记 `⏭`，不算通过。
  */
 const CRITICAL_SUITES = new Set([
-  'write-verify', 'stale-gate', 'byte-fidelity', 'encoding-fidelity', 'span-fidelity',
-  'content-address', 'arg-shape', 'read-schema', 'read', 'notfound-receipt', 'range-args',
-  'standalone', 'write', 'replace-all', 'observation-gate', 'multi-read', 'multi-edit', 'verify-edit', 'tx-session',
-  'argument-surface', 'single-line-target', 'observation-concurrency', 'range-bytes',
-  'aura-read/load', 'aura-edit/load', 'capabilities', 'public-surface', 'ci-contract',
+  'write-verify', 'stale-gate', 'byte-fidelity', 'encoding-fidelity', 'span-fidelity', 'arg-shape', 'read-schema', 'range-args', 'standalone', 'write', 'replace-all', 'observation-gate', 'verify-edit', 'tx-session', 'argument-surface', 'single-line-target', 'observation-concurrency', 'range-bytes', 'aura-read/load', 'aura-edit/load', 'capabilities', 'public-surface', 'ci-contract', 'entity-apply', 'docs-surface',
 ])
 const run = (relative, args = []) =>
   spawnSync(process.execPath, [path.join(root, relative), ...args], { cwd: root, encoding: 'utf8', timeout: 1800000 })
@@ -89,407 +85,65 @@ function suite(name, relative, group = '套件') {
 
 // ① 既有套件（顺序固定：先引擎、再工具壳）
 const SUITES = [
+  // 测试分层（2026-10-27 起）：只保留 interface / integration / system 三层。
+  // 单元层已从闸门移除并归档到 docs/archive/unit-tests（不运行、不发货）。
+  // 新增套件必须属于三层之一；纯函数/单内部函数断言不进这里。
   ['write-verify', 'src/locator-lab/write-verify-test.mjs'],
   ['stale-gate', 'src/locator-lab/stale-gate-test.mjs'],
-  // C32：文件已按普查口径改名（`*-test.mjs`），断言仍 102 条；旧名 `byte-fidelity.mjs` 不再存在。
   ['byte-fidelity', 'src/locator-lab/byte-fidelity-test.mjs'],
   ['encoding-fidelity', 'src/locator-lab/encoding-fidelity.mjs'],
   ['span-fidelity', 'src/locator-lab/span-fidelity.mjs'],
   ['policy-arg', 'src/locator-lab/policy-arg-test.mjs'],
-  ['struct', 'src/locator-lab/struct-test.mjs'],
-  ['corpus', 'src/locator-lab/corpus-test.mjs'],
   ['read-schema', 'src/locator-lab/aura-read-schema-test.mjs'],
-  ['read-fidelity', 'src/locator-lab/read-fidelity.mjs'],
-  ['read', 'src/locator-lab/read-test.mjs'],
   ['read2', 'src/locator-lab/read-test2.mjs'],
-  ['lang', 'src/locator-lab/lang-test.mjs'],
-  ['layers', 'src/locator-lab/layers-test.mjs'],
-  ['regex-lex', 'src/locator-lab/regex-lex-test.mjs'],
-  // 语言覆盖测试：每个新语言的符号/跨度/`target=`/负向断言（F1 的专用验收）
-  ['lang-coverage', 'src/locator-lab/lang-coverage-test.mjs'],
-  // 带修饰符/导出的变量绑定（T7）：`export const X` 必须可按名寻址，
-  // 且补 `$mods*` 不得让多修饰符声明报出重复符号。
-  ['var-binding', 'src/locator-lab/var-binding-test.mjs'],
-  // 适配器面（裸函数 / OpenAI / MCP）与"未配置语言必须被拒"。
-  // 此前它**不在本清单里**，所以恒红的两条断言（拿 .hs 当"未配置"样本，
-  // 而语言表后来把 Haskell 登记了）一直没人发现——一个不进闸门的套件等于不存在。
   ['adapters', 'src/locator-lab/adapters.mjs'],
-  // 写路径的物理前提：原子发布必换 inode，因此版本令牌能区分同尺寸改动。
-  // 没有这一条时，“必须原子发布”只能靠人记得（T20）。
-  ['atomic-publish', 'src/locator-lab/atomic-publish-test.mjs'],
-  // 差分测试：期望值由**两个独立实现互相提供**，不靠人写。
-  // 它抓的是"测试与代码共享同一个盲区"——本项目已因此三次全绿带真 bug。
-  ['differential', 'src/locator-lab/differential-test.mjs'],
-  // 导出面是一等公民：`map` 必须能用**常数成本**回答"这个模块给别人什么"（T25）。
-  ['export-surface', 'src/locator-lab/export-surface-test.mjs'],
-  // 新鲜度判据（时间戳不可用）与 Rust `pub const` 的已知形状（T23 / T28）。
-  ['fresh-judgement', 'src/locator-lab/fresh-judgement-test.mjs'],
-  // 行号地址的漂移判据（T21）：位移后“同址文本恰好相符”这一类**没有**被老判据拦住，
-  // 而修补它的四版判据各自误杀过一例真实场景——四例与四版都钉在套件里，免得重做。
-  ['coordinate-drift', 'src/locator-lab/coordinate-drift-test.mjs'],
-  // 入参形状的容错面（T29）：日志里 27 次失败是“单个 hunk 平铺在顶层”。
-  // 它同时钉住**分界**：宽容形状，但不宽容拼写（未声明字段仍由 schema 拒）。
   ['arg-shape', 'src/locator-lab/arg-shape-test.mjs'],
-  // 属性测试（T18）：不变式而不是行为断言。随机扰动真实语料，断言“扰动前后哪些符号能寻到”
-  // 是同一个集合、跨度可信、解析幂等。已验证它在“命中区域平移一行”的注入下会红。
-  ['symbol-invariant', 'src/locator-lab/symbol-invariant-test.mjs'],
-  // 仓库级粗粒度地图（T26）：`aura_basetools_read <目录>` 的判据——预算、跨语言依赖方向、忽略规则、
-  // 候选选择（只读被选中的文件）、以及“预算不够时从后往前丢并自报”。
-  ['repo-map', 'src/locator-lab/repo-map-test.mjs'],
-  // **真框架冒烟**：把两个插件注册进真的 @deepseek-ai/dsh-tools，并用真校验器验 execute 的返回值。
-  // 它补的是 mock 套件看不见的那一格：mock 不校验 schema，而本仓被这一形态咬过三次
-  // （`text` 未声明 / `dry_run` 未声明 / 未声明字段被拒），每次都是**每条成功路径被框架拒**而套件全绿。
-  // 解析不到宿主 peer 时它自报跳过（exit 0）——但会把“跳过”印得显眼。
   ['real-framework', 'src/locator-lab/real-framework-smoke-test.mjs'],
-  // ↓ 四类各一块，按“问的问题”分，而不是按文件分（见 public-surface-test 头部那张表）：
-  //   验收·接口 —— 对外承诺的每一条还在不在（导出面 / 插件四件套 / bin / 参数键同源 / 文档路径）
   ['public-surface', 'src/locator-lab/public-surface-test.mjs'],
-  //   验收·文档 —— `docs/embed-example` 说的做法**照做真能跑**（空目录、零安装）
   ['embeddability', 'src/locator-lab/embeddability-test.mjs'],
-  //   端到端+集成 —— CLI / MCP 当**真进程**驱动，多次调用串起来（含令牌跨进程、并发多进程）
   ['cli-mcp-e2e', 'src/locator-lab/cli-mcp-e2e-test.mjs'],
-  // 多 agent 共用面的可移植子集：MCP 的 schema 一旦用了 `oneOf`/`$ref`/长度约束，
-  // DeepSeek strict / OpenAI strict 会整面拒掉——而这一面 Codex/Claude Code/Cursor/ZCode 共用。
   ['schema-portability', 'src/locator-lab/schema-portability-test.mjs'],
-  // 多编码：探测 / 读 / 回编码 / 不可表示拒绝 / UTF-8 回归（反馈 2026-10-25 第一条）。
   ['encoding', 'src/locator-lab/encoding-test.mjs'],
-  // 文档/配置的结构目录（Markdown / JSON / YAML / TOML）。
-  ['doc-map', 'src/locator-lab/doc-map-test.mjs'],
-  // 写前预检 / 写后结构状态 / diagnose（0.22 错误闭环）。
   ['preflight', 'src/locator-lab/preflight-test.mjs'],
-  // 漂移重定位（--retry，0.22 P3）。
   ['retry', 'src/locator-lab/retry-test.mjs'],
-  // 覆盖集（opt-in，0.22 P4）。
   ['coverage', 'src/locator-lab/coverage-test.mjs'],
-  // 结构地址 / 结构句柄（0.23）。
   ['structure', 'src/locator-lab/structure-test.mjs'],
-  // probe 模式（只给元信息、不发正文）。
   ['probe', 'src/locator-lab/probe-test.mjs'],
-  // 同一工具在 MCP 与 DSH 两面必须是同一张形状（顶层键集合差只允许文档化清单；
-  // 平铺单 hunk 在两面都要真的能执行）。
   ['surface-parity', 'src/locator-lab/surface-parity-test.mjs'],
-  // strict 变体是 P1 归零的唯一工具侧产物：输出必须满足 provider strict 的四条硬约束。
-  ['strict-schema', 'src/locator-lab/strict-schema-test.mjs'],
-  // 故障投递面（多 agent 稳定）：7 种现场 × CLI/MCP，断言“回包可解析 + 跨入口语义类一致”；
-  // 挂死 / 崩 / 非 JSON 回包 / 同一故障两面不同类 → 闸红（P1 不在其中：它发生在工具之前）。
   ['interrupt-posture', 'probes/interrupt-matrix.mjs'],
-  //   冒烟·部署 —— **装出来的那一份**能不能用（每个 .mjs 真 import / peer 从装包位置可解析）
   ['installed-package', 'src/locator-lab/installed-package-test.mjs'],
-  // ── C32 补登：以下 18 件**本来就在 `src` 下自带判据与汇总行**，却因为"清单靠人手抄"而没进闸。
-  //    一半的漏网原因是文件名：老口径把"普查"理解成"名字匹配 `*-test.mjs`"（`byte-fidelity.mjs`
-  //    就是这么漏的），另一半是纯粹没人登记（17 个 `*-test.mjs` 一直在闸外红着也没人知道）。
-  //    口径与 §⑩ 的机检同源：判定权在**文件的形态**（自有判据调用 / 退出码判据 / 打印通过·失败汇总行），
-  //    不在文件名。补登后闸内 52 件，其中 51 件自带判据、1 件（`read-fidelity`）只读数不判定。
-  //    C42 提醒：这里的“自带判据”是**算出来的**（见 §⑩ 的 S1/S1b/S1c/S2）——
-  //    而“自带判据”曾把一件没有退出码接线的套件（`corpus`）也算进去，所以 §⑩ 另加了闸门 A7。
-  // 引擎侧（locator-lab）：
-  ['anchor-cache', 'src/locator-lab/anchor-cache-test.mjs'],
-  ['assert-contains', 'src/locator-lab/assert-contains-test.mjs'],
-  ['content-address', 'src/locator-lab/content-address-test.mjs'],
-  ['expect-address-form', 'src/locator-lab/expect-address-form-test.mjs'],
-  ['expect-single-source', 'src/locator-lab/expect-single-source-test.mjs'],
-  ['incremental-read', 'src/locator-lab/incremental-read-test.mjs'],
-  ['index-cache', 'src/locator-lab/index-cache-test.mjs'],
-  ['notfound-receipt', 'src/locator-lab/notfound-receipt-test.mjs'],
-  ['old-fragment-fallback', 'src/locator-lab/old-fragment-fallback-test.mjs'],
   ['range-args', 'src/locator-lab/range-args-test.mjs'],
-  ['range-formats', 'src/locator-lab/range-formats-test.mjs'],
   ['range-error-lifecycle', 'src/locator-lab/range-error-lifecycle-test.mjs'],
-  ['read-continuation', 'src/locator-lab/read-continuation-test.mjs'],
-  ['write-gate-cost', 'src/locator-lab/write-gate-cost-test.mjs'],
-  // **探针形状**：文件名不匹配 `*-test.mjs`，但有 13 条自有判据并以退出码表态
-  //（冻结基准夹具的完整性、三列分桶和、语料账本）。它一直是"自带判据却不进闸"的第二例。
-  ['failure-replay', 'src/locator-lab/failure-replay.mjs'],
-  // 独立面（包内那份 `standalone-test` 在 §③ 以 dist 形态跑；这里跑的是 src 那一份，
-  // 两份逐字节相同——§⑥ 保证——所以两边都不能省：一处查"包里那份能用"，一处查"源这侧能过"）：
   ['standalone', 'src/aura-standalone/test/standalone-test.mjs'],
-  // P0.1/P1.6：CLI/MCP 未知参数、targets 元素未知键、initialize 协议版本。17 项。
   ['argument-surface', 'src/aura-standalone/test/argument-surface-test.mjs'],
-  // P1.5：并发读的观测缓存 read-merge-write（两进程 / 六进程）。9 项。
   ['observation-concurrency', 'src/aura-standalone/test/observation-concurrency-test.mjs'],
-  // 0.10.1：整文件写（内置 Write 的替代）——新建/覆写走同一事务与回读校验，
-  //   BOM 与文件既有行尾保留、有无尾换行精确、no-overwrite/dry-run/undo、MCP 声明面与调用面。
-  //   0.10.3 加严格新鲜度，0.10.4 加 eol 策略，0.10.5 加评审回归，0.10.6 加复审回归；现读数 66 项。
   ['write', 'src/aura-standalone/test/write-test.mjs'],
   ['range-bytes', 'src/aura-standalone/test/range-bytes-test.mjs'],
-  // 壳侧：
   ['aura-read/outcome', 'src/aura-read/outcome-test.mjs'],
   ['aura-edit/outcome', 'src/aura-edit/outcome-test.mjs'],
   ['aura-read/load', 'src/aura-read/load-test.mjs'],
   ['aura-edit/load', 'src/aura-edit/load-test.mjs'],
   ['aura-edit/align', 'src/aura-edit/align-test.mjs'],
-  // ── C37 补登：`probes/` 下的 3 件**真套件**（自带判据 + 通过/失败汇总行 + 失败非零退出，
-  //    且离线自足）。此前它们一件都不在闸内 —— 闸只扫 `src/`，探针坏了也没人知道：
-  //    上一波两个探针正是「判据坏了」与「不在闸内」两件事同时发生，于是一路带病通关。
-  //    收件的分界线（与 §⑩ 豁免台账同源，理由逐条写在那边）：**判据必须是不随波演进的不变式**
-  //    —— 引擎按契约改进之后它仍然绿，红了就该去看代码。下面三件都满足：
-  //      · `adoption-stats-test`：统计逻辑的纯函数判据（会话筛选口径 / 寻址分布 / 失败判定），
-  //        不需要会话日志，209ms；
-  //      · `name-addressing`：判据是「按名寻址失败的回执里必须给出下一步」（行号不是 undefined），
-  //        与失败条数无关，仓内固定语料，558ms；
-  //      · `address-form-census`：11 条判据（含载体自证 R11/R12/R13），其中 R08 钉的是
-  //        「anchor / line_cue / target 三种地址形态入口齐备」（Y=0）这个契约不变式，4.8s。
-  ['probes/adoption-stats-test', 'probes/adoption-stats-test.mjs'],
-  ['probes/name-addressing', 'probes/name-addressing.mjs'],
-  ['probes/address-form-census', 'probes/address-form-census.mjs'],
-  // C38 新建的套件（错误回执里那段「原文是什么」要能回抄命中原文）：它落地时没登记，是 §⑩ 当场
-  // 点名「未登记」才补进来的 —— 这正是这条机检的用法：新放一个自带判据的文件，不问文件名、
-  // 按形态发现它，然后要么登记要么写清豁免。
-  ['quote-render', 'src/locator-lab/quote-render-test.mjs'],
-  // C45（fs-contract-v2 波15）：编辑路径的第四条出路 —— “你要改的原文不在，但结果已经是你给的
-  // 样子了，这次不用改”（`outcome: 'already_applied'`，判据是 `write-path.mjs` 的
-  // `alreadyAppliedHits`）。收它的理由按 §⑩ 的分界线逐条对：
-  //   · 判据是**不变式**，不是本波绝对读数：三条 —— 不得把真的找不到误判成已落地（六条负向）、
-  //     磁盘一个字节都不许动（写调用数恒 0 + sha256/字节逐项不变）、重复应用同一编辑必须幂等
-  //     （连打三次，写次数恒为 1）。引擎以后再改（这一类多几条少几条）它照样绿；
-  //   · 离线自足：段落用仓内夹具 + 只读消费 `failure-corpus.json`，不起任何外网/子进程；
-  //   · 自带通过/失败汇总行与退出码接线（末行 `process.exitCode = 1`）。
-  // 与它同源的**普查件**（probes/already-applied-census.mjs）是量具，登记在下面的豁免台账里。
-  ['already-applied', 'src/locator-lab/already-applied-test.mjs'],
-  // C49（fs-contract-v2 波16）：第四态接到**工具面**。C45 把 `already_applied` 做进了引擎
-  // 编排层（`applyEditToProvider`），而 DSH 壳的 `OUTCOMES` 里没有它 —— 同一个
-  // `PATCH_NOT_FOUND` 一律折成 `not_found`，于是模型看到的仍是「找不到你要改的原文」。
-  // 这一件钉的就是最后一公里，收件理由按 §⑩ 的分界线逐条对：
-  //   · 判据是**不变式**，不是本波绝对读数：已落地 ⇒ 第四态 + 写调用恒 0 + 磁盘逐字节不变；
-  //     真找不到 ⇒ 仍 not_found（含多 hunk 半落地）；危险短串（`}`/`ok`/`return`/`};`）
-  //     一个都不许误判；第四态在 output.schema 的 enum 与字段面里声明过。它不钉"本波多少条"，
-  //     引擎以后多认几条少认几条它照样绿（绿了就该去看代码）；
-  //   · 离线自足：仓内 mock ctx + 临时夹具，不起子进程、不读会话日志、不碰外网；
-  //   · 每段都带**反向对照**（同一份夹具换一个真在文件里的 replace ⇒ already_applied），
-  //     所以"全判 not_found"的实现过不了它；
-  //   · 自带通过/失败汇总行与退出码接线（末行 `process.exitCode = 1`）。
   ['already-applied-shell', 'src/aura-edit/already-applied-shell-test.mjs'],
-  // C55（fs-contract-v2 波20）：非 UTF-8 文件给的是**可执行的拒绝**，不是裸的 Node 错误。
-  // 收件理由按 §⑩ 的分界线逐条对：
-  //   · 判据是**不变式**，不是本波绝对读数：① 四件事必须同一次说清（哪个文件 / 为什么读不了 /
-  //     下一步怎么办 / 这次没写盘）；② 通道不变（DSH 侧仍抛错、独立面仍 ok:false + exit 2，
-  //     不许被伪装成结果通道的意图判决）；③ **不误伤**——带 BOM 的 UTF-8 照常成功、
-  //     含 NUL 的二进制仍用自己那句；④ 三个面的判据与那句话逐字同源。夹具的 sha256
-  //     逐条前后复验，与具体文案无关（文案改了仍绿）；
-  //   · 离线自足：临时夹具 + 仓内 mock ctx，只多起两个自己的 CLI 子进程（与 cli-mcp-e2e 同形）；
-  //   · 自带通过/失败汇总行与退出码接线（末行 `process.exitCode = 1`）。
   ['encoding-refusal', 'src/locator-lab/encoding-refusal-test.mjs'],
-  // C56（fs-contract-v2 波21）：账本的路径同一性要**跨进程**成立。C54 把归一化做进了引擎，
-  // 但那一半的证据挂在**会话内**的折叠别名索引上（`read-core.mjs` 的 `PATH_ALIASES`）——
-  // DSH 壳是长进程所以有效，而**独立面 CLI / MCP 每次调用都是新进程**：读 `Beta.js`（进程1）
-  // → 第三方改掉被寻址行 → 用仅大小写不同的 `beta.js` 发无 `expect` 编辑（进程2）
-  // ⇒ 改前实测 `ok:true, unverified_region:true`（**静默覆盖**，点斜线写法在同实验里被正确拒）。
-  // 收件理由按 §⑩ 的分界线逐条对：
-  //   · 判据是**不变式**，不是本波绝对读数：① 跨进程换写法 + 被寻址行被第三方改过 ⇒ 必须
-  //     `PATCH_STALE_REGION` 且磁盘一字节不落；② **正向对照**（同一个文件换写法、无第三方改动
-  //     ⇒ 照常成功且不许谎称 `unverified_region`）—— 没有它，"一律拒绝"这种实现也能让①全绿；
-  //     ③ 两个**真不同**的文件（大小写敏感目录里 `Beta.js` 与 `beta.js` 并存）不许并成一个键；
-  //     ④ DSH 侧进程内那条路不退化（换写法编辑成功 / 被第三方改过就拒）。引擎以后再改它照样绿；
-  //   · **离线自足**：临时夹具 + 只多起自己的 CLI 子进程（与 `cli-mcp-e2e` / `encoding-refusal` 同形），
-  //     缓存用 `AURA_CACHE_DIR` 指到临时目录，不碰 `~/.aura`、不读会话日志、不碰外网；
-  //   · 自带通过/失败汇总行与退出码接线（末行 `process.exitCode = 1`）。
-  // 为什么必须起**真进程**："每次调用都是新进程"正是这条洞的**成因**，进程内跑等于把成因抹掉。
   ['observation-store-identity', 'src/locator-lab/observation-store-identity-test.mjs'],
-  // C59（fs-contract-v2 波23）：结构索引的**归属归因（`enclosing`）不再二次**。施工前实测：
-  // 平坦文件里没有任何符号包含别的符号 ⇒ 旧实现「每个符号扫一遍按宽度排序的整张符号表」退化为
-  // 完整 O(n²)，100000 符号档冷索引 **50510 ms**（本机复跑 67579 ms），而 `--cpu-prof` 行级 tick
-  // 说那段占 `buildStructure` 自身耗时的 **99.2%** —— 「一次 read 卡几十秒」的全部来源。
-  // 收件理由按 §⑩ 的分界线逐条对：
-  //   · 判据是**不变式**，不是本波绝对读数：① 10 万符号档冷索引 ≤ 2 秒（施工单终态；改前 33 倍于它，
-  //     必红）；② 五档每行成本不再随规模上升（末档 ≤ 首档 ×1.5；改前是 30.4 倍）；③ `enclosing`
-  //     与「改前那段判据逐字照抄」的 oracle 逐符号零不一致（真实语料 2217 个符号 + 钉住形状 189 个
-  //     + 确定性模糊 317 个），并且交叉覆盖是**自证**的（语料里真的出现过「重叠但不包含」的区间对）；
-  //     ④ 零符号的对照文件仍走平（证明扫描器没被改坏）。引擎以后再改它照样绿，红了就该去看代码；
-  //   · **离线自足**：只用仓内语料（本目录的 *.mjs）+ 仓内确定性生成器（xorshift32 固定种子），
-  //     不起子进程、不读会话日志、不碰外网；冷路径靠 `import('…?scaling=N')` 拿全新模块实例；
-  //   · 自带通过/失败汇总行与退出码接线（末行 `process.exitCode = 1`）。
   ['index-scaling', 'src/locator-lab/index-scaling-test.mjs'],
-  // C61（fs-contract-v2 波25）：**路径别名**（junction / 符号链接）下的陈旧闸门。
-  // C54 修的是"同一个文件的不同**词法**写法"（`.` 段 / 冗余分隔符 / 盘符大小写 / 进程内折叠大小写），
-  // C56 修的是独立面 CLI/MCP 的**跨进程**那半（磁盘存储自己做 realpath）。DSH 壳这一侧两半都没走到：
-  // 壳按 `target.displayPath` 记账，而它是 `ctx.fs.resolve()` 里 `path.resolve(cwd, p)` 的产物（纯词法）
-  // ⇒ junction 两种写法在账本里是两个键：读别名、第三方改被寻址行、用真实路径发无 expect 编辑
-  // ⇒ 改前 `outcome=applied`、磁盘被静默覆盖（两个方向各自复现过一次）。
-  // 事实来源是宿主本来就拿着的 `ctx.fs.resolve().targetKey`（`dsh-fs` 契约："stale guards and
-  // target lookup" 用的不透明键；本地后端 = `realpath`），引擎拿不到它（ENGINE 守卫禁 `node:fs`）。
-  // 本套件跑的是**真壳**（两个 `apply(ctx)` + `registered.execute`）配与 `dsh-fs-local` 同形的 `ctx.fs`，
-  // 在真文件系统上真建 junction；跑环境自带：
-  //   · 靶场在 `os.tmpdir()` 下自建自删，不碰 `~/.aura`、不读会话日志、不起子进程、不碰外网；
-  //   · 每个段先 `setObservationStore(null)`（换存储 = 换会话），段与段不互相污染；
-  //   · 自带通过/失败汇总行与退出码接线（末行 `process.exitCode = 1`）。
-  // 与它同源的两条：`stale-gate-test`（词法那一半）、`observation-store-identity-test`（跨进程那一半）。
   ['alias-identity', 'src/locator-lab/alias-identity-test.mjs'],
-  // C62（fs-contract-v2 波29）：「工具级报错率」变成可复现、可证伪的读数。
-  // 此前的语料读数只印「失败码分布」——「引擎抛错（真报错）」与「如实返回回执（不是报错）」
-  // 在码分布里长得一样，却是性质相反的两件事，这一格此前没有任何判据钉住它。
-  // 收件理由按 §⑩ 的分界线逐条对：
-  //   · 判据是**不变式**，不是本波绝对读数：① 进了错误通道（引擎真的抛了）的每一条都必须在
-  //     `probes/tool-error-rate.mjs` 那份**手写台账**里、且码逐条对得上（新抛一个码 ⇒ 红并点名，
-  //     强迫人决定“它确实是工具级故障”还是“它其实可判定、该进白名单”）；② 台账的判定必须与
-  //     实测通道一致（`code ∈ INTENT_CODES` ⇔ 判“可判定”）—— 把壳层白名单里的一条删掉，这一条
-  //     必红（变异实测：删 `PATCH_NOT_FOUND` ⇒ exit 1 并点名 147 条）；③ 表外码的条数就是头条
-  //     读数那一格（本波 Y=0），但它**不写进判据**：引擎以后多抛/少抛，台账跟着改即可，判据照绿；
-  //   · 判据与读数**不同源**：重放走 `src/locator-lab/failure-replay.mjs` 导出的
-  //     `replayNewContract`（与「现树·新契约」列同一个入口，没有第二份复刻的判定层）；白名单走
-  //     壳层新导出的 `INTENT_CODES`，同一趟里再用**文本正则**把壳层那张表解析一遍、断言两边逐字
-  //     相等 —— 导出面漂移、或壳层“表外 ⇒ 抛”那条边界被改，都会红；
-  //   · 离线自足：只读仓内 `failure-corpus.json`，重放落在 `os.tmpdir()` 的临时副本上，
-  //     不起子进程、不读会话日志、不碰 `~/.aura`、不碰外网；
-  //   · 自带通过/失败汇总行与退出码接线（`process.exit(bad === 0 ? 0 : 1)`）。
-  ['probes/tool-error-rate', 'probes/tool-error-rate.mjs'],
-  // fs-contract-v2 · w28 + w30：`terminatorBlockEnd`（SQL / Erlang / Vim / HCL 的块体终结）**不再二次**。
-  // 退化形状 = 整份文件一行、且语料里没有终结符 ⇒「终结符」与「换行」两条停止条件永不成立，
-  // 每个声明都一路扫到 token 流末尾（改前 1k/4k/8k = 76.9 / 1145.8 / 5709.9 ms，每翻一倍 ×3.6~×5.0）；
-  // w28 改成两张后缀最小值表 + 一张链尾表（每次建索引只建一次），改后 14.6 / 51.6 / 87.2 ms（×1.69~×1.99）。
-  // 收件理由按 §⑩ 的分界线逐条对：
-  //   · 判据是**不变式**，不是本波绝对读数：① 手写样本的**想要的跨度**逐字段写死（`;` 在下一行也要
-  //     盖到它、括号组整层跨过、整份文件一行时的落点、找不到收尾时 fail-closed）——这一部分是**意图**：
-  //     将来引擎真改好了要人来改期望值，那是对的；② 大批量确定性夹具的整表摘要 sha256 + 符号数 +
-  //     用例数（漂移报警器，抓「没人想改却被改坏」）；③ 退化形状 1k/4k/8k **只看比值**：主判据
-  //     t(8k)/t(4k) ≤ 3（线性约 1.7~2.0、二次约 5）、兜底 t(4k)/t(1k) ≤ 12；原始毫秒照印但不做判据
-  //     （读数时机上可能有并行负载）；
-  //   · **判定力**（变异实测）：把跳表的终结符判据短路（`isTerminatorToken(t, terminators) || …` →
-  //     `false || …`）⇒ 本套件 exit 1 并逐条点名差异；按字节还原（sha256 前后一致）⇒ 立刻绿；
-  //   · **覆盖事实**：仓库真实语料里**一件 `.sql` / `.erl` / `.vim` 都没有**（w28 等价性对照扫过 2000 件
-  //     真实文件 / 52759 个符号，终结符型语言 **0 件**；那条路径的覆盖全部来自 128 件夹具 / 1311 个符号）
-  //     ⇒ 这条路径在闸内**只有本套件**守着，所以语料全部就地生成；
-  //   · **离线自足**：不读 %TEMP%、不依赖机器状态、不起子进程、不碰外网；冷路径靠 `import('…?suite=N')`
-  //     拿全新模块实例（与 `index-scaling` 同一手法）；
-  //   · 自带通过/失败汇总行与退出码接线（末行 `process.exitCode = …`）。
-  ['terminator-scan', 'src/locator-lab/terminator-scan-test.mjs'],
-  // 读侧发句柄（HD1）：句柄的确定性（同一段未变字节重读得同一个柄）/ 一字节敏感性 / 可还原 /
-  //   落在 windowEnvelope 那一层而**不是正文 text**（正文才是宿主剪枝器量的东西）/ search 超上限只报数 /
-  //   形状 = `15 + 起始行位数 + 结束行位数`（120-160 那一档恰 21 字符；**不补零** —— 补零会改坐标语义）。
-  //   靶子用 os.tmpdir 临时文件（要真改字节），退出前删除；离线自足、不起子进程。
-  //   判定力（变异实测）：把 `regionFingerprint` 改成常量 `'00000000'` ⇒ 3 条断言变红（44→41）、exit 非 0；
-  //   §6b **单源**：摘要与 `contentToken` 同一哈希（行为断言只能钉口径一致），且引擎 8 个模块里
-  //   **只有 handle-core.mjs 在算 FNV-1a** —— 那 3 条是**静态**断言（按 ENGINE 名单读源文件扫“FNV 质数
-  //   16777619 且真出现 `Math.imul(` 调用”），因为**逐字相同的副本行为上必然全绿**。
-  //   判定力（变异实测，两条）：① `regionFingerprint` 改成常量 `'00000000'` ⇒ 3 条断言变红；
-  //   ② 把 FNV 循环**原样搬回** `read-core.mjs`（选这个而不是改常数，后者红得没信息量）⇒ 另 3 条静态
-  //   断言变红（49/52）、而四条行为断言仍全绿 —— 这就是“行为断言看不见重复实现”的现场证据。
-  //   两次都按字节还原（sha256 前后一致）⇒ **52/52** 绿。
-  //   遗留提示：那 3 条静态断言的 ENGINE 名单是**手抄**自 `make-bundle.mjs` 的（import 它会执行打包
-  //   脚本，红线禁止），引擎模块增减时名单要跟着改。
-  ['handle-read', 'src/locator-lab/handle-read-test.mjs'],
-  // 编辑侧解析句柄（HD2）：四种相对定位（整段 / 段内第 k 行 / 段内内容 / 边界插入）各自命中且**真落盘**；
-  //   身份标签不符 ⇒ PATCH_HANDLE_IDENTITY_MISMATCH；区间被改坏 ⇒ PATCH_HANDLE_STALE（磁盘不动）；
-  //   区间搬迁 ⇒ 按新坐标成功并在 applied[].tier 里披露 `region moved: lines A-B → C-D`；
-  //   `{handle, old}` 而引文在区间外 ⇒ PATCH_HANDLE_QUOTE_OUTSIDE；形状不对 ⇒ **抛错**（参数面，刻意不进白名单）。
-  //   句柄 hunk **照旧进 regionGate**（不是绕过 PATCH_STALE_REGION 的第一条路），且有对照断言钉住非句柄 hunk 一字未改。
-  //   另钉一条**回归守卫**（集成时现场发现并修掉的真回归）：`line`/`position` **只有配 `handle` 才成立** ——
-  //   裸 `{line: 3, replace}` 必须抛 `PATCH_NO_ADDRESS`，**不许**被规范成 `lines:[3,3]`（否则“lines 误写成
-  //   line”这个最常见手误会从报错变成一次成功的错误编辑；守卫落在 `planHunks` 引擎级，因为入口不止一个）。
-  //   判定力（变异实测，两条）：① 把身份标签核对短路成 `false && …` ⇒ 对应断言变红；
-  //   ② 把新守卫短路成 `if (false && …)` ⇒ 段K 共 4 条变红。两次都按字节还原 ⇒ **58/58** 绿。
-  ['handle-edit', 'src/locator-lab/handle-edit-test.mjs'],
-  // fs-contract-v2 · mt1（红线）：**单目标不许回归**。接下来的改造是「一次调用多目标 + 调用内并发池」，
-  // 全部风险都压在同一个方向上：为了多目标把单目标那条路重写一遍（多跑一次 / 多读一次 / 多建一次索引 /
-  // 回执里多一个字段），而验收只看新功能通不通 ⇒ “单目标悄悄变大变慢变了形状”没有一台机器会发现。
-  // 这一件就是那台机器：黄金集采自 0.6.9 现树（`fixtures/golden-single-target-0.6.9.json`，
-  // 采集与比对共用同一份用例定义，所以不可能漂移），每次跑都现场重算并逐字节比对。
-  // 收件理由按 §⑩ 的分界线逐条对：
-  //   · 判据是**不变式**，不是本波绝对读数：四类 —— ① `readWith` 在 3 份仓内夹具 ×
-  //     lines/search/digest/map 上的**整个信封逐字节**不变（12 条）；② `applyEditToProvider` +
-  //     真 provider 的单 hunk 编辑：回执逐字节 + **落盘字节逐字节** + 写次数 = 1；③ 计数 provider
-  //     钉住 N=1 的调用**序列与次数**（读两形状 + 写一形状）—— 这一条就是“多目标改造不许在 N=1 上
-  //     偷偷多跑一遍”的把柄；④ `indexCacheStats()`：100k 行档读一遍只多一条索引且被准入，第二遍
-  //     不新增条目，并用**内层数组身份**（命中时 `indexStructure` 返回浅拷贝 ⇒ `tokens` 还是同一批
-  //     对象）证明第二遍**没有重建** —— 全是结构量，一个 wall-clock 阈值都没有（本仓被按可用内存
-  //     估额度的计时判据咬过两次；这里连唯一与内存有关的那一格也钉死在进程里：`AURA_INDEX_CACHE_MB`）；
-  //   · **判定力**（变异实测）：① 回执里多加一个字段（临时改 `read-core.mjs` 的分支）⇒ ①类红并
-  //     逐条点名，按字节还原（sha256 前后一致）⇒ 立刻绿；② 把计数 provider 的记账改成“只数一次”
-  //     ⇒ ③类红。另有一套**合成变异自证**（段E：对内存里的黄金回执改一个字符 / 多一个字段，
-  //     断言比较器必须判红），防的是“比较器被写空而套件照印全绿”；
-  //   · **离线自足**：只用仓内夹具 + `os.tmpdir()` 下自建自删的靶场，不起子进程、不读会话日志、
-  //     不碰 `~/.aura`（只读一份 install.json 记指纹）、不碰外网；
-  //   · 自带通过/失败汇总行与退出码接线（末行 `process.exit(failed === 0 ? 0 : 1)`）。
-  ['single-target-nonregression', 'src/locator-lab/single-target-nonregression-test.mjs'],
-  // 读侧多目标（mt2）：`readManyWith` 一次读多个目标/区间。收件理由：
-  //   · 判据是**不变式**：① 逐项回执与「同一目标单独跑一次」逐字节相同（10 组，含行寻址三写法与 CRLF+BOM 档）；
-  //     ② 结果序 = 输入序 —— 用可控延迟假 provider 把完成顺序钉成与输入序相反（30/12/0ms，`onFinish` 记真实完成序），
-  //     输出必须仍是输入序；同批倒过来跑一遍双向对账，防「恰好倒序也对」；③ N===1 零池零包装：`trace` 零触发
-  //     + 关 BOM 探针后调用序列恰为 `resolve→stat→readText`（连跑 3 次逐项相同）+ 回执与单目标入口逐字节相同；
-  //     ④ N>1 只并发 I/O 与纯计算，并发是**结构观测**不是计时（N=12 在飞峰值 = MT_POOL(8)、池宽压 3 时峰值 = 3）；
-  //     ⑤ 失败走结果通道（三目标中间那个不存在 ⇒ true,false,true；汇总行只在 `summary`）；
-  //     上限/形状错一律抛并报出实得数（`MT_TOO_MANY_TARGETS` 带 got/max）。
-  //   · **判定力**（变异实测）：① 改成「按完成顺序装配」⇒ 段B 四条红；② 「N===1 ⇒ 直调」改成永远走池
-  //     ⇒ 段C 的 trace 条红（55/56），而同次**红线 26/26 仍绿** —— 后者正是「单目标那条路未被碰」的证据。
-  //   · 没有一条计时判据；退出码接线齐全，现读数 56/56。
-  ['multi-read', 'src/locator-lab/multi-read-test.mjs'],
-  // 写侧多目标（mt3）：`applyEditsToProvider` 一次改多个文件。收件理由：
-  //   · 判据是**不变式**：① 逐项 `edits[i].receipt` 就是单目标回执本体（A6 逐字节比对守着）；
-  //     ② **三阶段**：全量规划（只读）→ 全部可落才提交 → 写后回读校验；阶段一任一失败 ⇒ `writeText=0`、
-  //     汇总行收 `no files were changed` + `aborted:'plan'`（与单调用“任一 hunk 不成立就一个字节不写”同一条纪律）；
-  //     阶段二三中途失败 ⇒ 逐项 `landed`/`stage` + `landed_paths`/`not_landed_paths` + `partial:true`；
-  //     ③ **同一文件多目标合并成一次提交**（分组键 `ledgerIdentityKey`，D1 断言 `writeText===1` 且两处改动都在）；
-  //     ④ 结果序 = 输入序（按完成顺序装配会被段B 点名）；⑤ N===1 直调既有单目标入口，零池零包装。
-  //   · **判定力**（变异实测）：① 「规划一个提交一个」⇒ C3/C4 红（`writeText=2`、三个文件逐字节被改）；
-  //     ② 「按完成顺序装配」⇒ B1 红（点名 `third,second,first`）；两次都按字节还原 ⇒ 42/42 绿。
-  //   · 没有一条计时判据；退出码接线齐全，现读数 42/42。
-  ['multi-edit', 'src/locator-lab/multi-edit-test.mjs'],
-  // 失败回执的**可修复地址**（mt6）：`PATCH_NOT_FOUND` 在“Closest region + `!N|` 边距行”之后多一段
-  //   `retry: {"handle":"h…"}`，`PATCH_AMBIGUOUS`/`needs_choice` 在**每条候选**后各跟一行同样的 retry。
-  //   目的：失败之后的**那一次重试不必重抄原文** —— 而“转述错”正是本工具最大的一类失败来源
-  //   （残余 147 里 B03 55 + B04 46 都是这一类）。
-  //   · 句柄怎么铸：身份标签 = 这一次编辑的 `ledgerKey`（与读侧同一 `ledgerIdentityKey` 口径）；
-  //     指纹 = **文件里那几行的原始字节**（未裁剪、未加行号）；行号 = 绝对行号（与 `!N|` 同一把尺子）。
-  //   · 体积有上限：候选柄最多 5 条、修法段最多 220 字符（越限整段不印，`next` 照旧）。
-  //   · **判定一条没放宽**：码、`writeText=0`、磁盘逐字节不变照旧；另有一条反而**收紧**（从“存在一个
-  //     throw 调用点”改成“恰好 1 处”）。
-  //   · **判定力（本单最重的一条）**：回环测试 —— 造一个必然 not_found 的编辑 ⇒ 从**正文**（模型唯一
-  //     看得见的那一段）解析出 `retry:` ⇒ 配上自己的 `replace` 再发 ⇒ **必须真的落盘且落点就是那段**；
-  //     needs_choice 同形（取第 3 个候选的柄 ⇒ 只动那一行）。变异（把铸柄步短路）⇒ 回环必红
-  //     （`PATCH_HANDLE_IDENTITY_MISMATCH`、writes=0），按字节还原 ⇒ 绿。
-  //   · 退出码接线齐全，现读数 36/36。
-  ['repair-address', 'src/locator-lab/repair-address-test.mjs'],
-  // 能力面对齐（C71）：修复地址的**第三条面** —— DSH 工具面上模型看得见的那段文本里地址在不在，
-  //   并与回执的结构化 `retry.handle` 同源同名。收件理由：① 判的是**渲染后**的 text（引擎里有不算 ——
-  //   句柄化落地时就是靠这条发现“结构化字段到不了模型”）；② 变异臂 `--mutation=no-address` 把引擎那条
-  //   地址行拿掉 ⇒ R1/R3/R4 按名变红（变异跑在**仓库外的私有副本**上：就地改源文件会让闸里并发跑的
-  //   别的套件读到被改过的引擎，实测踩过）；③ 退出码接线齐全，现读数 6/6。
   ['repair-address-shell', 'src/aura-edit/repair-address-shell-test.mjs'],
-  // 能力面对齐（C71）：修复地址的**第三条面** —— DSH 工具面上模型看得见的那段文本里地址在不在，
-  //   并与回执的结构化 `retry.handle` 同源同名。收件理由：① 判的是**渲染后**的 text（引擎里有不算 ——
-  //   句柄化落地时就是靠这条发现"结构化字段到不了模型"）；② 变异臂 `--mutation=no-address` 在**导入前**
-  //   把引擎那条地址行拿掉 ⇒ R1/R3/R4 按名变红，按字节还原 ⇒ 回绿（第一版变异落在 import 之后：
-  //   ESM 已缓存 ⇒ 空变异 ⇒ 假绿，已修）；③ 退出码接线齐全，现读数 6/6。
-  // 0.8.1：编辑回执自带**改后坐标 / 行数变化 / 新句柄**（调用方不必回读即可继续编辑）；
-  //   片段层另回填整行 `after`（`replaced` 只是行内那一段）。判据只走公开 API，27 项。
-  ['receipt-context', 'src/locator-lab/receipt-context-test.mjs'],
-  // 0.8.2：`auto` 选模式用**宿主真实 budget**（不是固定 8192）判“全文装不装得下”，
-  //   并在理由里披露 host budget / envelope allowance；显式 mode 不被改写。16 项。
-  ['auto-budget', 'src/locator-lab/auto-budget-test.mjs'],
-  // 0.10.0：`replace` 换行风格（auto/preserve/lf/crlf）——对齐内置 Edit 的 CRLF 行为，
-  //   同时保留旧的 preserve 口径与 BOM/区外字节不动。15 项。
-  ['eol-adapt', 'src/locator-lab/eol-adapt-test.mjs'],
-  // 0.15.0：写后验证闭环。显式 verify 命令成功才提交；失败自动回滚（单/多目标/write 都钉住）。
   ['verify-edit', 'src/locator-lab/verify-edit-test.mjs'],
-  // 0.16.0：跨调用事务。begin → 多次 edit --tx → commit/rollback；CLI 子进程证明持久化。
   ['tx-session', 'src/locator-lab/tx-session-test.mjs'],
-  // 0.10.2：`replace_all`——全部非重叠出现、同行多处的列级重叠判定、参数互斥、
-  //   expect 逐处核对、出现次数变化拒绝（was/now）、CLI/MCP 两面。现读数 36 项。
   ['replace-all', 'src/locator-lab/replace-all-test.mjs'],
-  // P0.2：共享行符号 / lone CR 的 target/lines 拒绝，old 片段仍安全。12 项。
   ['single-line-target', 'src/locator-lab/single-line-target-test.mjs'],
-  // 0.10.3：严格新鲜度——never-read / changed-since-read、create 豁免、dry-run 同判、
-  //   多目标零写入、写后自带观测、CLI/MCP/引擎 helper。现读数 32 项。
   ['observation-gate', 'src/locator-lab/observation-gate-test.mjs'],
-  // 0.9.2：并发/崩溃一致性——多进程同工作区不丢更新、pending 事务可回滚、
-  //   空锁宽限（PID 未写入不抢锁）、外部改动后 undo 默认拒绝。15 项。
   ['concurrency-crash', 'src/locator-lab/concurrency-crash-test.mjs'],
-  // 0.8.3：任务级基准（读一次 + 改一次 + 回读校验）：8 个真实编辑任务，跨 JS/TS/Python/Go/
-  //   Rust/SQL/Erlang/多 hunk；SLO = 全成功、每任务 2 次调用、返工 0、token ≤ 基线 1.2×、
-  //   p95 ≤ max(5s, 基线 p95×3)（墙钟只作 sanity ceiling）。
   ['task-bench', 'build/task-bench.mjs'],
-  // 0.8.4：发布物验证——本地 tgz 解包核对声明/文件边界、离线真装、CLI/MCP 真跑，
-  //   并做“同版本逐文件哈希一致”；产出 dist/release-scorecard.json。registry 模式需网络，不在此闸。
   ['post-publish', 'build/post-publish-check.mjs'],
-  // 0.9.3：性能包线——1k/10k/100k map 冷/热读 p50/p95 + 10k 符号编辑；绝对上限 +
-  //   t(100k)/t(10k) 规模比值。基线只用于报告，判据不绑死本机毫秒。
   ['perf-gate', 'build/perf-gate.mjs'],
-  // 0.9.4：`aura doctor` 自检——Node/版本/MCP 握手/缓存与锁目录可写；正常 exit 0，
-  //   缓存不可用 exit 2 且逐项点名。11 项。
   ['doctor', 'src/aura-standalone/test/doctor-test.mjs'],
-  // 0.9.5：能力清单与源码同源（语言表/地址档/读模式/限制）；dist/capabilities.json 由构建产出。
   ['capabilities', 'build/capabilities-test.mjs'],
-  // CI / 发布闸自己的静态契约：Linux full-gate、Node 18/20 smoke、跳过≠通过、新套件登记。
+  ['docs-surface', 'src/locator-lab/docs-surface-test.mjs'],
   ['ci-contract', 'build/ci-contract-test.mjs'],
+  ['entity-apply', 'src/aura-standalone/test/entity-apply-test.mjs'],
 ]
 for (const [name, relative] of SUITES) suite(name, relative)
 
@@ -757,6 +411,12 @@ for (const [name, relative] of [
  * 机检会验证那一组读数真的出现过，没出现就红 —— “它在闸内别处实跑”这句话过期了。
  */
 const CENSUS_EXEMPT = [
+  // 2026-10-27：单元层移除后，以下测量/支持件不再进闸；它们不是回归测试。
+  ['probes/name-addressing.mjs', '测量探针（按名寻址可达面）：判据是探针自检；按三层策略移出闸门，保留读数能力'],
+  ['probes/address-form-census.mjs', '测量探针（地址形态普查）：判据是探针自检；按三层策略移出闸门'],
+  ['probes/tool-error-rate.mjs', '测量探针（工具错误率）：判据是探针自检；按三层策略移出闸门'],
+  ['probes/entity-bench.mjs', '1.0 性能探针：只打印 entity/apply/repo-grep/image 的墙钟读数，无判据、无退出码；不进闸'],
+  ['src/locator-lab/failure-replay.mjs', '失败语料重放/被其它探针 import 的支持件，不是回归测试；按三层策略移出闸门'],
   // ── src/：写这句时是 9 条；现值以表里 `src/` 前缀条目计 = 10 条（8 条非套件豁免 + 本波新增的 `src/aura-standalone/bin/` 那 2 条同属 src 侧）──
   ['src/aura-read/index.js', 'DSH 壳：apply 里用 assert 抛参数错（对内守卫），没有自己的汇总行与退出码'],
   ['src/aura-edit/index.js', 'DSH 壳：同上（hunk schema 守卫用 assert）'],
@@ -788,7 +448,7 @@ const CENSUS_EXEMPT = [
   //    恢复后必须两处都不会假红：它既不能被 A7（登记套件缺退出码接线）点名 —— 它有接线；
   //    也不能被“CENSUS_EXEMPT 已过期”点名 —— 它已经不在豁免表里了。
   ['probes/activate-and-verify.mjs', '激活验收件：判据问的是**本机当下**的激活状态（宿主进程表 / ~/.aura 安装副本 vs 源树 / 钩子那一行）—— C37 当次跑 --check 就是 exit 1（宿主还没重启）。红不红取决于"重启了没有"，不是回归线'],
-  ['probes/adoption-stats.mjs', '采用率读数器：打印覆盖率与模式分布，唯一的退出码是**用法错**（exit 2）。真正会出错的地方（会话筛选口径 / hunk 级寻址 / 失败判定 / 自测会话过滤）由 adoption-stats-test.mjs 判，那一件已由 C37 登记进 SUITES'],
+  ['probes/adoption-stats.mjs', '采用率读数器：打印覆盖率与模式分布，唯一的退出码是**用法错**（exit 2）。真正会出错的地方（会话筛选口径 / hunk 级寻址 / 失败判定 / 自测会话过滤）判据随单元层移除；探针本身只读数'],
   ['probes/coordinate-drift-experiment.mjs', 'T15 分辨实验：合成自证 9 条可复现，但默认还会扫 ~/.dsh/sessions（活语料，随日志增长而变）；读数用于判读“漂移补偿要不要立项”，不是引擎回归线。'],
   // C49 改理由：这条原本写「无判据」——而 C47 给它加了 `--split-at` 的**守恒自检**、
   // C48 又把那条自检接到了退出码上，所以「无判据」与「恒 exit 0」两句都已经过期。
@@ -864,7 +524,7 @@ const CENSUS_EXEMPT = [
   // 上游导出的 replayNewContract（本单 C53 又把 quote-hygiene 这最后一件同形缝收了口）。
   // 它仍不是回归线，理由换成不会随波漂的两条：读数挂在活读数 + 本次语料×引擎的快照上；
   // 真正的不变式在 SUITES 里那三条。
-  ['probes/already-applied-census.mjs', 'C45 的**测量线**（残余 147 条里有多少条其实是“这次编辑已经落地了”），不是回归线：① 它的读数（本波 27/144/2 + 编号集）是这一次语料×引擎的快照，只打印、不手抄进判据；② 它判绿的两条里有一条挂在**活状态**上 —— 现场起只读子进程 `failure-replay.mjs --json` 取上游六格读数（columns.treeNew）与已落地编号集做逐格对账，而它自己那份重放已经是 import 上游导出的 `replayNewContract`（C52 起不再自带复刻件；上游那一列一改，它仍会红，而那时要对的是它内嵌的 pin 与记账适配、不是引擎，口径③）；③ 真正该当回归线的那三条不变式（不许误判 / 磁盘不动 / 幂等）已经由 `src/locator-lab/already-applied-test.mjs` 在 SUITES 里逐条钉住，不需要这一件再钉一遍'],
+  ['probes/already-applied-census.mjs', 'C45 的**测量线**（残余 147 条里有多少条其实是“这次编辑已经落地了”），不是回归线：① 它的读数（本波 27/144/2 + 编号集）是这一次语料×引擎的快照，只打印、不手抄进判据；② 它判绿的两条里有一条挂在**活状态**上 —— 现场起只读子进程 `failure-replay.mjs --json` 取上游六格读数（columns.treeNew）与已落地编号集做逐格对账，而它自己那份重放已经是 import 上游导出的 `replayNewContract`（C52 起不再自带复刻件；上游那一列一改，它仍会红，而那时要对的是它内嵌的 pin 与记账适配、不是引擎，口径③）；③ 真正该当回归线的那三条不变式（不许误判 / 磁盘不动 / 幂等）由接口层 `already-applied-shell` 覆盖；原单元套件已归档'],
   // MT4 新增：编辑返工量具（本单预注册的问题：agent 调编辑工具要返工几次、错了能不能自己修回来）。
   // 它不是回归线，三条理由都不随波漂：
   //   ① 读数挂在**活语料**上（现扫 ~/.dsh/sessions 里两个真实任务工作区，会话文件还在长）；

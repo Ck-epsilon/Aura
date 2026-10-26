@@ -62,7 +62,7 @@ const tools = responses.find((msg) => msg.id === 2)?.result?.tools
 
 console.log('=== 0. 服务端可用 ===')
 check(res.status === 0, 'MCP 进程正常退出', `status=${res.status} stderr=${String(res.stderr ?? '').slice(0, 120)}`)
-check(Array.isArray(tools) && tools.length >= 4, `tools/list 返回 ${Array.isArray(tools) ? tools.length : 0} 个工具`)
+check(Array.isArray(tools) && tools.length === 2, `tools/list 返回 ${Array.isArray(tools) ? tools.length : 0} 个工具`)
 if (!Array.isArray(tools)) {
   console.log(`\n--- ${pass} 通过 / ${fail} 失败（无法拿到 schema，后续判据跳过）---`)
   process.exit(1)
@@ -115,8 +115,8 @@ for (const tool of tools) {
 
 console.log('\n=== 2. 工具面完整性 ===')
 const names = tools.map((tool) => tool.name).sort()
-const expected = ['aura_basetools_convert', 'aura_basetools_edit', 'aura_basetools_read', 'aura_basetools_tx', 'aura_basetools_write']
-check(JSON.stringify(names) === JSON.stringify(expected), `五个工具都在：${names.join(', ')}`)
+const expected = ['aura_basetools_apply', 'aura_basetools_read']
+check(JSON.stringify(names) === JSON.stringify(expected), `两个公开工具都在：${names.join(', ')}`)
 
 console.log(`\n--- ${pass} 通过 / ${fail} 失败 ---`)
 fs.rmSync(tmp, { recursive: true, force: true })

@@ -97,6 +97,11 @@ const file = path.join(tmp, 'demo.mjs')
 fs.writeFileSync(file, 'export function alpha() {\n  const n = 1\n  return n\n}\n\nexport function beta() {\n  return 2\n}\n')
 fs.writeFileSync(path.join(tmp, 'note.zzz'), 'plain text\n')
 fs.writeFileSync(path.join(tmp, 'external.txt'), 'original\n')
+fs.writeFileSync(path.join(tmp, 'dup.js'), 'export function dup() {\n  return 1\n}\n\nexport function dup() {\n  return 2\n}\n')
+fs.writeFileSync(
+  path.join(tmp, 'pixel.png'),
+  Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'),
+)
 
 let version = 1
 const fsService = {
@@ -147,12 +152,21 @@ say('=== A. 描述符必须被真框架接受 ===')
 for (const dir of ['aura-read', 'aura-edit']) {
   const mod = await import(asUrl(path.join(pkgRoot, 'src', dir, 'index.js')))
   mod.apply(mkCtx())
+  // The public surface is read+apply; the legacy write/edit descriptors are kept as a
+  // test seam so this smoke still exercises their real schemas against dsh-tools.
+  if (dir === 'aura-edit' && mod.lastLegacyTools !== null) {
+    registered.push(mod.lastLegacyTools.write, mod.lastLegacyTools.edit)
+  }
 }
 const readTool = registered.find((t) => t.name === 'aura_basetools_read')
 const editTool = registered.find((t) => t.name === 'aura_basetools_edit')
 const writeTool = registered.find((t) => t.name === 'aura_basetools_write')
-check(readTool !== undefined && editTool !== undefined && writeTool !== undefined, '三个工具都注册成功（aura_basetools_read / aura_basetools_edit / aura_basetools_write）')
-for (const tool of [readTool, editTool, writeTool]) {
+const applyTool = registered.find((t) => t.name === 'aura_basetools_apply')
+check(
+  readTool !== undefined && editTool !== undefined && writeTool !== undefined && applyTool !== undefined,
+  '四个工具都注册成功（aura_basetools_read / aura_basetools_edit / aura_basetools_write / aura_basetools_apply）',
+)
+for (const tool of [readTool, editTool, writeTool, applyTool]) {
   if (tool === undefined) continue
   let why = ''
   let ok = true
@@ -192,6 +206,9 @@ const cases = [
   ['aura_basetools_write 覆写（已观测）', writeTool, { file_path: path.join(tmp, 'written.txt'), content: 'rewritten\n' }],
   ['aura_basetools_write 盲写（allow_unobserved）', writeTool, { file_path: path.join(tmp, 'external.txt'), content: 'external-new\n', allow_unobserved: true }],
   ['aura_basetools_write eol preserve', writeTool, { file_path: path.join(tmp, 'written.txt'), content: 'exact\n', eol: 'preserve' }],
+  // 0.23：实体地址的一步写入（apply 自己建立观测，调用方不必先 read）。
+  ['aura_basetools_apply 替换实体正文', applyTool, { file_path: file, entity: 'function:beta', op: 'replace-body', change: 'export function beta() {\n  return 22\n}' }],
+  ['aura_basetools_apply 重命名实体', applyTool, { file_path: file, entity: 'function:beta', op: 'rename', new_name: 'betaRenamed', scope: 'file' }],
 ]
 for (const [label, tool, args] of cases) {
   let value = null
@@ -204,6 +221,34 @@ for (const [label, tool, args] of cases) {
   }
   const v = validateShape(tool.output.schema, value)
   check(v.ok, `${label} → 输出通过真校验`, v.ok ? '' : v.why)
+}
+
+say('')
+say('=== B2. apply 的拒绝回执同样要过真输出校验（零写入路径最容易被漏声明） ===')
+{
+  const staleFile = path.join(tmp, 'stale.mjs')
+  fs.writeFileSync(staleFile, 'export function omega() {\n  return 1\n}\n')
+  const seeded = await applyTool.execute(
+    { file_path: staleFile, entity: 'function:omega', op: 'replace-body', change: 'export function omega() {\n  return 10\n}', dry_run: true },
+    exec,
+  )
+  check(seeded.dryRun === true && seeded.evidence?.spanHash !== undefined, 'B2a 预演给出 evidence')
+  fs.writeFileSync(staleFile, 'export function omega() {\n  return 2\n}\n')
+  const stale = await applyTool.execute(
+    { file_path: staleFile, entity: 'function:omega', op: 'replace-body', change: 'export function omega() {\n  return 3\n}', evidence: seeded.evidence },
+    exec,
+  )
+  const staleShape = validateShape(applyTool.output.schema, stale)
+  check(stale.code === 'PATCH_ENTITY_STALE' && stale.ok === false, 'B2b 证据过期 ⇒ PATCH_ENTITY_STALE', stale.code)
+  check(staleShape.ok, 'B2b 拒绝回执通过真输出校验', staleShape.why ?? '')
+  check(fs.readFileSync(staleFile, 'utf8').includes('return 2'), 'B2c 拒绝时零写入')
+  const missing = await applyTool.execute(
+    { file_path: staleFile, entity: 'function:nope', op: 'replace-body', change: 'x' },
+    exec,
+  )
+  const missingShape = validateShape(applyTool.output.schema, missing)
+  check(missing.outcome === 'not_found' && missing.ok === false, 'B2d 实体不存在 ⇒ not_found', missing.code)
+  check(missingShape.ok, 'B2d 未找到回执通过真输出校验', missingShape.why ?? '')
 }
 
 say('')
@@ -249,10 +294,24 @@ const WRITE_SHAPES = [
   { file_path: 'x.js', content: 'y', eol: 'preserve', no_overwrite: true },
   { file_path: 'x.js', content: 'y', allow_unobserved: true },
 ]
+const APPLY_SHAPES = [
+  { file_path: 'x.js', entity: 'function:a', op: 'replace-body', change: 'a' },
+  { file_path: 'x.js', entity: { kind: 'function', name: 'a' }, op: 'replace-body', change: '' },
+  { file_path: 'x.js', entity: 'function:a', op: 'rename', new_name: 'b', scope: 'file' },
+  {
+    file_path: 'x.js',
+    entity: 'function:a',
+    op: 'replace-body',
+    change: 'a',
+    evidence: { spanHash: 'abc', contentHash: 'def', version: 'v1' },
+    dry_run: true,
+  },
+]
 for (const [tool, shapes] of [
   [readTool, READ_SHAPES],
   [editTool, EDIT_SHAPES],
   [writeTool, WRITE_SHAPES],
+  [applyTool, APPLY_SHAPES],
 ]) {
   const bad = shapes.filter((s) => !validateShape(tool.parameters, s).ok)
   check(bad.length === 0, `${tool.name}：真 schema 接受全部 ${shapes.length} 种合法调用形状`, bad.map((s) => JSON.stringify(s)).join(' | '))

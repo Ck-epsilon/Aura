@@ -1,12 +1,11 @@
 # aura-basetools —— 项目总览
 
-给 AI coding agent 用的文件读写工具：`aura_basetools_read`（按意图取景：符号目录 / 接口 / 窗口 / 搜索 / 差异）、
-`aura_basetools_edit`（按意图寻址：模糊意图 / 符号名 / 行号 / 唯一词 / 记忆原文；逐字节保真、陈旧区域闸门、落盘后回读校验）
-与 `aura_basetools_write`（整文件新建/覆写；同一事务与回读校验，保留 BOM 与文件既有行尾）。
-**0.7.0 起拆成两个 npm 包**：
+给 AI coding agent 用的读写工具：`aura_basetools_read`（按意图取景：符号目录 / 接口 / 窗口 / 文本搜索；`entity` 给定义+引用+证据；目录给地图或仓库级 grep；图片给元数据+内容）、
+`aura_basetools_apply`（实体优先写：`replace-body` / `rename`，外加 `patch` / `write` / `convert` / `tx`；证据校验、原子写、落盘后回读）。
+**1.0.0 起公开面只有这两个工具**（0.7.0 起引擎/适配器是两个 npm 包）：
 
 - `aura-basetools`：引擎 + CLI + MCP，**不依赖 DSH**；
-- `aura-basetools-dsh`：DSH 的 `aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write` / `aura_basetools_convert` 适配器，依赖 core。
+- `aura-basetools-dsh`：DSH 的 `aura_basetools_read` / `aura_basetools_apply` 适配器，依赖 core。
 
 DSH 插件 · MCP 服务（Codex / Claude Code / Cursor）· CLI 三条入口共用同一份引擎。
 
@@ -195,9 +194,8 @@ node build/capabilities.mjs --write                # 能力清单 dist/capabilit
 node dist/aura-basetools/test/standalone-test.mjs  # 包内自带验收：测"要发出去的那一份"
 ```
 
-引擎与工具壳的既有套件在 `src/locator-lab/`（write-verify 42 · stale-gate 95 · byte-fidelity 102 ·
-encoding 32 · span 95 · policy-arg 12 · struct 28 · corpus 44 · schema 56 · read 33/59 · lang 21 ·
-layers 29 · regex-lex 51）与 `src/aura-{read,edit}/`（load 50/41 · align 12）。
+套件清单以 `build/release-check.mjs` 的 `SUITES` 为准；2026-10-27 起只保留接口 / 集成 / 系统三层，
+单元层已从闸门移除并归档到 `docs/archive/unit-tests`（不运行、不发货）。
 
 ## 开发与测试前提
 
@@ -284,7 +282,7 @@ cd ../aura-basetools-dsh && npm publish
 node probes/adoption-stats.mjs                     # 唯一入口：覆盖率 + 调用量 + 模式/寻址分布 + 失败率
 node probes/adoption-stats.mjs --include-meta      # 把“在测工具本身”的自测会话也合并进来
 node probes/adoption-stats.mjs --json              # 机器可读（给别的脚本用）
-node probes/adoption-stats-test.mjs                # 判据：统计逻辑的纯函数断言，不需要日志
+# 统计逻辑的单元判据已归档：docs/archive/unit-tests/adoption-stats-test.mjs（不运行）
 node probes/which-tools.mjs                        # 逐会话列出用过哪些工具
 ```
 
@@ -317,7 +315,7 @@ npm 官方源发**两个包**（构建在 `dist/npm/`，由 `make-bundle.mjs --p
 | 包 | 内容 | 入口 |
 |---|---|---|
 | `aura-basetools` | 核心：引擎 + CLI + MCP，**无 DSH 依赖** | `aura` / `aura-mcp`；`npx -y --package aura-basetools aura basetools mcp` |
-| `aura-basetools-dsh` | DSH 适配器：四个工具壳（`aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write` / `aura_basetools_convert`）+ patch，依赖同版本核心 | `dsh plugin add aura-basetools-dsh` |
+| `aura-basetools-dsh` | DSH 适配器：两个工具壳（`aura_basetools_read` / `aura_basetools_apply`）+ patch + 钩子执行器，依赖同版本核心 | `dsh plugin add aura-basetools-dsh` |
 
 发布顺序：先核心、后适配器。两包都能装上且适配器按包名解析核心，由
 `build/split-package-test.mjs` 守着（已入 `release-check` 与 CI）。

@@ -32,7 +32,7 @@ const say = (m) => console.log(`\n=== ${m} ===`)
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-write-'))
 const cache = path.join(tmp, 'cache')
-const env = { ...process.env, AURA_CACHE_DIR: cache }
+const env = { ...process.env, AURA_CACHE_DIR: cache, AURA_TEST_EXPOSE_LEGACY: '1' }
 const run = (args, cwd = tmp) => spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8', env })
 const json = (res) => {
   try {
@@ -215,7 +215,7 @@ say('C MCP：aura_basetools_write 声明面与调用面')
 
   const tools = byId.get(2)?.result?.tools ?? []
   const writeTool = tools.find((tool) => tool.name === 'aura_basetools_write')
-  check(tools.length === 5 && writeTool !== undefined, `C1 tools/list 五个工具且含 aura_basetools_write（${tools.map((tool) => tool.name).join(',')}）`)
+  check(tools.length === 6 && writeTool !== undefined, `C1 tools/list 六个工具且含 aura_basetools_write（${tools.map((tool) => tool.name).join(',')}）`)
   check(JSON.stringify(writeTool?.inputSchema?.required) === JSON.stringify(['file_path', 'content']), 'C2 aura_basetools_write schema 必填 file_path + content', JSON.stringify(writeTool?.inputSchema?.required))
   check(envOf(3).ok === true && envOf(3).result?.operation === 'create', 'C3 经 MCP 新建成功', JSON.stringify(envOf(3)).slice(0, 160))
   check(fs.readFileSync(file('mcp-created.txt'), 'utf8') === 'mcp\ncreate\n', 'C4 MCP 新建的内容真的落盘')
@@ -235,8 +235,9 @@ say('D 能力清单：write 在命令表与工具表里')
 {
   const caps = json(run(['basetools', 'capabilities']))
   const writeTool = caps.tools?.find((tool) => tool.name === 'aura_basetools_write')
-  check(caps.ok === true && caps.commands?.includes('basetools write'), 'D1 commands 含 write', JSON.stringify(caps.commands))
-  check(JSON.stringify(writeTool?.operations) === JSON.stringify(['create', 'overwrite']), 'D2 tools 含 aura_basetools_write{create,overwrite}', JSON.stringify(writeTool))
+  check(caps.ok === true && caps.commands?.includes('basetools apply'), 'D1 commands 含 apply', JSON.stringify(caps.commands))
+  const applyTool = caps.tools?.find((tool) => tool.name === 'aura_basetools_apply')
+  check(applyTool?.operations?.includes('write'), 'D2 apply 含 write 操作', JSON.stringify(applyTool?.operations))
 }
 
 // ── E provider 级：整份替换只读一次 ───────────────────────────────────────

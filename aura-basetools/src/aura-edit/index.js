@@ -20,6 +20,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 // 不参与成功的定位——实测符号级定位对文本扰动免疫（100% vs 58.6%），而锚点失败里
 // 100% 都能被符号名救回（见 locator-lab/recoverable.mjs）。
 import { langOf } from '../locator-lab/struct-core.mjs'
+// 实体地址（0.23）：解析 → 正文替换 / 词元重命名 hunk。apply 壳只编排，判据全在引擎里。
+import { entityRenameHunks, entityToStructureHunk, entityView } from '../locator-lab/entity-core.mjs'
 // 定位引擎本身是框架无关的，住在 locator-lab；本文件是它的 **DSH 适配器**。
 // 这条依赖方向是刻意的：引擎不认识 Cordis，而 Cordis 侧认识引擎。
 // 换一个 agent 框架接进来，只需要另写一个适配器，引擎一行不用动。
@@ -39,6 +41,7 @@ import {
   countByteOrderMarks,
   latestObservation,
   leadingByteOrderMarks,
+  readWith,
   rememberRead,
 } from '../locator-lab/read-core.mjs'
 import {
@@ -90,6 +93,13 @@ export const name = 'dsh-tool-aura-edit'
  * `ctx.tools` 不声明就会在 apply 阶段直接抛 "cannot get property ... without inject"。
  */
 export const inject = ['fs', 'tools', 'systemPrompt']
+
+/**
+ * Test-only seam: the legacy write/convert/edit tool definitions after `apply(ctx)`.
+ * Production registers only `aura_basetools_apply`; the old interface suites register these
+ * into their mock ctx to keep their assertions. Never read this from production code.
+ */
+export let lastLegacyTools = null
 
 /**
  * 一个 hunk 的**属性声明**（唯一一份）。
@@ -241,6 +251,73 @@ const HUNK_PROPERTIES_OPTIONAL = Object.fromEntries(
   }),
 )
 
+// ── receipt schema fragments shared by aura_basetools_edit and aura_basetools_apply ──
+// apply returns the edit receipt verbatim, so these shapes must be one declaration, not two.
+
+/** One applied hunk: before/after coordinates, tier, and (0.8.1) the follow-up handle. */
+const APPLIED_ITEM_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    line: { type: 'integer', required: true },
+    tier: { type: 'string', required: true },
+    byNear: { type: 'boolean', required: true },
+    actual: { type: 'string', required: true },
+    replaced: { type: 'string', required: true },
+    eolAdapted: { type: 'boolean' },
+    afterLine: { type: 'integer' },
+    afterEndLine: { type: 'integer' },
+    delta: { type: 'integer' },
+    handle: { type: 'string' },
+    after: { type: 'string' },
+    afterTruncated: { type: 'boolean' },
+  },
+}
+
+/** Candidate lines: one shape only (`{line, text?}`), shared by success and failure receipts. */
+const CANDIDATES_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      line: { type: 'integer', required: true },
+      text: { type: 'string' },
+    },
+  },
+}
+
+/** A handle the caller can paste back with its own replacement. */
+const RETRY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { handle: { type: 'string', required: true } },
+}
+
+/** Evidence for the `already_applied` outcome. */
+const ALREADY_APPLIED_ITEM_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    hunk: { type: 'integer', required: true },
+    line: { type: 'integer', required: true },
+    tier: { type: 'string', required: true },
+    actual: { type: 'string', required: true },
+    replaced: { type: 'string', required: true },
+  },
+}
+
+/** Write-back verification level and byte counts. */
+const WRITE_VERIFY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    level: { type: 'string', required: true },
+    bytes: { type: 'integer' },
+    chars: { type: 'integer' },
+  },
+}
+
 /**
  * 平铺形状下的**内容地址**（`old` + 可选 `context`）。
  *
@@ -368,6 +445,41 @@ export const EDIT_ARG_KEYS = [
   'targets',
   ...Object.keys(HUNK_PROPERTIES),
 ]
+
+/**
+ * `aura_basetools_apply` 的顶层参数名（唯一一份，供未知参数守卫用）。
+ * 它与 `EDIT_ARG_KEYS` **分开**：apply 接受 entity/op/change，edit 不接受（反过来也一样）。
+ */
+export const APPLY_ARG_KEYS = [
+  'file_path',
+  'entity',
+  'op',
+  'change',
+  'new_name',
+  'scope',
+  'evidence',
+  'dry_run',
+  'verify',
+  'transaction',
+  'expect',
+  'hunks',
+  'create',
+  'content',
+  'no_overwrite',
+  'allow_unobserved',
+  'eol',
+  'to',
+  'from',
+  'bom',
+  'repair_double_encoding',
+  'require_observation',
+  'retry',
+  'action',
+  'targets',
+]
+
+/** Drop undefined values before handing args to a nested defineTool: it validates lossless JSON. */
+const definedArgs = (object) => Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined))
 
 /**
  * `aura_basetools_write` 的顶层参数名（唯一一份，供未知参数守卫用）。
@@ -794,6 +906,66 @@ function intentReceipt(displayPath, verdict, dryRun) {
   }
 }
 
+// ── 0.23 aura_basetools_apply: entity receipt shapes ───────────────────────
+
+/** Struct-core candidates ({name,kind,startLine}) → the receipt's single {line,text} shape. */
+function entityCandidatesOf(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((c) => c !== null && typeof c === 'object' && Number.isInteger(c.startLine))
+    .map((c) => ({ line: c.startLine, text: `${c.kind ?? 'symbol'} ${c.name ?? ''}`.trim() }))
+}
+
+/** `enclosing: null` is normalized away so the receipt schema stays strictly typed. */
+function entityRecordOf(entity) {
+  return {
+    id: entity.id,
+    file: typeof entity.file === 'string' ? entity.file : '',
+    kind: entity.kind,
+    name: entity.name,
+    ...(entity.enclosing === null || entity.enclosing === undefined ? {} : { enclosing: entity.enclosing }),
+    startLine: entity.startLine,
+    endLine: entity.endLine,
+    signature: entity.signature,
+    structureTarget: entity.structureTarget,
+    evidence: { contentHash: entity.evidence.contentHash, spanHash: entity.evidence.spanHash },
+  }
+}
+
+/** Entity evidence with the observation's version (view.evidence.version is null before a read). */
+function entityEvidenceOf(evidence, version) {
+  return {
+    ...(typeof version === 'string' ? { version } : {}),
+    contentHash: evidence.contentHash,
+    spanHash: evidence.spanHash,
+  }
+}
+
+/** Ambiguity / not-found / stale: a normal receipt with zero writes and the reason attached. */
+function applyFailureReceipt(displayPath, { code, message, candidates, entity, evidence, dryRun, outcome = 'not_found', next }) {
+  const receipt = {
+    ok: false,
+    path: displayPath,
+    outcome,
+    code,
+    message,
+    error: message,
+    ...(candidates === undefined || candidates.length === 0 ? {} : { candidates }),
+    ...(entity === undefined ? {} : { entity }),
+    ...(evidence === undefined ? {} : { evidence }),
+    applied: [],
+    dryRun,
+    next,
+  }
+  receipt.text = renderFailure(receipt)
+  return receipt
+}
+
+/**
+ * `notWrittenClause` / `renderFailure` 在改壳之前就存在：apply 的失败回执走同一个渲染器，
+ * 不另写一份「没写盘」的排版。
+ */
+
 /**
  * 失败回执抬头里那一句「磁盘动了没有」——**两种事实两个句子**。
  *
@@ -1189,8 +1361,7 @@ function registerTools(ctx, sandbox) {
           ].join(' '),
   })
 
-  ctx.tools.register(
-    defineTool({
+  const writeTool = defineTool({
       name: 'aura_basetools_write',
       description:
         'Create or replace a whole UTF-8 text file in one call. It preserves a leading BOM and (with `eol: "auto"`) the file\'s line-ending style, writes through the host filesystem with a version check, and reads the file back to verify. ' +
@@ -1225,15 +1396,7 @@ function registerTools(ctx, sandbox) {
             dryRun: { type: 'boolean', required: true },
             bytes: { type: 'integer' },
             unverified_region: { type: 'boolean' },
-            write_verify: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                level: { type: 'string', required: true },
-                bytes: { type: 'integer' },
-                chars: { type: 'integer' },
-              },
-            },
+            write_verify: WRITE_VERIFY_SCHEMA,
           },
         },
         render: (_args, value) => {
@@ -1337,8 +1500,7 @@ function registerTools(ctx, sandbox) {
           ...(verify === undefined ? {} : { write_verify: verify }),
         }
       },
-    }),
-  )
+    })
 
   /**
    * `aura_basetools_convert`（0.23）：本地换编码 / 换行尾 / 增删 BOM。
@@ -1353,8 +1515,7 @@ function registerTools(ctx, sandbox) {
    * 源侧不猜：给了 `from` 就按它解码；没给则只接受**合法 UTF-8**，其余情况要求显式给 `from`。
    * 这比“猜一个”保守，但与“拒绝而不是猜”是同一方向。
    */
-  ctx.tools.register(
-    defineTool({
+  const convertTool = defineTool({
       name: 'aura_basetools_convert',
       description:
         'Convert a text file to UTF-8 locally, without sending its content through the model: decode raw bytes (explicit `from`, else valid UTF-8 only), normalize line endings/BOM, write atomically with a version guard, and verify the text read back. ' +
@@ -1453,8 +1614,7 @@ function registerTools(ctx, sandbox) {
         ctx.emit('fs/observed', target, { kind: 'present', version: written.version }, exec)
         return { ...receipt, verified: backText === normalized }
       },
-    }),
-  )
+    })
 
   ctx.systemPrompt.section({
     name: 'tool:aura-edit',
@@ -1492,14 +1652,379 @@ function registerTools(ctx, sandbox) {
             // 语义只说真的（不吹“要么全成要么全不落”）：规划阶段任何一项失败 ⇒ **一个字节都不写**；
             // 而写入阶段失败时，回执会逐项点名哪些落了、哪些没落（`landed_paths` / `not_landed_paths`）。
             'To change several files at once, pass `targets` (each item the same single-target arguments): if any target fails to plan, the whole batch writes nothing — and if a write itself fails, the receipt names exactly which targets landed.',
-            // 兜底：整份写由 aura_basetools_write 承担；读图仍只有内置 read_image。
-            // 刻意不把内置 `edit`/`write` 写进来：它们在同样场景会丢 BOM / 归一行尾，不是等价兜底。
-            'For a whole-file create or rewrite, use aura_basetools_write — not the built-in write; `read_image` is still the only way to read an image.',
+            // 兜底：整份写由 aura_basetools_write 承担；图片读由 aura_basetools_read 承担
+            // （元信息总是给，附件服务在场时连图一起给）。刻意不把内置 `edit`/`write` 写进来：
+            // 它们在同样场景会丢 BOM / 归一行尾，不是等价兜底。
+            'For a whole-file create or rewrite, use aura_basetools_write — not the built-in write; to look at an image, use aura_basetools_read (it returns dimensions and format, and attaches the image when the host has an attachment store).',
           ].join(' '),
   })
 
+  // ── 0.23 apply: one entity-first write ────────────────────────────────────
+  // 注册在 edit **之前**：既有套件用「最后一次 register」取 edit，顺序一改它们就取到 apply。
+  let editTool
+  ctx.systemPrompt.section({
+    name: 'tool:aura-apply',
+    order: 1321,
+    text: ({ scope }) =>
+      ctx.tools.get('aura_basetools_apply', scope) === undefined
+        ? ''
+        : [
+            'Use the aura_basetools_apply tool for every write: op=replace-body|rename for one entity (comments and strings are never renamed), op=patch for raw hunks, op=write for a whole file, op=convert for encoding/line endings.',
+            'For entity ops pass the `evidence` from aura_basetools_read (entity); if the entity changed since that read the call is refused with PATCH_ENTITY_STALE and zero writes.',
+            'op=write/convert/patch cover the old whole-file, encoding and raw-hunk paths; this surface cannot run verify/transaction — use the CLI or MCP apply for those.',
+          ].join(' '),
+  })
   ctx.tools.register(
     defineTool({
+      name: 'aura_basetools_apply',
+      description:
+        'The single write tool. op=replace-body (entity + change) or rename (entity + new_name) is the default for code: pass the evidence from an entity read; ambiguity/staleness writes nothing; the tool observes the current revision itself, writes atomically and verifies. ' +
+        'The same tool covers op=patch (raw hunks/create), op=write (whole file) and op=convert (encoding/line endings). Comments and string literals are never renamed.',
+      parameters: {
+        file_path: { type: 'string', required: true, description: 'Path to change, resolved by the filesystem backend.' },
+        entity: {
+          oneOf: [{ type: 'string' }, { type: 'object', additionalProperties: true }],
+          description: 'Entity selector: `function:apply`, `Class/method`, or {kind,name,file}. Required for entity ops.',
+        },
+        op: {
+          type: 'string',
+          enum: ['replace-body', 'rename', 'patch', 'write', 'convert', 'tx'],
+          description: 'Omitted: action→tx; content→write; to→convert; hunks/create→patch; new_name→rename; entity→replace-body.',
+        },
+        change: { type: 'string', description: 'replace-body: the complete new body of the entity (signature and trailing newline included).' },
+        new_name: { type: 'string', description: 'rename: the new identifier.' },
+        scope: {
+          type: 'string',
+          enum: ['span', 'file'],
+          description: 'rename: `span` rewrites only the entity span, `file` the whole file (default file).',
+        },
+        evidence: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            version: { type: 'string' },
+            contentHash: { type: 'string' },
+            spanHash: { type: 'string' },
+          },
+          description: 'The evidence from an entity read: a mismatching spanHash (or contentHash) means the entity changed and the call writes nothing.',
+        },
+        dry_run: { type: 'boolean', description: 'Plan and validate without touching the file.' },
+        verify: {
+          type: 'string',
+          description: 'Post-write verification command. This surface cannot run one: providing it is refused, use the CLI/MCP apply.',
+        },
+        transaction: {
+          type: 'string',
+          description: 'Cross-call transaction id. This surface has no transaction log: providing it is refused, use the CLI/MCP apply.',
+        },
+        expect: { type: 'string', description: 'replace-body: assert what the entity span currently holds; a mismatch fails the call.' },
+        hunks: {
+          type: 'array',
+          items: { type: 'object', properties: HUNK_PROPERTIES, additionalProperties: false },
+          description: 'op=patch: raw hunk array (escape hatch; entity ops are preferred).',
+        },
+        targets: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'op=patch: multi-target batch (same shape as the old edit targets).' },
+        create: { type: 'string', description: 'op=patch: create the file with this whole content.' },
+        content: { type: 'string', description: 'op=write: the whole UTF-8 text.' },
+        no_overwrite: { type: 'boolean', description: 'op=write: refuse an existing file.' },
+        allow_unobserved: { type: 'boolean', description: 'op=write: allow overwriting without a prior read.' },
+        eol: { type: 'string', enum: ['auto', 'preserve', 'lf', 'crlf', 'keep'], description: 'op=write/convert: line-ending policy.' },
+        to: { type: 'string', description: 'op=convert: target encoding (utf-8 on this surface).' },
+        from: { type: 'string', description: 'op=convert: source encoding; omit only for valid UTF-8.' },
+        bom: { type: 'string', enum: ['keep', 'yes', 'no'], description: 'op=convert: BOM policy.' },
+        repair_double_encoding: { type: 'boolean', description: 'op=convert: repair reversible double encoding.' },
+        action: { type: 'string', enum: ['begin', 'commit', 'rollback', 'status'], description: 'op=tx: MCP/CLI only; this surface refuses it.' },
+        require_observation: { type: 'boolean', description: 'op=patch: require a prior read of this file.' },
+        retry: { type: 'boolean', description: 'op=patch: rebase a stale address from the last read.' },
+      },
+      additionalProperties: false,
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            ok: { type: 'boolean', required: true },
+            path: { type: 'string', required: true },
+            applied: { type: 'array', required: true, items: APPLIED_ITEM_SCHEMA },
+            dryRun: { type: 'boolean', required: true },
+            outcome: { type: 'string', enum: OUTCOMES, required: true },
+            code: { type: 'string' },
+            message: { type: 'string' },
+            error: { type: 'string' },
+            candidates: CANDIDATES_SCHEMA,
+            retry: RETRY_SCHEMA,
+            next: { type: 'string' },
+            already_applied: { type: 'array', items: ALREADY_APPLIED_ITEM_SCHEMA },
+            unchanged: { type: 'boolean' },
+            unverified_region: { type: 'boolean' },
+            write_verify: WRITE_VERIFY_SCHEMA,
+            operation: { type: 'string' },
+            from: { type: 'string' },
+            to: { type: 'string' },
+            bom: { type: 'string' },
+            bytes_before: { type: 'integer' },
+            bytes_after: { type: 'integer' },
+            verified: { type: 'boolean' },
+            bytes: { type: 'integer' },
+            targets: { type: 'integer' },
+            summary: { type: 'string' },
+            edits: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            landed_paths: { type: 'array', items: { type: 'string' } },
+            not_landed_paths: { type: 'array', items: { type: 'string' } },
+            aborted: { type: 'boolean' },
+            partial: { type: 'boolean' },
+            // Entity-first half of the receipt (absent on argument-level failures).
+            entity: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                id: { type: 'string', required: true },
+                file: { type: 'string', required: true },
+                kind: { type: 'string', required: true },
+                name: { type: 'string', required: true },
+                enclosing: { type: 'string' },
+                startLine: { type: 'integer', required: true },
+                endLine: { type: 'integer', required: true },
+                signature: { type: 'string', required: true },
+                structureTarget: { type: 'string', required: true },
+                evidence: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    contentHash: { type: 'string', required: true },
+                    spanHash: { type: 'string', required: true },
+                  },
+                },
+              },
+            },
+            evidence: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                version: { type: 'string' },
+                contentHash: { type: 'string', required: true },
+                spanHash: { type: 'string', required: true },
+              },
+            },
+            auto_observed: { type: 'boolean' },
+            text: { type: 'string' },
+          },
+        },
+        render: (_args, value) => [{ type: 'text', text: typeof value.text === 'string' ? value.text : receiptBody(value) }],
+      },
+      async execute(args, exec) {
+        assertKnownArgs(args, APPLY_ARG_KEYS, 'aura_basetools_apply')
+        if (typeof args.file_path !== 'string' || args.file_path.trim().length === 0) {
+          throw new PatchError('apply needs `file_path` as a non-empty string', 'APPLY_BAD_ARGS')
+        }
+        // verify/transaction exist on the CLI/MCP envelope only; refusing beats silently dropping them.
+        if (args.verify !== undefined || args.transaction !== undefined) {
+          throw new PatchError(
+            'this surface cannot run `verify` or `transaction` — use the CLI or MCP apply for those; nothing was written',
+            'APPLY_UNSUPPORTED_OPTION',
+          )
+        }
+        const dryRun = args.dry_run === true
+        const op =
+          args.op ??
+          (args.action !== undefined
+            ? 'tx'
+            : Array.isArray(args.targets)
+              ? 'patch'
+              : typeof args.content === 'string'
+                ? 'write'
+                : typeof args.to === 'string'
+                  ? 'convert'
+                  : args.hunks !== undefined || args.create !== undefined
+                    ? 'patch'
+                    : typeof args.new_name === 'string'
+                      ? 'rename'
+                      : 'replace-body')
+        if (op === 'tx') {
+          throw new PatchError('op=tx is MCP/CLI only — this surface has no transaction log; nothing was written', 'APPLY_UNSUPPORTED_OPTION')
+        }
+        if (op === 'write') {
+          const result = await writeTool.execute(
+            definedArgs({
+              file_path: args.file_path,
+              content: args.content,
+              dry_run: dryRun,
+              no_overwrite: args.no_overwrite,
+              allow_unobserved: args.allow_unobserved,
+              eol: args.eol,
+            }),
+            exec,
+          )
+          return { ok: true, ...result, applied: result.applied ?? [] }
+        }
+        if (op === 'convert') {
+          const result = await convertTool.execute(
+            definedArgs({ file_path: args.file_path, to: args.to, from: args.from, bom: args.bom, eol: args.eol, dry_run: dryRun }),
+            exec,
+          )
+          return { ok: true, ...result, applied: result.applied ?? [] }
+        }
+        if (op === 'patch') {
+          const result = Array.isArray(args.targets)
+            ? await editTool.execute(
+                definedArgs({ targets: args.targets, dry_run: dryRun, require_observation: args.require_observation, retry: args.retry }),
+                exec,
+              )
+            : await editTool.execute(
+                definedArgs({
+                  file_path: args.file_path,
+                  hunks: args.hunks,
+                  create: args.create,
+                  dry_run: dryRun,
+                  require_observation: args.require_observation,
+                  retry: args.retry,
+                }),
+                exec,
+              )
+          return {
+            ok: result.ok ?? (result.outcome === 'applied' || result.outcome === 'already_applied'),
+            ...result,
+            applied: result.applied ?? [],
+          }
+        }
+        if (op !== 'replace-body' && op !== 'rename') {
+          throw new PatchError(`unknown apply op ${JSON.stringify(op)}; expected replace-body | rename | patch | write | convert`, 'APPLY_BAD_ARGS')
+        }
+        if (args.entity === undefined || args.entity === null) {
+          throw new PatchError('apply needs an `entity` selector for entity ops', 'APPLY_BAD_ARGS')
+        }
+        const policyService = sandbox()
+        const policy =
+          policyService === undefined
+            ? undefined
+            : policyService.resolve(exec.agent === undefined ? {} : { session: exec.agent.session })
+        const cwd = policy?.workspaceRoot ?? exec.agent?.session?.header?.cwd
+        const target = await ctx.fs.resolve(args.file_path, {
+          ...(cwd === undefined ? {} : { cwd }),
+          signal: exec.signal,
+        })
+        const info = await ctx.fs.stat(target, exec.signal)
+        if (info === undefined) throw new PatchError(`cannot apply "${target.displayPath}": not found`, 'FS_NOT_FOUND')
+        if (info.type !== 'file') throw new PatchError(`cannot apply "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
+        let source
+        try {
+          source = await ctx.fs.readText(target, exec.signal)
+        } catch (error) {
+          if (!isNonUtf8TextFailure(error)) throw error
+          throw Object.assign(new Error(nonUtf8RefusalMessage('patch', target.displayPath, 'aura_basetools_apply')), {
+            code: typeof error.code === 'string' && error.code.length > 0 ? error.code : 'ERR_ENCODING_INVALID_ENCODED_DATA',
+            cause: error,
+          })
+        }
+        const lang = langOf(target.displayPath)
+        const view = entityView({ filePath: target.displayPath, source, lang, selector: args.entity })
+        if (view.ok !== true) {
+          return applyFailureReceipt(target.displayPath, {
+            code: view.code,
+            message: view.message,
+            candidates: entityCandidatesOf(view.candidates),
+            dryRun,
+            outcome: view.code === 'ENTITY_AMBIGUOUS' ? 'needs_choice' : 'not_found',
+            next:
+              view.code === 'ENTITY_AMBIGUOUS'
+                ? 'more than one symbol matches — pass a qualified selector (Outer/Inner) or one of the candidate lines'
+                : 'no such symbol in this file — read it with aura_basetools_read (mode=map) and use a selector that is there',
+          })
+        }
+        // Evidence staleness is checked before any planning: a mismatch writes nothing.
+        if (args.evidence !== null && typeof args.evidence === 'object') {
+          const hasSpan = args.evidence.spanHash !== undefined && args.evidence.spanHash !== null
+          const spanChanged = hasSpan && args.evidence.spanHash !== view.evidence.spanHash
+          const contentOnly = !hasSpan && args.evidence.contentHash !== undefined && args.evidence.contentHash !== null
+          const contentChanged = contentOnly && args.evidence.contentHash !== view.evidence.contentHash
+          if (spanChanged || contentChanged) {
+            return applyFailureReceipt(target.displayPath, {
+              code: 'PATCH_ENTITY_STALE',
+              message: 'entity changed since evidence; re-read it',
+              entity: entityRecordOf(view.entity),
+              evidence: entityEvidenceOf(view.evidence),
+              dryRun,
+              next: 're-read the entity (aura_basetools_read with entity=…) and pass the fresh evidence',
+            })
+          }
+        }
+        let hunks
+        if (op === 'replace-body') {
+          if (typeof args.change !== 'string') {
+            throw new PatchError('replace-body needs `change` as a string — nothing was written', 'APPLY_BAD_ARGS')
+          }
+          const hunk = entityToStructureHunk(view.entity, args.change)
+          hunks = [typeof args.expect === 'string' ? { ...hunk, expect: args.expect } : hunk]
+        } else if (op === 'rename') {
+          const renamed = entityRenameHunks({ source, lang, name: view.entity.name, newName: args.new_name, scope: args.scope ?? 'file' })
+          if (renamed.ok !== true) {
+            return applyFailureReceipt(target.displayPath, {
+              code: renamed.code,
+              message: renamed.message,
+              candidates: entityCandidatesOf(renamed.candidates),
+              entity: entityRecordOf(view.entity),
+              evidence: entityEvidenceOf(view.evidence),
+              dryRun,
+              outcome: renamed.code === 'ENTITY_AMBIGUOUS' ? 'needs_choice' : 'not_found',
+              next: 'pass `new_name` as a non-empty identifier, or read the file first to pick a selector that resolves',
+            })
+          }
+          hunks = renamed.hunks
+        } else {
+          throw new PatchError(`unknown op ${JSON.stringify(op)}; expected replace-body or rename`, 'APPLY_BAD_ARGS')
+        }
+        /**
+         * Auto-observation: apply establishes its own "this revision was just read" basis,
+         * so the caller does not have to read first; the edit path then requires it.
+         */
+        const observation = readWith(source, {
+          mode: 'lines',
+          lines: [view.entity.startLine, view.entity.endLine],
+          filePath: target.displayPath,
+          ...(typeof target.targetKey === 'string' && target.targetKey.length > 0 ? { identityKey: target.targetKey } : {}),
+          byteOrderMark: (await fileByteOrderMarkCount(ctx.fs, target, exec.signal)) > 0,
+        })
+        if (observation.ok === false) throw new Error(`${observation.code}: ${observation.message}`)
+        const evidence = entityEvidenceOf(view.evidence, observation.version)
+        const entity = entityRecordOf(view.entity)
+        if (hunks.length === 0) {
+          // Renaming to the same identifier: a true no-op, reported instead of sending an empty hunk list.
+          return {
+            ok: true,
+            path: target.displayPath,
+            applied: [],
+            dryRun,
+            outcome: 'applied',
+            entity,
+            evidence,
+            auto_observed: true,
+            text: `${target.displayPath}: new_name is already "${view.entity.name}" — nothing to rename and nothing was written.`,
+          }
+        }
+        // The edit tool is the one execution path: no second copy of planning/gates/write/verify.
+        const editResult = await editTool.execute(
+          { file_path: args.file_path, hunks, dry_run: dryRun, require_observation: true },
+          exec,
+        )
+        return {
+          ...editResult,
+          ok: editResult.outcome === 'applied' || editResult.outcome === 'already_applied',
+          entity,
+          evidence,
+          auto_observed: true,
+        }
+      },
+      presentCall: (args) => ({
+        card: 'generic',
+        title: `Apply ${args.op ?? (args.new_name !== undefined ? 'rename' : 'replace-body')} ${typeof args.entity === 'string' ? args.entity : ''} in ${args.file_path}`,
+        kind: 'edit',
+        rawInput: { entity: args.entity, op: args.op, scope: args.scope, dry_run: args.dry_run },
+      }),
+    }),
+  )
+
+
+  editTool = defineTool({
       name: 'aura_basetools_edit',
       description:
         'Edit or create a text file in one call. ' +
@@ -1629,30 +2154,7 @@ function registerTools(ctx, sandbox) {
             applied: {
               type: 'array',
               required: true,
-              items: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  line: { type: 'integer', required: true },
-                  tier: { type: 'string', required: true },
-                  byNear: { type: 'boolean', required: true },
-                  actual: { type: 'string', required: true },
-                  replaced: { type: 'string', required: true },
-                  // 0.10.0：`replace` 的换行被 auto/lf/crlf 改写过时如实标注。
-                  eolAdapted: { type: 'boolean' },
-                  /**
-                   * 0.8.1：改后坐标 / 行数变化 / 新句柄。`line` 仍是改前坐标（契约），
-                   * 三者让调用方不必回读就能继续编辑；删除没有可指区间，因此没有 `handle`。
-                   */
-                  afterLine: { type: 'integer' },
-                  afterEndLine: { type: 'integer' },
-                  delta: { type: 'integer' },
-                  handle: { type: 'string' },
-                  // 片段层（行内替换）的整行回填；整行替换的 `replaced` 已是完整新区域，不需要它。
-                  after: { type: 'string' },
-                  afterTruncated: { type: 'boolean' },
-                },
-              },
+              items: APPLIED_ITEM_SCHEMA,
             },
             dryRun: { type: 'boolean', required: true },
             /**
@@ -1683,17 +2185,7 @@ function registerTools(ctx, sandbox) {
              * 形状**只有一种**（`{line, text?}`）：引擎编辑侧给行号数组、读取侧给对象，
              * 同一个字段名两种含义是本仓已经栽过的坑（见 read-core 里 `truncated` 的注释）。
              */
-            candidates: {
-              type: 'array',
-              items: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  line: { type: 'integer', required: true },
-                  text: { type: 'string' },
-                },
-              },
-            },
+            candidates: CANDIDATES_SCHEMA,
             /**
              * 引擎算好的**可粘回地址**：`{ handle }`，把它配自己的 `replace` 再发一次即可。
              *
@@ -1703,11 +2195,7 @@ function registerTools(ctx, sandbox) {
              * 引擎与 CLI/MCP 早就有这份结构化地址，DSH 回执到本波才补上。
              * 正文里那行 `retry: {"handle":…}` 写法未变：模型看到的还是同一句话。
              */
-            retry: {
-              type: 'object',
-              additionalProperties: false,
-              properties: { handle: { type: 'string', required: true } },
-            },
+            retry: RETRY_SCHEMA,
             // 下一步做什么。与 aura_basetools_read 的同名字段对齐（那里是续读指令，这里是恢复指令）。
             next: { type: 'string' },
             /**
@@ -1722,17 +2210,7 @@ function registerTools(ctx, sandbox) {
              */
             already_applied: {
               type: 'array',
-              items: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  hunk: { type: 'integer', required: true },
-                  line: { type: 'integer', required: true },
-                  tier: { type: 'string', required: true },
-                  actual: { type: 'string', required: true },
-                  replaced: { type: 'string', required: true },
-                },
-              },
+              items: ALREADY_APPLIED_ITEM_SCHEMA,
             },
             /**
              * 第四态的标量副产物，与引擎侧回执里的 `unchanged` 同名同义：**磁盘内容一字未动**。
@@ -1749,15 +2227,7 @@ function registerTools(ctx, sandbox) {
             // C14：这次写入被**回读校验**过。`level: 'bytes'` = 逐字节整份比对（看得见 BOM 与行尾改写）；
             // `level: 'text'` = 后端没有字节接口，只比对了文本（看不见 BOM / 行尾），如实写在这里。
             // 对不上时走不到这里：那条路抛 WRITE_VERIFY_FAILED（错误对象上带两边字节数与普查）。
-            write_verify: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                level: { type: 'string', required: true },
-                bytes: { type: 'integer' },
-                chars: { type: 'integer' },
-              },
-            },
+            write_verify: WRITE_VERIFY_SCHEMA,
             // 创建路径会带上 operation，让调用方能区分"改了文件"与"建了文件"。
             operation: { type: 'string' },
             /**
@@ -2276,8 +2746,8 @@ function registerTools(ctx, sandbox) {
           rawInput: hunks,
         }
       },
-    }),
-  )
+    })
+  lastLegacyTools = { write: writeTool, convert: convertTool, edit: editTool }
 }
 
 export { planHunks } from '../locator-lab/write-path.mjs'

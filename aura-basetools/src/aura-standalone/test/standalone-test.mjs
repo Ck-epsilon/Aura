@@ -34,7 +34,7 @@ const say = (m) => console.log(`\n=== ${m} ===`)
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-standalone-'))
 const cache = path.join(tmp, 'cache') // 观测缓存也放测试目录，绝不写 ~/.aura
-const env = { ...process.env, AURA_CACHE_DIR: cache }
+const env = { ...process.env, AURA_CACHE_DIR: cache, AURA_TEST_EXPOSE_LEGACY: '1' }
 const run = (args, cwd = tmp) => spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8', env })
 const json = (res) => {
   try {
@@ -175,17 +175,16 @@ say('B2 能力清单：capabilities 从引擎常量派生')
 {
   const caps = json(run(['basetools', 'capabilities']))
   const readTool = caps.tools?.find((tool) => tool.name === 'aura_basetools_read')
-  const editTool = caps.tools?.find((tool) => tool.name === 'aura_basetools_edit')
+  const applyTool = caps.tools?.find((tool) => tool.name === 'aura_basetools_apply')
   check(caps.ok === true && caps.langsCount === caps.langs?.length, `langsCount=${caps.langsCount}`, JSON.stringify(caps.langs?.length))
   check(caps.langsCount === 65, '语言表 65 种（与 LANGS 同源）', String(caps.langsCount))
   check(readTool?.modes?.includes('auto') && readTool.modes.includes('map') && readTool.modes.includes('changed'), '读模式含 auto/map/changed', JSON.stringify(readTool?.modes))
-  check(editTool?.addressKinds?.includes('target') && editTool.addressKinds.includes('handle'), '编辑地址档含 target/handle', JSON.stringify(editTool?.addressKinds))
-  check(editTool?.options?.includes('replace_all'), '编辑选项含 replace_all', JSON.stringify(editTool?.options))
-  check(editTool?.options?.includes('require_observation'), '编辑选项含 require_observation', JSON.stringify(editTool?.options))
+  check(applyTool?.addressKinds?.includes('target') && applyTool.addressKinds.includes('handle'), 'apply 地址档含 target/handle', JSON.stringify(applyTool?.addressKinds))
+  check(applyTool?.options?.includes('replace_all'), 'apply 选项含 replace_all', JSON.stringify(applyTool?.options))
+  check(applyTool?.options?.includes('require_observation'), 'apply 选项含 require_observation', JSON.stringify(applyTool?.options))
   check(caps.limits?.multiTargetsMax === 32 && caps.limits?.defaultPruneBudget === 8192 && caps.limits?.contentBudget === 7492, '限制与常量一致', JSON.stringify(caps.limits))
-  check(caps.commands?.includes('basetools doctor') && caps.commands.includes('basetools capabilities') && caps.commands.includes('basetools write'), '命令表含 doctor/capabilities/write', JSON.stringify(caps.commands))
-  const writeTool = caps.tools?.find((tool) => tool.name === 'aura_basetools_write')
-  check(writeTool?.writeSafety?.dsh?.includes('observation-gate') && !writeTool.writeSafety.dsh.includes('transaction'), 'write 能力按入口分：DSH 有观察闸、无事务', JSON.stringify(writeTool?.writeSafety))
+  check(caps.commands?.includes('basetools doctor') && caps.commands.includes('basetools capabilities') && caps.commands.includes('basetools apply'), '命令表含 doctor/capabilities/apply', JSON.stringify(caps.commands))
+  check(applyTool?.writeSafety?.dsh?.includes('observation-gate') && !applyTool.writeSafety.dsh.includes('transaction'), 'apply 能力按入口分：DSH 有观察闸、无事务', JSON.stringify(applyTool?.writeSafety))
 }
 
 // ── B3 平铺 CLI 的空 replace = 删除（0.9.10 评审发现） ─────────────────────
@@ -377,8 +376,8 @@ say('F MCP：initialize / tools/list / tools/call')
   check(byId.get(1)?.result?.serverInfo?.name === 'aura-basetools', 'serverInfo.name = aura-basetools')
   const instructions = byId.get(1)?.result?.instructions
   check(
-    typeof instructions === 'string' && instructions.includes('Prefer the aura_basetools_*') && instructions.includes('aura_basetools_tx'),
-    'initialize 带服务器 instructions（优先 aura + tx）',
+    typeof instructions === 'string' && instructions.includes('Prefer the aura_basetools_*') && instructions.includes('aura_basetools_apply') && instructions.includes('op=tx'),
+    'initialize 带服务器 instructions（read/apply + tx op）',
     String(instructions ?? '').slice(0, 120),
   )
   // 版本号曾经写死在 bin 里（包到 0.4.0，服务对外还报 0.2.1）—— 这里钉住它跟包清单一致
@@ -392,11 +391,11 @@ say('F MCP：initialize / tools/list / tools/call')
   if (manifest !== null) check(byId.get(1)?.result?.serverInfo?.version === manifest.version, `serverInfo.version 跟包一致（${manifest.version}）`, String(byId.get(1)?.result?.serverInfo?.version))
   const tools = byId.get(2)?.result?.tools ?? []
   check(
-    tools.length === 5 &&
-      ['aura_basetools_read', 'aura_basetools_edit', 'aura_basetools_write', 'aura_basetools_convert', 'aura_basetools_tx'].every((name) =>
+    tools.length === 6 &&
+      ['aura_basetools_read', 'aura_basetools_edit', 'aura_basetools_apply', 'aura_basetools_write', 'aura_basetools_convert', 'aura_basetools_tx'].every((name) =>
         tools.some((tool) => tool.name === name),
       ),
-    `tools/list 五个工具（${tools.map((t) => t.name).join(',')}`,
+    `tools/list 六个工具（${tools.map((t) => t.name).join(',')}`,
   )
   const readEnv = JSON.parse(byId.get(3)?.result?.content?.[0]?.text ?? '{}')
   check(readEnv.ok === true && Array.isArray(readEnv.symbols ?? []), 'aura_basetools_read 经 MCP 可用', JSON.stringify(readEnv).slice(0, 120))
@@ -1095,9 +1094,9 @@ say('MT-K MCP：targets 的声明、逐项回执、汇总行与既有形状')
   const tools = byId.get(2)?.result?.tools ?? []
   const schemaOf = (name) => tools.find((t) => t.name === name)?.inputSchema ?? {}
   check(
-    schemaOf('aura_basetools_read').properties?.targets?.type === 'array' && schemaOf('aura_basetools_edit').properties?.targets?.type === 'array',
+    schemaOf('aura_basetools_read').properties?.targets?.type === 'array' && schemaOf('aura_basetools_apply').properties?.targets?.type === 'array',
     'K 两个工具的 inputSchema 都声明了 targets 数组',
-    JSON.stringify({ read: schemaOf('aura_basetools_read').properties?.targets, edit: schemaOf('aura_basetools_edit').properties?.targets }).slice(0, 160),
+    JSON.stringify({ read: schemaOf('aura_basetools_read').properties?.targets, apply: schemaOf('aura_basetools_apply').properties?.targets }).slice(0, 160),
   )
   const batch = envOf(3)
   check(batch.ok === true && batch.entries?.length === 2, 'K file_path 缺席 + targets 在场 ⇒ 不再 BAD_ARGS，逐项照给', JSON.stringify(batch).slice(0, 180))
@@ -1170,12 +1169,12 @@ say('MT-L 句柄寻址：同一份柄、同一次改动 —— 三面同 tier �
   const decl = mcpReplies(
     declScene.mcp([...MCP_HELLO, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, mcpCall(3, 'aura_basetools_read', { file_path: 'a.js', mode: 'lines', lines: [1, 4] })]),
   )
-  const editTool = decl.tools.find((t) => t.name === 'aura_basetools_edit')
+  const editTool = decl.tools.find((t) => t.name === 'aura_basetools_apply')
   const hunkProps = Object.keys(editTool?.inputSchema?.properties?.hunks?.items?.properties ?? {})
   const missing = ['handle', 'line', 'position'].filter((key) => !hunkProps.includes(key))
   check(
     missing.length === 0,
-    'L① MCP 声明面：aura_basetools_edit 的 hunks.items.properties 收得下 handle / line / position',
+    'L① MCP 声明面：aura_basetools_apply 的 hunks.items.properties 收得下 handle / line / position',
     `缺 ${missing.join(',') || '（无）'}；实得 ${hunkProps.join(',')}`,
   )
   const hunkRequired = editTool?.inputSchema?.properties?.hunks?.items?.required ?? []

@@ -32,7 +32,7 @@ const say = (m) => console.log(`\n=== ${m} ===`)
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-observed-'))
 const cache = path.join(tmp, 'cache')
-const env = { ...process.env, AURA_CACHE_DIR: cache }
+const env = { ...process.env, AURA_CACHE_DIR: cache, AURA_TEST_EXPOSE_LEGACY: '1' }
 const run = (args) => spawnSync(process.execPath, [bin, ...args], { cwd: tmp, encoding: 'utf8', env })
 const json = (res) => {
   try {

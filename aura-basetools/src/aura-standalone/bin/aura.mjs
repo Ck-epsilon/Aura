@@ -22,6 +22,7 @@ import {
   openProvider,
   readEnvelope,
   editEnvelope,
+  applyEnvelope,
   flatHunk,
   // 多目标（fs-contract-v2）的引擎绑定：与单目标同一处（`lib/ops.mjs`），bin 里不另找引擎。
   readManyWith,
@@ -77,7 +78,7 @@ let command = argv[0]
  * 有了这份名单，“下一个是已知布尔旗标”才当没带值，**其它以 `--` 开头的东西都当值**。
  * 代价是名单要维护；收益是那个静默丢值的路径从根上消失，而不是靠叫用户改写法。
  */
-const BOOLEAN_FLAGS = new Set(['pretty', 'dry-run', 'plan', 'no-overwrite', 'replace-all', 'require-observation', 'allow-unobserved', 'json'])
+const BOOLEAN_FLAGS = new Set(['pretty', 'dry-run', 'plan', 'no-overwrite', 'replace-all', 'require-observation', 'allow-unobserved', 'json', 'regex', 'case-sensitive', 'ignore-case'])
 const isBooleanFlag = (token) => typeof token === 'string' && BOOLEAN_FLAGS.has(token.replace(/^--/, ''))
 
 /**
@@ -89,8 +90,12 @@ const isBooleanFlag = (token) => typeof token === 'string' && BOOLEAN_FLAGS.has(
  */
 const COMMAND_FLAGS = {
   read: {
-    value: ['cwd', 'file', 'targets', 'mode', 'around', 'lines', 'start-line', 'end-line', 'search', 'since', 'context', 'kind', 'budget', 'max-chars', 'offset', 'limit', 'encoding'],
-    bool: ['pretty', 'coverage', 'structure-handle'],
+    value: ['cwd', 'file', 'targets', 'mode', 'around', 'lines', 'start-line', 'end-line', 'search', 'since', 'context', 'kind', 'budget', 'max-chars', 'offset', 'limit', 'encoding', 'entity', 'glob', 'max-results'],
+    bool: ['pretty', 'coverage', 'structure-handle', 'regex', 'case-sensitive', 'ignore-case'],
+  },
+  apply: {
+    value: ['cwd', 'file', 'entity', 'op', 'change', 'new-name', 'scope', 'evidence', 'verify', 'transaction', 'expect', 'hunks', 'targets', 'create', 'content', 'to', 'from', 'bom', 'eol', 'action'],
+    bool: ['pretty', 'dry-run', 'no-overwrite', 'allow-unobserved', 'repair-double-encoding', 'require-observation', 'retry'],
   },
   edit: {
     value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'structure', 'line', 'position', 'replace', 'expect', 'near', 'eol', 'verify', 'tx', 'encoding'],
@@ -175,8 +180,11 @@ const USAGE = [
   '  aura basetools read  --file <路径> [--mode map|digest|full|around|lines|search|changed]',
   '             [--around <符号>] [--lines <a,b>|<a-b>|<n>] [--start-line <n> --end-line <n>]',
   '             [--search <子串>] [--context <n>] [--kind <类型>] [--budget <字符数>] [--since <令牌>] [--max-chars <n>] [--offset <n> --limit <n>]',
-  // `--file` 指向**目录**时直接给一张仓库地图（模块/目录/依赖方向），不需要额外旗标。
+  '             [--entity <选择器>] [--regex] [--glob <模式>] [--case-sensitive|--ignore-case] [--max-results <n>]',
+  // `--file` 指向**目录**时：给 `--search`/`--pattern` ⇒ 仓库级 grep；否则给一张仓库地图。
+  '             （--file 传目录 + --search ⇒ 仓库级 grep：递归、忽略 node_modules/.git、跳过二进制）',
   '             （--file 传目录 ⇒ 仓库地图：模块清单 + 目录骨架 + 被依赖最多的模块 + 入口点）',
+  '             （--entity ⇒ 一个实体：签名/正文 + 引用 + 证据；配合 apply 使用）',
   '  aura basetools read  --targets <json|@文件>                               # 一次读多个目标（≤32 项；与 --file 互斥）',
   '  aura basetools edit  --targets <json|@文件> [--dry-run|--plan] [--verify "命令"]  # 一次改多个文件（先全量规划，任一失败则零写入）',
   "  aura basetools edit  --file <路径> --create <内容|@文件>                     # 建文件（不必再给 --hunks）",
@@ -189,6 +197,9 @@ const USAGE = [
   '   aura basetools edit  --file <路径> --handle <h…> --line <段内行号> --replace <文本>            # 只换区间内第 k 行（1-based，从区间首行数起）',
   '   aura basetools edit  --file <路径> --handle <h…> --position before|after --replace <文本>  # 在区间边界插入，区间本身不动',
   "              （--line / --position 是从属键：只有与 --handle 同时给才成立，单独给不构成一次编辑）",
+  '  aura basetools apply --file <路径> --entity <选择器> [--op replace-body|rename] [--change <正文|@文件>] [--new-name <名字>] [--scope span|file]',
+  '             [--evidence <json|@文件>] [--dry-run] [--verify "命令"] [--transaction <id>] [--expect <原文>]',
+  '             （replace-body = 换整个实体正文；rename = 只换 ident 词元，注释/字符串不动；apply 自己建立新鲜观测）',
   '  aura basetools tx begin               开一个跨调用事务（后续 edit/write 用 --tx <id> 加入）',
   '  aura basetools tx commit --id <id> [--verify "命令"]  提交；verify 失败/文件被外部改过 ⇒ 拒绝并回滚',
   '  aura basetools tx rollback --id <id>  回滚整个事务（按 afterVersion 校验）',
@@ -209,6 +220,10 @@ const USAGE = [
   '  aura basetools edit --file new.md --create @body.md                             # @文件 ——推荐给长内容',
   '  aura basetools edit --file new.md --create=---                                  # 值以 -- 开头时必须用 = 形式',
   '  aura basetools read --file ./src                                                # 目录 ⇒ 仓库地图',
+  '  aura basetools read --file ./src --search TODO --glob "*.js" --regex            # 目录 ⇒ 仓库级 grep',
+  '  aura basetools read --file a.mjs --entity function:alpha                        # 读一个实体 + 引用 + 证据',
+  '  aura basetools apply --file a.mjs --entity function:alpha --op rename --new-name omega',
+  '  aura basetools apply --file a.mjs --entity function:alpha --change @body.js     # 换整个实体正文',
   '',
   'PowerShell 两个已踩过的坑：',
   '  · 反引号 `n 写进 JSON 字符串会变成控制字符（JSON 不允许）⇒ 用 --hunks-file 或单引号 heredoc；',
@@ -321,7 +336,7 @@ if (command === '--version' || command === '-v') emit({ ok: true, version: VERSI
  * 旧顶层动词只给**迁移提示**，不再作为别名执行——保留别名等于保留未来的撞名。
  * 只提示、不执行：`aura basetools read` 不会偷偷改文件。
  */
-const MOVED_COMMANDS = new Set(['read', 'outline', 'edit', 'write', 'tx', 'mcp', 'doctor', 'capabilities'])
+const MOVED_COMMANDS = new Set(['read', 'outline', 'edit', 'apply', 'write', 'tx', 'mcp', 'doctor', 'capabilities'])
 if (!namespaced && MOVED_COMMANDS.has(command)) {
   emit(
     {
@@ -457,7 +472,7 @@ if (command === 'doctor') {
     const tools = String(res.stdout ?? '').split('\n').flatMap((line) => {
       try { return JSON.parse(line).result?.tools?.map((tool) => tool.name) ?? [] } catch { return [] }
     })
-    add('mcp-handshake', res.status === 0 && tools.includes('aura_basetools_read') && tools.includes('aura_basetools_edit'), `exit=${res.status} tools=${tools.join(',') || '(none)'}`)
+    add('mcp-handshake', res.status === 0 && tools.includes('aura_basetools_read') && tools.includes('aura_basetools_apply'), `exit=${res.status} tools=${tools.join(',') || '(none)'}`)
   } else {
     add('mcp-handshake', false, 'skipped: mcp bin missing')
   }
@@ -550,11 +565,25 @@ if (command === 'read' || command === 'outline') {
     limit: typeof flag('limit') === 'string' ? Number(flag('limit')) : undefined,
     // 光写 `--max-chars` 不带值时 flag() 回 true，Number(true)=1 会变成"预算 1 字符"这种怪值
     maxChars: typeof flag('max-chars') === 'string' ? Number(flag('max-chars')) : undefined,
+    // entity-first：实体选择器 / 目录 grep 的匹配面（值与形状判据都在 lib/ops.mjs）。
+    entity: typeof flag('entity') === 'string' ? flag('entity') : undefined,
+    regex: has('regex') ? true : undefined,
+    glob: typeof flag('glob') === 'string' ? flag('glob') : undefined,
+    case_sensitive: has('ignore-case') ? false : has('case-sensitive') ? true : undefined,
+    max_results: typeof flag('max-results') === 'string' ? Number(flag('max-results')) : undefined,
     encoding: encodingFlag,
     // 覆盖集：只在显式请求时出现（不回改既有回执形状）。
     ...(has('coverage') ? { coverage: true } : {}),
     ...(has('structure-handle') ? { structure_handle: true } : {}),
   })
+  /**
+   * 图片：CLI 不往终端倒 base64 —— 只回元数据，并说明字节为什么不在。
+   * 需要字节的调用方走 MCP（原生 image content）。
+   */
+  if (env.ok === true && env.image !== undefined) {
+    const { image, ...meta } = env
+    emit({ ...meta, image_data: 'omitted (MCP returns bytes)' }, 0)
+  }
   emit(env, env.ok ? 0 : 2)
 }
 
@@ -689,6 +718,94 @@ if (command === 'edit') {
     ...(has('retry') ? { retry: true } : {}),
     ...(typeof flag('verify') === 'string' ? { verify: flag('verify') } : {}),
     ...(typeof flag('tx') === 'string' ? { transaction: flag('tx') } : {}),
+  })
+  emit(env, env.ok ? 0 : 2)
+}
+
+/**
+ * `aura basetools apply`：唯一写入口（entity / patch / write / convert / tx）。
+ * 参数面只做形状收敛；op 推断与各操作的校验在 `lib/ops.mjs` 的 applyEnvelope。
+ */
+if (command === 'apply') {
+  const file = typeof flag('file') === 'string' ? flag('file') : undefined
+  const rawEntity = flag('entity')
+  let entity = rawEntity
+  if (typeof rawEntity === 'string' && rawEntity.trim().startsWith('{')) {
+    try {
+      entity = JSON.parse(rawEntity)
+    } catch (error) {
+      emit({ ok: false, error: `--entity 不是合法 JSON：${error.message}；也可以直接给选择器字符串（如 function:alpha）`, code: 'USAGE' }, 1)
+    }
+  }
+  const fileOrValue = (value) =>
+    typeof value === 'string' && value.startsWith('@') ? readArgumentFile(value.slice(1), 'apply') : value
+  const parseJsonFlag = (name, kind) => {
+    const raw = flag(name)
+    if (raw === undefined) return undefined
+    if (typeof raw !== 'string') usage(`apply 的 --${name} 需要一个 JSON 字符串或 @文件`)
+    const text = (raw.startsWith('@') ? readArgumentFile(raw.slice(1), `--${name}`) : raw).replace(/^\uFEFF/, '')
+    let value
+    try {
+      value = JSON.parse(text)
+    } catch (error) {
+      usage(`--${name} 不是合法 JSON：${error.message}`)
+    }
+    if (kind === 'array' && !Array.isArray(value)) usage(`--${name} 需要数组`)
+    if (kind === 'object' && (value === null || typeof value !== 'object' || Array.isArray(value))) usage(`--${name} 需要对象`)
+    return value
+  }
+  const usage = (message) => emit({ ok: false, error: message, code: 'USAGE' }, 1)
+  const change = fileOrValue(flag('change'))
+  const content = fileOrValue(flag('content'))
+  const create = fileOrValue(flag('create'))
+  const hunks = parseJsonFlag('hunks', 'array')
+  const targets = parseJsonFlag('targets', 'array')
+  const evidence = parseJsonFlag('evidence', 'object')
+  const op =
+    flag('op') ??
+    (content !== undefined
+      ? 'write'
+      : flag('to') !== undefined
+        ? 'convert'
+        : hunks !== undefined || targets !== undefined || create !== undefined
+          ? 'patch'
+          : flag('action') !== undefined
+            ? 'tx'
+            : entity !== undefined
+              ? (flag('new-name') !== undefined ? 'rename' : 'replace-body')
+              : undefined)
+  if (op === undefined) usage('apply 需要 --op <replace-body|rename|patch|write|convert|tx> 或可推断的字段')
+  if ((op === 'replace-body' || op === 'rename') && (typeof file !== 'string' || typeof entity === 'undefined')) {
+    usage(`${op} 需要 --file 与 --entity`)
+  }
+  if ((op === 'write' || op === 'convert') && typeof file !== 'string') usage(`${op} 需要 --file`)
+  if (op === 'patch' && typeof file !== 'string' && targets === undefined) usage('patch 需要 --file 或 --targets')
+  const env = await applyEnvelope(provider, {
+    file,
+    entity,
+    op,
+    change,
+    newName: flag('new-name'),
+    scope: flag('scope'),
+    evidence,
+    hunks,
+    targets,
+    create,
+    content,
+    noOverwrite: has('no-overwrite'),
+    allowUnobserved: has('allow-unobserved'),
+    eol: flag('eol'),
+    to: flag('to'),
+    from: flag('from'),
+    bom: flag('bom'),
+    repairDoubleEncoding: has('repair-double-encoding'),
+    action: flag('action'),
+    requireObservation: has('require-observation'),
+    retry: has('retry'),
+    dryRun: has('dry-run'),
+    verify: flag('verify'),
+    transaction: flag('transaction'),
+    expect: flag('expect'),
   })
   emit(env, env.ok ? 0 : 2)
 }
