@@ -494,6 +494,7 @@ const ENGINE_MODULES = [
   'read-core.mjs',
   // read-core 静态 import 它（文档/配置的结构目录）；镜像漏拷 = 回路测试直接 ERR_MODULE_NOT_FOUND。
   'doc-structure.mjs',
+  'preflight.mjs',
   'args.mjs',
   'handle-core.mjs',
   'mock-ctx.mjs',

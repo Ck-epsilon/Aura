@@ -174,7 +174,13 @@ say('=== E. MCP：JSON-RPC over stdio 的整条往返 ===')
   const byId = new Map(replies.map((r) => [r.id, r]))
   check(byId.get(1)?.result?.serverInfo?.name === 'aura-basetools', 'E1 initialize 握手带回 serverInfo', JSON.stringify(byId.get(1)?.result?.serverInfo ?? null))
   const tools = byId.get(2)?.result?.tools?.map((t) => t.name) ?? []
-  check(tools.includes('aura_basetools_read') && tools.includes('aura_basetools_edit') && tools.includes('aura_basetools_write') && tools.includes('aura_basetools_tx'), 'E2 tools/list 列出读/改/整写/事务四个工具', tools.join(','))
+  check(
+    ['aura_basetools_read', 'aura_basetools_edit', 'aura_basetools_write', 'aura_basetools_convert', 'aura_basetools_tx'].every((name) =>
+      tools.includes(name),
+    ),
+    'E2 tools/list 列出读/改/整写/转换/事务五个工具',
+    tools.join(','),
+  )
   const readText = byId.get(3)?.result?.content?.[0]?.text ?? ''
   check(typeof byId.get(3)?.result?.structuredContent?.version === 'string' || /version/.test(readText), 'E3 读回的令牌在回包里', readText.slice(0, 60))
   const editRes = byId.get(4)?.result

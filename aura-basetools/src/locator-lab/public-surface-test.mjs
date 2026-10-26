@@ -105,7 +105,10 @@ const mkCtx = (registered, hidden) => ({
   systemPrompt: { section: (s) => registered.push({ __section: s }) },
 })
 const names = []
-const EXPECTED_TOOLS = { 'aura-read': ['aura_basetools_read'], 'aura-edit': ['aura_basetools_edit', 'aura_basetools_write'] }
+const EXPECTED_TOOLS = {
+  'aura-read': ['aura_basetools_read'],
+  'aura-edit': ['aura_basetools_convert', 'aura_basetools_edit', 'aura_basetools_write'],
+}
 for (const dir of ['aura-read', 'aura-edit']) {
   const registered = []
   shells[dir].apply(mkCtx(registered, false))
@@ -115,7 +118,11 @@ for (const dir of ['aura-read', 'aura-edit']) {
   check(JSON.stringify(got) === JSON.stringify(want), `${dir}: 注册的工具恰好是 ${want.join(' / ')}`, `实际 ${got.join(' / ')}`)
   names.push(...tools.map((t) => t.name))
 }
-check(names.sort().join(',') === 'aura_basetools_edit,aura_basetools_read,aura_basetools_write', '三个工具名恰好是 aura_basetools_read / aura_basetools_edit / aura_basetools_write（模型与文档都按这三个名字调）', names.join(','))
+check(
+    names.sort().join(',') === 'aura_basetools_convert,aura_basetools_edit,aura_basetools_read,aura_basetools_write',
+    '四个工具名恰好是 read / edit / write / convert（模型与文档都按这些名字调）',
+    names.join(','),
+  )
 
 say('')
 say('=== C. 参数键的唯一来源：守卫名单 == schema 声明 == 兼容层实装 ===')
@@ -137,7 +144,8 @@ say('=== C. 参数键的唯一来源：守卫名单 == schema 声明 == 兼容�
   // `--old <原文>`（`replace_all` 依赖它）。
   // `line` / `position` **不是**地址键——它们只在 `handle` 同时在场时才成立（拒绝那一半在
   // `write-path.mjs` 的 `planHunks` 里）。
-  const flat = ['target', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle', 'old']
+  // `structure`（0.23）：结构路径地址（symbol/section/key），平铺形状也可以直接给。
+  const flat = ['target', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle', 'old', 'structure']
   const missing = flat.filter((k) => !editKeys.includes(k))
   check(missing.length === 0, 'aura_basetools_edit 的名单覆盖全部平铺地址键（否则守卫拒自家实装的形状）', missing.join(','))
   const { FLAT_ADDRESS_KEYS } = await import(asUrl(path.join(pkgRoot, 'src', 'locator-lab', 'args.mjs')))

@@ -116,7 +116,10 @@ const DISPATCH_SNIPPETS = {
  *     而 B01 跟着 **12 → 11**（少的就是 F0040）。它不是「引擎少认了一条」，
  *     是「这条调用本来就不需要改」。
  */
-const EXPECTED_BUCKETS = { ok: 143, fail: 147, needs_choice: 15, already_applied: 27, unrepresentable: 17, na: 4 }
+// 2026-10-26：写前预检上线后，F0191（一次会把 JSON 改坏的编辑）从 ok 变成 fail ⇒
+// ok 143→142、fail 147→148。它不是 B01：地址形态已经解析成功，是**写入内容**被拒，
+// 所以 classify 用 PREFLIGHT_CODES 把它挡在 B01 之外（B01 仍是 11，名单不变）。
+const EXPECTED_BUCKETS = { ok: 142, fail: 148, needs_choice: 15, already_applied: 27, unrepresentable: 17, na: 4 }
 const EXPECTED_B01_TOTAL = 11
 const EXPECTED_B01_IDS = [
   'F0017', 'F0021', 'F0059', 'F0060', 'F0073',
@@ -342,7 +345,11 @@ function evidenceOf(entry, content, res) {
 }
 
 /** 有序阶梯：每条恰好落在第一个命中项上（与 residual-census 逐字同形）。 */
+/** 写前预检的码：地址已经解析成功，拒绝的是“写下去之后的内容”——不属于 B01。 */
+const PREFLIGHT_CODES = new Set(['PATCH_STRUCTURE_BROKEN', 'PATCH_LONE_CR', 'PATCH_DESTRUCTIVE_UNOBSERVED'])
+
 function classify(entry, f) {
+  if (PREFLIGHT_CODES.has(f.code)) return 'preflight_refused'
   if (f.tool === 'aura_read') return 'na_read'
   if (f.oldChars === null) return 'no_quote'
   if (f.quoteKind !== 'expect') return 'not_text_quote'

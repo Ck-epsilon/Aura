@@ -52,7 +52,7 @@ export function buildCapabilities() {
       {
         name: 'aura_basetools_edit',
         addressKinds: [...new Set([...FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
-        options: ['replace_all', 'require_observation', 'verify'],
+        options: ['replace_all', 'require_observation', 'retry', 'verify'],
         /**
          * 寻址安全等级（反馈 D7）：机器可读地说明“哪种地址自带校验”。
          * 旧清单只有按**入口**分的 writeSafety，读起来像“写都被 gate”，
@@ -65,7 +65,7 @@ export function buildCapabilities() {
          */
         addressSafety: {
           contentVerified: ['old', 'handle'],
-          structural: ['target'],
+          structural: ['target', 'structure'],
           coordinate: ['lines', 'start_line', 'end_line', 'line_cue', 'anchor'],
           coordinateNeedsObservation: false,
         },
@@ -84,6 +84,9 @@ export function buildCapabilities() {
         name: 'aura_basetools_tx',
         actions: ['begin', 'commit', 'rollback', 'status'],
         options: ['verify'],
+      },
+      {
+        name: 'aura_basetools_convert',
       },
       {
         name: 'aura_basetools_write',

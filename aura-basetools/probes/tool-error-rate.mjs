@@ -112,6 +112,14 @@ const ids = (list, code, judgement, reason) =>
  */
 const FAULT_LEDGER = new Map([
   /**
+   * ── PATCH_STRUCTURE_BROKEN（1 条）——判「工具级故障」──
+   *
+   * 为什么它不走结果通道：这是**写前预检**的拒绝（这次编辑会把 JSON 改坏）。事实是“拒绝”，
+   * 不是“没找到 / 多处命中”，壳层的三态结果没有对应的恢复动作；要收进白名单得新增一个
+   * outcome 类（schema 变更），不在本波。回执仍带可执行的 message 与 code。
+   */
+  ...ids('F0191', 'PATCH_STRUCTURE_BROKEN', FAULT, '写前预检拒绝：编辑会把 JSON 改坏；三态结果没有对应的恢复动作，暂留错误通道'),
+  /**
    * ── PATCH_AMBIGUOUS（15 条）——判「其实可判定，建议收进白名单」──
    *
    * 为什么它可判定：这个码意味着「你要改的这段文字在文件里有好几处都像」—— 引擎看懂了意图，

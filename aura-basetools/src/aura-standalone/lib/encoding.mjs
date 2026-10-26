@@ -37,8 +37,37 @@ const BOMS = [
 /** 探测候选（顺序 = 并列时的优先级；windows-1252 是最终兜底，任何字节都能解码）。 */
 export const ENCODING_CANDIDATES = ['gb18030', 'shift_jis', 'euc-kr', 'big5', 'windows-1252']
 
-/** 本工具能读能写的编码（UTF-32 只读，不在此列）。`capabilities.textEncodings` 取这一份。 */
-export const SUPPORTED_ENCODINGS = ['utf-8', 'utf-16le', 'utf-16be', 'gb18030', 'shift_jis', 'euc-kr', 'big5', 'windows-1252']
+/**
+ * 本工具能读能写的编码（UTF-32 只读，不在此列）。`capabilities.textEncodings` 取这一份。
+ *
+ * 单字节代码页都在：它们不进探测候选（单字节解码永远不会失败，会抢 CJK 的判决），
+ * 但**显式指定**时与多字节编码走同一套反向表（懒建、逐字节写回）。
+ */
+export const SUPPORTED_ENCODINGS = [
+  'utf-8',
+  'utf-16le',
+  'utf-16be',
+  'gb18030',
+  'shift_jis',
+  'euc-kr',
+  'big5',
+  'windows-1252',
+  'windows-1250',
+  'windows-1251',
+  'windows-1253',
+  'windows-1254',
+  'windows-1255',
+  'windows-1256',
+  'windows-1257',
+  'windows-1258',
+  'iso-8859-2',
+  'iso-8859-5',
+  'iso-8859-7',
+  'iso-8859-9',
+  'iso-8859-15',
+  'koi8-r',
+  'koi8-u',
+]
 
 /** 不支持“回编码”的编码（Node 能解码，但这里不建表）：UTF-32 只读。 */
 const READ_ONLY_ENCODINGS = new Set(['utf-32le', 'utf-32be'])
@@ -61,6 +90,102 @@ function bomOf(buffer) {
     }
   }
   return null
+}
+
+/**
+ * 双重编码检测：文本是不是“原本的 UTF-8 字节被当成 Latin-1/GBK 又存了一次”的产物。
+ *
+ * 只认**可逆**的那一类：能拿当前文本按原编码还原出字节、再按 UTF-8 解出**更像正文**的文本。
+ * `锟斤拷` 那种（UTF-8 解码失败后被替换字符落盘）不可逆，这里**不假装能救**——返回 null。
+ *
+ * 判据故意保守：解出来的文本必须有 ≥3 个汉字，而当前文本里一个汉字都没有。
+ * 宁可漏报，不可把一段合法的法文/代码字符当乱码“修复”掉。
+ */
+export function detectDoubleEncoding(text) {
+  if (typeof text !== 'string' || text.length === 0) return null
+  if (/[\u4e00-\u9fff]/u.test(text)) return null // 已有汉字：不是这一类乱码
+  const latin1 = countLatin1Supplement(text)
+  if (latin1 >= text.length * 0.5 && latin1 >= 3) {
+    try {
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(text, 'latin1'))
+      if (hanCount(decoded) >= 3) return { kind: 'latin1-then-utf8', via: 'latin1' }
+    } catch {
+      /* 不是可逆的一类 */
+    }
+  }
+  try {
+    const bytes = encodeText(text, { encoding: 'gb18030', bom: [] })
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    if (hanCount(decoded) >= 3) return { kind: 'gb18030-then-utf8', via: 'gb18030' }
+  } catch {
+    /* 不是可逆的一类 */
+  }
+  return null
+}
+
+/** 把检测到的双重编码还原成正文（纯函数；不可逆时抛错）。 */
+export function repairDoubleEncoding(text, detected) {
+  if (detected === null || detected === undefined) throw Object.assign(new Error('no double-encoding detected'), { code: 'CONVERT_NO_DOUBLE_ENCODING' })
+  const bytes = detected.via === 'latin1' ? Buffer.from(text, 'latin1') : encodeText(text, { encoding: 'gb18030', bom: [] })
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+}
+
+function countLatin1Supplement(text) {
+  let count = 0
+  for (const ch of text) {
+    const code = ch.codePointAt(0)
+    if (code >= 0x80 && code <= 0xff) count += 1
+  }
+  return count
+}
+
+function hanCount(text) {
+  let count = 0
+  for (const ch of text) {
+    const code = ch.codePointAt(0)
+    if (code >= 0x4e00 && code <= 0x9fff) count += 1
+  }
+  return count
+}
+
+/**
+ * 无 BOM UTF-16 的端序推断：只看 NUL 的**位置分布**。
+ * 返回 'utf-16le' / 'utf-16be' / null。
+ */
+function inferBomlessUtf16(buffer) {
+  if (buffer.length < 4 || buffer.length % 2 !== 0) return null
+  let zeros = 0
+  let evenZeros = 0
+  let oddZeros = 0
+  for (let i = 0; i < buffer.length; i += 1) {
+    if (buffer[i] !== 0) continue
+    zeros += 1
+    if (i % 2 === 0) evenZeros += 1
+    else oddZeros += 1
+  }
+  if (zeros < buffer.length * 0.15) return null
+  if (oddZeros >= zeros * 0.85) return 'utf-16le'
+  if (evenZeros >= zeros * 0.85) return 'utf-16be'
+  return null
+}
+
+/**
+ * 控制符/替换符比例过高就不是“干净文本”。
+ * 无 BOM 的 UTF-16 推断只针对**以 ASCII 为主**的文本（纯 CJK 的 UTF-16 几乎没有 NUL，
+ * 信息上不可判）；所以解出来的非 ASCII 码点必须很少——否则一段带 NUL 的二进制字节
+ * 会被误当成 UTF-16。
+ */
+function plausibleText(text) {
+  let bad = 0
+  let wide = 0
+  for (const ch of text) {
+    const code = ch.codePointAt(0)
+    if (code === 0xfffd) return false
+    if (code > 0x7e) wide += 1
+    if (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) bad += 1
+  }
+  if (wide > text.length * 0.1) return false
+  return bad <= Math.max(1, text.length * 0.01)
 }
 
 /** ASCII 之外是否还有字节：纯 ASCII 不必猜，UTF-8 就是对的。 */
@@ -205,7 +330,21 @@ export function probeEncoding(buffer, { hint } = {}) {
   }
 
   if (buffer.includes(0)) {
-    // 无 BOM 且含 NUL：UTF-16 猜不准端序，按二进制拒绝（与既有 FS_NOT_TEXT 行为一致）。
+    /**
+     * 无 BOM 的 UTF-16：ASCII 为主的文本，NUL 会集中在奇（LE）或偶（BE）位。
+     * 这是可判的：≥15% 的字节是 NUL、且 ≥85% 的 NUL 落在同一侧。
+     * 解出来必须是干净文本（无替换符、控制符不异常），否则仍按二进制拒。
+     * 纯 CJK 的 UTF-16 几乎没有 NUL，信息上不可判——那时仍然拒绝（不猜）。
+     */
+    const inferred = inferBomlessUtf16(buffer)
+    if (inferred !== null) {
+      const probe = { encoding: inferred, bom: [], confidence: 'medium', alternatives: [inferred === 'utf-16le' ? 'utf-16be' : 'utf-16le'], ...roundTripVerdict(buffer, inferred, []), readOnly: false, explicit: false }
+      if (probe.roundTrip === true) {
+        const decoded = decoderFor(inferred).decode(Buffer.from(buffer))
+        if (!decoded.includes('\uFFFD') && plausibleText(decoded)) return probe
+      }
+    }
+    // 无 BOM 且判不出端序：按二进制拒绝（与既有 FS_NOT_TEXT 行为一致）。
     return { encoding: null, bom: [], confidence: 'high', alternatives: [], roundTrip: false, readOnly: true }
   }
 

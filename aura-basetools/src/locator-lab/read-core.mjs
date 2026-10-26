@@ -29,7 +29,7 @@ import { docKindOf, indexDocument } from './doc-structure.mjs'
  * `handle-core.mjs` 是叶子（导入表为空），因此这条 import **不构成环**——
  * 否则 `write-path → read-core → handle-core → read-core` 会让模块求值顺序依赖入口。
  */
-import { HANDLE_MAX_PER_RECEIPT, fnv1a32, handleCharsFor, mintHandle } from './handle-core.mjs'
+import { HANDLE_MAX_PER_RECEIPT, fnv1a32, handleCharsFor, mintHandle, mintStructureHandle } from './handle-core.mjs'
 /**
  * 参数收敛层（叶子模块，导入表为空 ⇒ 这条 import 也不构成环）。
  *
@@ -883,6 +883,37 @@ export function rememberRead(filePath, version, source, byteOrderMark = false, i
  * 从没读过、或那一条已被淘汰 ⇒ null，语义是"没观测过"（闸门不拦，但回执会带 unverified_region）。
  * 每一模式的读都会记账（见 {@link readWith} 的 render），不只是 `changed`。
  */
+/**
+ * 覆盖集：这次回执展示了哪些行、没展示哪些行。
+ *
+ * 输入只有两个事实：引擎自己的 `shown`（`"10-20"` / `"none"`）与总行数。
+ * 输出用**区间字符串**（`"1-9"` / `"21-40"`），与 `shown` 同一套写法：
+ * 调用方不需要额外解析一层嵌套数组，锚点也能直接对着回执核。
+ *
+ * 它回答的是“行覆盖”，不是“知识覆盖”：`map`/`digest` 给了结构但没给正文，
+ * 这里照实报 `covered: []`（正文一行都没展示）。
+ */
+export function coverageOf(shown, totalLines) {
+  const total = Number.isInteger(totalLines) && totalLines > 0 ? totalLines : null
+  if (total === null) return null
+  const covered = []
+  const match = typeof shown === 'string' ? /^(\d+)-(\d+)$/.exec(shown) : null
+  if (match !== null) {
+    const start = Number(match[1])
+    const end = Number(match[2])
+    if (start >= 1 && end >= start && end <= total) covered.push([start, end])
+  }
+  const notCovered = []
+  let cursor = 1
+  for (const [start, end] of covered) {
+    if (start > cursor) notCovered.push([cursor, start - 1])
+    cursor = Math.max(cursor, end + 1)
+  }
+  if (cursor <= total) notCovered.push([cursor, total])
+  const fmt = ([start, end]) => (start === end ? `${start}` : `${start}-${end}`)
+  return { totalLines: total, covered: covered.map(fmt), notCovered: notCovered.map(fmt) }
+}
+
 export function latestObservation(filePath, evidence, identityKey = undefined) {
   if (typeof filePath !== 'string') return null
   /**
@@ -2285,6 +2316,8 @@ export function readWith(source, request = {}) {
       contentBudget: budget,
       ...(mode === 'changed' ? {} : { version }),
       ...(auto === null ? {} : { auto: auto.reason }),
+      // 结构句柄（0.23，opt-in）：窗口**恰好**覆盖一个符号时，回执带 `s…:symbol=名字`。
+      ...(request.structureHandle === true ? { structureHandle: true } : {}),
     }
     // 符号索引只建一次：`map`/`digest`/`around` 本来就要用，而 `lines`/`search` 现在也要
     // （给裸行号附上可重新定位的引用）。没语言配置（未索引扩展名）时为 null，各处自行降级。
@@ -3099,6 +3132,24 @@ function windowEnvelope(
     handleContext === null || kept === 0
       ? null
       : handleFor(handleContext.ledgerKey, lines, handleContext.byteOrderMark, from, deliveredTo)
+  /**
+   * 结构句柄：只在调用方显式要、且交付窗口**恰好**等于一个符号的跨度时发。
+   * 不在跨度上就不发——“长得差不多”的区间不能冒充一个结构节点。
+   */
+  const structureHandle =
+    base.structureHandle !== true || handleContext === null || kept === 0 || symbolsIndex === null
+      ? null
+      : (() => {
+          const hit = symbolsIndex.symbols.find((symbol) => symbol.startLine === from && symbol.endLine === deliveredTo)
+          if (hit === undefined) return null
+          return mintStructureHandle({
+            ledgerKey: handleContext.ledgerKey,
+            regionText: lines.slice(from - 1, deliveredTo).join('\n'),
+            byteOrderMark: handleContext.byteOrderMark,
+            kind: 'symbol',
+            path: hit.name,
+          })
+        })()
   const rowsWithHandle = headHandle === null ? rows : [withHandleOnLine(rows[0], headHandle), ...rows.slice(1)]
   const out = {
     ...base,
@@ -3119,6 +3170,7 @@ function windowEnvelope(
     // 与接在头行上的那一个**是同一个值**（`headHandle` 只算一次）：两处各算一次的话，
     // 以后任何一处改了口径，结构化字段与模型看到的文本就会静默地对不上。
     ...(headHandle === null ? {} : { handle: headHandle }),
+    ...(structureHandle === null ? {} : { structure_handle: structureHandle }),
     text: rowsWithHandle.join('\n'),
   }
   const omissions = []

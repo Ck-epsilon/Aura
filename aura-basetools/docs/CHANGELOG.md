@@ -8,6 +8,48 @@
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
 
+## 0.23.0：结构地址 / 结构句柄 / 双重编码修复 / convert 全面
+
+- **结构地址**（`edit` 的 `structure` 字段）：`symbol:<名字>` / `section:<标题>` / `key:<点号路径>`。
+  按结构定位而不是坐标：行号漂移、**整段正文被外部改写**后仍指得到；歧义/找不到 ⇒
+  `PATCH_STRUCTURE_AMBIGUOUS` / `PATCH_STRUCTURE_NOT_FOUND`，零写入。符号解析复用 `resolveTarget`
+  （支持 `function:foo`、`Outer/Inner`、`#n`），节/键走 `doc-structure` 的索引。
+- **结构句柄**：`read --structure-handle` 在窗口**恰好**覆盖一个符号时发 `s<id><fp>:symbol=<name>`；
+  解析时按符号重定位并比对指纹（内容变了照常改，因为地址是路径而不是字节）。
+  与行号句柄同族：身份标签不符 ⇒ `PATCH_HANDLE_IDENTITY_MISMATCH`。
+- **双重编码检测/修复**：`diagnose` 报 `doubleEncoding`；`convert --repair-double-encoding` 还原
+  “UTF-8 字节被当 Latin-1/GBK 又存了一次”的可逆损坏；`锟斤拷` 这类不可逆的明确拒绝。
+- **convert 上 MCP 与 DSH 面**：MCP 新增 `aura_basetools_convert`（全编码）；DSH 新增同名工具，
+  受宿主 `writeText` 只能写 UTF-8 的契约限制，**目标只支持 utf-8**（其余走 CLI）。
+- **工具数**：MCP 5（read/edit/write/convert/tx）；DSH 4（read/edit/write/convert）。
+- **判据**：`structure-test` 16；`encoding-test` 61；`public-surface`/`capabilities` 随工具面更新；
+  全量闸 exit 0。
+
+## 0.22.0：错误闭环（预检 / 重定位 / 体检 / 转换 / 覆盖集）
+
+这一版的目标从“降低错误率”改成“缩短错误闭环”：预检率、检测/定位/修复时延四个数。
+
+- **写前预检**（写盘之前，在“计划内容”上跑）：
+  - JSON 改前可解析、改后不可 ⇒ `PATCH_STRUCTURE_BROKEN`；
+  - Markdown 围栏配平 → 不配平 ⇒ 同上；
+  - 替换文本引入 lone CR ⇒ `PATCH_LONE_CR`；
+  - 未读过的文件一次删掉 ≥30 行且 ≥30% ⇒ `PATCH_DESTRUCTIVE_UNOBSERVED`；
+  - `write` 整份替换是显式逃生口：同样的坏结构降为 `preflight_warnings`，写后回执带 `structure: broken`。
+- **写后结构状态**：`structure` 只在坏的时候出现（JSON / Markdown），既有成功回执逐字节不变。
+- **`edit --retry`**（MCP / DSH 同名参数）：地址过期时用上次读到的原文在现文里整行唯一匹配，
+  重放并回 `rebased: [{from,to}]`；找不到 / 多处命中仍拒绝。`dry_run` 也预演出同一个 rebased。
+- **`diagnose`**（CLI）：只读体检——编码/置信度/来源、BOM、crlf/lf/cr 普查、lone CR、结构是否可解析。
+- **`convert`**（CLI）：零 token 的本地变换（`--to/--from/--bom/--eol/--dry-run`），
+  原子 CAS 写 + 文本相等校验；目标编码表示不了 ⇒ `ENCODING_UNREPRESENTABLE`，零写入。
+- **编码补全**：单字节代码页 cp1250–1258 / ISO-8859-2/5/7/9/15 / KOI8-R/U 可显式读写；
+  无 BOM UTF-16 按 NUL 奇偶位推断（纯 CJK 仍拒）；短 CJK 文件在同目录 ≥5 个高置信兄弟、
+  ≥90% 一致时用目录先验，再逐字节可逆复核，回执标 `encoding_source: "directory-prior"`。
+- **覆盖集**：`read --coverage`（MCP / DSH）给 `coverage: {totalLines, covered, notCovered}`
+  （区间字符串）；只有显式请求才出现。
+- **判据**：`preflight-test` 29、`retry-test` 19、`coverage-test` 7、`encoding-test` 54；
+  探针 `probes/error-lifecycle.mjs` 13 类故障：预检 13/13、定位 13/13、一次修复 11/13、误拒 0。
+- **修复**：fresh clone 的 CRLF 夹具 blob（`-text` 下存 CRLF）——新克隆不再有 5 条黄金断言红。
+
 ## 0.21.0：多编码 / 文档结构 / probe
 
 - **非 UTF-8 读写**：自动探测 UTF-8（含 BOM）/ UTF-16LE/BE / GB18030（GBK，含补充平面 4 字节）/

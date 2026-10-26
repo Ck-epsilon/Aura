@@ -56,7 +56,7 @@ check(registered?.name === 'aura_basetools_read', `注册的工具名 = ${JSON.s
 const params = Object.keys(registered?.parameters?.properties ?? {})
 check(
   // start_line/end_line 是后加的：行区间不用写数组语法，模型少一类写错的机会（2026-09-22）。
-  params.join(',') === 'file_path,targets,mode,around,lines,start_line,end_line,search,max_chars,budget,offset,limit,context,since,kind',
+  params.join(',') === 'file_path,targets,mode,around,lines,start_line,end_line,search,max_chars,budget,coverage,structure_handle,offset,limit,context,since,kind',
   `参数 = ${params.join(',')}`,
 )
 check(registered?.description?.includes('map'), '描述里点明了 map 模式')

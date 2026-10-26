@@ -1,10 +1,10 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**0.21.0（已发布到 npm；安装只走 npm）**
-> 发布提交：本地 `d31e58c`；monorepo `2c28beb`（已推 main）
-> 工作树：干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
-> npm：`aura-basetools@0.21.0`、`aura-basetools-dsh@0.21.0` 已发布（registry.npmjs.org）
-> GitHub Release：`aura-basetools-v0.21.0`（monorepo `Ck-epsilon/Aura`）
+> 当前版本：**0.23.0（已发布到 npm；安装只走 npm）**
+> 工作树：本分支提交后干净；最近一次全量闸 `node build/release-check.mjs` **exit 0**
+> npm：`aura-basetools@0.23.0`、`aura-basetools-dsh@0.23.0`（registry.npmjs.org）
+> GitHub Release：`aura-basetools-v0.23.0`（monorepo `Ck-epsilon/Aura`）
+> 0.23 新增：结构地址/结构句柄（symbol/section/key）、双重编码检测与修复、convert 上 MCP 与 DSH 面（DSH 目标 UTF-8）
 
 ---
 

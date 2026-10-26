@@ -32,6 +32,8 @@ import {
   statusTransactionEnvelope,
   capabilitiesEnvelope,
   writeEnvelope,
+  diagnoseEnvelope,
+  convertEnvelope,
   assertReadTargets,
   assertEditTargets,
   assertKnownArgs,
@@ -88,12 +90,14 @@ const isBooleanFlag = (token) => typeof token === 'string' && BOOLEAN_FLAGS.has(
 const COMMAND_FLAGS = {
   read: {
     value: ['cwd', 'file', 'targets', 'mode', 'around', 'lines', 'start-line', 'end-line', 'search', 'since', 'context', 'kind', 'budget', 'max-chars', 'offset', 'limit', 'encoding'],
-    bool: ['pretty'],
+    bool: ['pretty', 'coverage', 'structure-handle'],
   },
   edit: {
-    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'line', 'position', 'replace', 'expect', 'near', 'eol', 'verify', 'tx', 'encoding'],
-    bool: ['pretty', 'dry-run', 'plan', 'replace-all', 'require-observation'],
+    value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'structure', 'line', 'position', 'replace', 'expect', 'near', 'eol', 'verify', 'tx', 'encoding'],
+    bool: ['pretty', 'dry-run', 'plan', 'replace-all', 'require-observation', 'retry'],
   },
+  diagnose: { value: ['cwd', 'file', 'encoding'], bool: ['pretty'] },
+  convert: { value: ['cwd', 'file', 'to', 'from', 'bom', 'eol'], bool: ['pretty', 'dry-run', 'repair-double-encoding'] },
   write: {
     value: ['cwd', 'file', 'content', 'eol', 'verify', 'tx', 'encoding'],
     bool: ['pretty', 'dry-run', 'plan', 'no-overwrite', 'allow-unobserved'],
@@ -365,6 +369,36 @@ if (command === 'tx') {
   emit({ ok: false, error: 'tx 需要 begin | commit | rollback | status（commit/rollback/status 还要 --id）', code: 'USAGE' }, 1)
 }
 
+/**
+ * `diagnose`：只读体检。它不是判据闸（结构坏也 exit 0），而是“感觉不对时”的第一站：
+ * 编码/置信度、BOM、行尾普查、lone CR、结构是否可解析。
+ */
+if (command === 'diagnose') {
+  const file = flag('file')
+  if (typeof file !== 'string' || file.length === 0) {
+    emit({ ok: false, error: 'diagnose needs --file <path>', code: 'USAGE' }, 1)
+  }
+  const env = diagnoseEnvelope(provider, { file, encoding: encodingFlag })
+  emit(env, env.ok ? 0 : 2)
+}
+
+/**
+ * `convert`：本地字节变换（换编码 / 换行尾 / 增删 BOM）。零 token，回执只报事实。
+ */
+if (command === 'convert') {
+  const value = (name, fallback) => (typeof flag(name) === 'string' ? flag(name) : fallback)
+  const env = await convertEnvelope(provider, {
+    file: flag('file'),
+    to: flag('to'),
+    from: flag('from'),
+    bom: value('bom', 'keep'),
+    eol: value('eol', 'keep'),
+    dryRun: has('dry-run'),
+    repairDoubleEncoding: has('repair-double-encoding'),
+  })
+  emit(env, env.ok ? 0 : 2)
+}
+
 if (command === 'capabilities') {
   const env = { ok: true, version: VERSION, ...capabilitiesEnvelope() }
   process.stdout.write(`${JSON.stringify(env, null, has('pretty') ? 2 : 0)}\n`)
@@ -517,6 +551,9 @@ if (command === 'read' || command === 'outline') {
     // 光写 `--max-chars` 不带值时 flag() 回 true，Number(true)=1 会变成"预算 1 字符"这种怪值
     maxChars: typeof flag('max-chars') === 'string' ? Number(flag('max-chars')) : undefined,
     encoding: encodingFlag,
+    // 覆盖集：只在显式请求时出现（不回改既有回执形状）。
+    ...(has('coverage') ? { coverage: true } : {}),
+    ...(has('structure-handle') ? { structure_handle: true } : {}),
   })
   emit(env, env.ok ? 0 : 2)
 }
@@ -561,6 +598,7 @@ if (command === 'edit') {
     // `toLineNumber` 收敛）。**这里不判“单独给算不算地址”**——那是 `FLAT_ADDRESS_KEYS` /
     // `HANDLE_SHAPE_KEYS` 的语义（`flatHunk` 只看地址键），CLI 另判一份就是第二份判据。
     handle: flag('handle'),
+    structure: flag('structure'),
     line: flag('line'),
     position: flag('position'),
     // 内容地址（0.10.2）：平铺 CLI 也能直接给逐字原文；`--replace-all` 用它改全部出现。
@@ -648,6 +686,7 @@ if (command === 'edit') {
     dryRun: has('dry-run') || has('plan'),
     create,
     ...(has('require-observation') ? { requireObservation: true } : {}),
+    ...(has('retry') ? { retry: true } : {}),
     ...(typeof flag('verify') === 'string' ? { verify: flag('verify') } : {}),
     ...(typeof flag('tx') === 'string' ? { transaction: flag('tx') } : {}),
   })

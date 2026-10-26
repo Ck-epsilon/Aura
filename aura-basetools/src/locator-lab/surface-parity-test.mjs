@@ -76,6 +76,8 @@ function mcpTools() {
 
 /** 文档化的不对称：MCP 有、DSH 还没有（不是漂移）。 */
 const MCP_ONLY = {
+  // DSH 面只能写 UTF-8（宿主 fs 契约），双重编码修复只在 MCP/CLI 面提供。
+  aura_basetools_convert: ['repair_double_encoding'],
   // `encoding`：MCP/CLI 可按调用指定源编码；DSH 宿主只递 UTF-8 文本，这一层无意义。
   aura_basetools_edit: ['encoding', 'transaction', 'verify'],
   aura_basetools_write: ['encoding', 'transaction', 'verify'],

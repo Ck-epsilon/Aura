@@ -28,6 +28,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { probeEncoding, decodeBytes, encodeText, writeRefusal } from './encoding.mjs'
+import { refineWithDirectory } from './encoding-context.mjs'
 import { recallEncoding, rememberEncoding } from './encoding-memory.mjs'
 
 const SAMPLE = 4096
@@ -236,6 +237,57 @@ export function createNodeFsProvider(options = {}) {
     return { type: 'file', version: fingerprintFile(file, st), size: st.size }
   }
 
+  /**
+   * 字节层写入：CAS + 权限保留 + 临时文件 rename。`writeText` 与 `convert`（换编码）共用一份。
+   * 把这段从 writeText 里拆出来，是为了让“换编码”走**同一条**原子写与陈旧闸——
+   * 否则 convert 会成为第二个写盘入口，再单独修一次。
+   */
+  const writeBytesImpl = (target, buffer, expected) => {
+    const display = target
+    const bytes = buffer.length
+    if (bytes > maxTextBytes) {
+      throw Object.assign(
+        new Error(`cannot patch "${display}": content is ${bytes} bytes, over the ${maxTextBytes}-byte text limit`),
+        { code: 'FS_TOO_LARGE', size: bytes, limit: maxTextBytes },
+      )
+    }
+    const resolved = resolveWriteTarget(abs(target))
+    if (expected?.kind === 'createIfAbsent' && resolved.exists) {
+      throw Object.assign(new Error(`cannot overwrite existing "${display}" without reading it first`), { code: 'FS_NOT_OBSERVED' })
+    }
+    if (expected?.kind === 'replaceIfVersion') {
+      if (!resolved.exists) throw Object.assign(new Error(`cannot patch "${display}": file no longer exists`), { code: 'FS_STALE_VERSION' })
+      const current = fingerprintFile(resolved.file, resolved.stat)
+      if (current !== expected.version) {
+        throw Object.assign(new Error(`cannot patch "${display}": file changed since it was read`), { code: 'FS_STALE_VERSION' })
+      }
+    }
+    let beforeRename = null
+    if (expected?.kind === 'replaceIfVersion') {
+      beforeRename = () => {
+        let st
+        try { st = fs.statSync(resolved.file) } catch {
+          throw Object.assign(new Error(`cannot patch "${display}": file no longer exists`), { code: 'FS_STALE_VERSION' })
+        }
+        if (fingerprintFile(resolved.file, st) !== expected.version) {
+          throw Object.assign(new Error(`cannot patch "${display}": file changed while the patch was being written`), { code: 'FS_STALE_VERSION' })
+        }
+      }
+    } else if (expected?.kind === 'createIfAbsent') {
+      beforeRename = () => {
+        if (fs.existsSync(resolved.file)) {
+          throw Object.assign(new Error(`cannot overwrite existing "${display}" without reading it first`), { code: 'FS_NOT_OBSERVED' })
+        }
+      }
+    }
+    writeAtomic(resolved.file, buffer, {
+      mode: resolved.exists ? resolved.stat.mode & 0o7777 : null,
+      beforeRename,
+    })
+    const after = fs.statSync(resolved.file)
+    return { version: fingerprintFile(resolved.file, after), stat: after, file: resolved.file }
+  }
+
   return {
     /** 工作区根（事务日志/锁的键；DSH 侧不使用本提供方）。 */
     root,
@@ -251,11 +303,17 @@ export function createNodeFsProvider(options = {}) {
        * 探测结果按绝对路径记住，`writeText` 用同一次探测回写（避免读一次写一次猜两次）。
        */
       const st = fs.statSync(file)
-      const effectiveHint = encodingHint ?? recallEncoding(file, st)
-      const probe = probeEncoding(buffer, { hint: effectiveHint })
+      const explicitHint = encodingHint
+      const effectiveHint = explicitHint ?? recallEncoding(file, st)
+      /**
+       * 显式 > 记忆 > 目录先验。先验只在“猜不准”时介入，且必须过逐字节可逆 ——
+       * 见 `encoding-context.mjs` 的三条边界。
+       */
+      let probe = probeEncoding(buffer, { hint: effectiveHint })
       if (probe.encoding === null) throw Object.assign(new Error(`cannot read "${target}": binary file`), { code: 'FS_NOT_TEXT' })
+      if (explicitHint === undefined) probe = refineWithDirectory(buffer, probe, file)
       // 显式指定过一次就记住；记忆只是加速器，指纹对不上会自动失效。
-      if (encodingHint !== undefined) rememberEncoding(file, probe.encoding, st)
+      if (explicitHint !== undefined) rememberEncoding(file, probe.encoding, st)
       probes.set(file, probe)
       return decodeBytes(buffer, probe)
     },
@@ -360,50 +418,17 @@ export function createNodeFsProvider(options = {}) {
         throw Object.assign(new Error(`cannot patch "${display}": ${refusal.reason} — nothing was written`), { code: refusal.code, encoding: probe.encoding })
       }
       const buffer = encodeText(content, probe)
-      const bytes = buffer.length
-      if (bytes > maxTextBytes) {
-        throw Object.assign(
-          new Error(`cannot patch "${display}": content is ${bytes} bytes, over the ${maxTextBytes}-byte text limit`),
-          { code: 'FS_TOO_LARGE', size: bytes, limit: maxTextBytes },
-        )
-      }
-      const resolved = resolveWriteTarget(abs(target))
-      if (expected?.kind === 'createIfAbsent' && resolved.exists) {
-        throw Object.assign(new Error(`cannot overwrite existing "${display}" without reading it first`), { code: 'FS_NOT_OBSERVED' })
-      }
-      if (expected?.kind === 'replaceIfVersion') {
-        if (!resolved.exists) throw Object.assign(new Error(`cannot patch "${display}": file no longer exists`), { code: 'FS_STALE_VERSION' })
-        const current = fingerprintFile(resolved.file, resolved.stat)
-        if (current !== expected.version) {
-          throw Object.assign(new Error(`cannot patch "${display}": file changed since it was read`), { code: 'FS_STALE_VERSION' })
-        }
-      }
-      let beforeRename = null
-      if (expected?.kind === 'replaceIfVersion') {
-        beforeRename = () => {
-          let st
-          try { st = fs.statSync(resolved.file) } catch {
-            throw Object.assign(new Error(`cannot patch "${display}": file no longer exists`), { code: 'FS_STALE_VERSION' })
-          }
-          if (fingerprintFile(resolved.file, st) !== expected.version) {
-            throw Object.assign(new Error(`cannot patch "${display}": file changed while the patch was being written`), { code: 'FS_STALE_VERSION' })
-          }
-        }
-      } else if (expected?.kind === 'createIfAbsent') {
-        beforeRename = () => {
-          if (fs.existsSync(resolved.file)) {
-            throw Object.assign(new Error(`cannot overwrite existing "${display}" without reading it first`), { code: 'FS_NOT_OBSERVED' })
-          }
-        }
-      }
-      writeAtomic(resolved.file, buffer, {
-        mode: resolved.exists ? resolved.stat.mode & 0o7777 : null,
-        beforeRename,
-      })
-      const after = fs.statSync(resolved.file)
+      const written = writeBytesImpl(target, buffer, expected)
       // 写完刷新记忆的指纹：否则下一次读到旧 stamp，记忆会被当成失效而回到“猜”。
-      if (probe.encoding !== 'utf-8') rememberEncoding(resolved.file, probe.encoding, after)
-      return { version: fingerprintFile(resolved.file, after) }
+      if (probe.encoding !== 'utf-8') rememberEncoding(written.file, probe.encoding, written.stat)
+      return { version: written.version }
+    },
+    /**
+     * 字节层写入（`convert` 用）：编码已经由调用方决定，provider 不再探测/拒绝。
+     * 它走与 `writeText` 同一条 CAS + 原子写路径。
+     */
+    async writeBytes(target, buffer, expected) {
+      return writeBytesImpl(target, buffer, expected)
     },
   }
 }

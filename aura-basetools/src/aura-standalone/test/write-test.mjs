@@ -215,7 +215,7 @@ say('C MCP：aura_basetools_write 声明面与调用面')
 
   const tools = byId.get(2)?.result?.tools ?? []
   const writeTool = tools.find((tool) => tool.name === 'aura_basetools_write')
-  check(tools.length === 4 && writeTool !== undefined, `C1 tools/list 四个工具且含 aura_basetools_write（${tools.map((tool) => tool.name).join(',')}）`)
+  check(tools.length === 5 && writeTool !== undefined, `C1 tools/list 五个工具且含 aura_basetools_write（${tools.map((tool) => tool.name).join(',')}）`)
   check(JSON.stringify(writeTool?.inputSchema?.required) === JSON.stringify(['file_path', 'content']), 'C2 aura_basetools_write schema 必填 file_path + content', JSON.stringify(writeTool?.inputSchema?.required))
   check(envOf(3).ok === true && envOf(3).result?.operation === 'create', 'C3 经 MCP 新建成功', JSON.stringify(envOf(3)).slice(0, 160))
   check(fs.readFileSync(file('mcp-created.txt'), 'utf8') === 'mcp\ncreate\n', 'C4 MCP 新建的内容真的落盘')

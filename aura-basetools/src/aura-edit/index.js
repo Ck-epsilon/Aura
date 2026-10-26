@@ -195,6 +195,11 @@ const HUNK_PROPERTIES = {
     description:
       'Opaque region handle handed out by `aura_basetools_read` (e.g. `h9f3ac1b2e4d5:120-160`) — the byte-exact region the tool read, so you never have to retype that text. Combine with `line` or `position` to address inside or beside the region. The handle wins over `old`/coordinates; whatever gets ignored is reported back in the receipt.',
   },
+  structure: {
+    type: 'string',
+    description:
+      'Structural address: `symbol:<name>` / `section:<title>` / `key:<dotted.path>`. Resolves by structure (name, heading, key path) instead of coordinates, so line drift and whole-body rewrites do not break it. Use it after `handle` when the bytes you read may have been rewritten.',
+  },
   /**
    * 段内**相对**定位：区间内第 k 行（1-based，相对区间起点）——整段替换与"只换其中一行"
    * 由此分开。越界是**结果**（`PATCH_HANDLE_LINE_OUT_OF_RANGE`），不是抛错：
@@ -357,6 +362,7 @@ export const EDIT_ARG_KEYS = [
   'dry_run',
   'create',
   'require_observation',
+  'retry',
   // fs-contract-v2 §2.2：多目标形状。它与 `file_path`/`hunks` **互斥**——
   // 判据只有一份（引擎与壳共调 `assertEditTargets`），这里只登记名字。
   'targets',
@@ -1088,6 +1094,7 @@ async function applyEditTargets(ctx, exec, args, targets, policy) {
     targets,
     ...(args.dry_run === undefined ? {} : { dryRun: args.dry_run }),
     ...(args.require_observation === true ? { requireObservation: true } : {}),
+    ...(args.retry === true ? { retry: true } : {}),
     ...(signal === undefined ? {} : { signal }),
   })
   const elements = Array.isArray(args.targets) ? args.targets : []
@@ -1333,6 +1340,122 @@ function registerTools(ctx, sandbox) {
     }),
   )
 
+  /**
+   * `aura_basetools_convert`（0.23）：本地换编码 / 换行尾 / 增删 BOM。
+   *
+   * ## 为什么这一面只支持目标 UTF-8
+   *
+   * 宿主的 `ctx.fs.writeText` 是 **UTF-8 only**（`dsh-fs` 契约："Atomically create or replace
+   * UTF-8 text"），字节级写入没有开口。`readBytes` 有，所以“读到原始字节、自己解码、写成 UTF-8”
+   * 可行；反过来把 GBK/UTF-16 字节写回去**不可行**。其余目标编码走 CLI：
+   * `aura basetools convert --to <编码>`（独立面有自己的字节写入口）。
+   *
+   * 源侧不猜：给了 `from` 就按它解码；没给则只接受**合法 UTF-8**，其余情况要求显式给 `from`。
+   * 这比“猜一个”保守，但与“拒绝而不是猜”是同一方向。
+   */
+  ctx.tools.register(
+    defineTool({
+      name: 'aura_basetools_convert',
+      description:
+        'Convert a text file to UTF-8 locally, without sending its content through the model: decode raw bytes (explicit `from`, else valid UTF-8 only), normalize line endings/BOM, write atomically with a version guard, and verify the text read back. ' +
+        'This surface can only write UTF-8 (the host filesystem writes UTF-8 text); for other target encodings use the CLI: `aura basetools convert --to <encoding>`.',
+      parameters: {
+        file_path: { type: 'string', description: 'Path to convert, resolved by the filesystem backend.' },
+        to: { type: 'string', description: 'Target encoding. This surface supports `utf-8` only.' },
+        from: { type: 'string', description: 'Source encoding (gb18030, shift_jis, utf-16le, windows-1251, …). Omit only when the bytes are valid UTF-8.' },
+        bom: { type: 'string', enum: ['keep', 'yes', 'no'], description: 'BOM policy: keep (default) / yes / no.' },
+        eol: { type: 'string', enum: ['keep', 'lf', 'crlf'], description: 'Line-ending policy: keep (default) / lf / crlf.' },
+        dry_run: { type: 'boolean', description: 'Report the plan (from/to/bytes) without writing.' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            ok: { type: 'boolean', required: true },
+          outcome: { type: 'string', required: true },
+          path: { type: 'string', required: true },
+          from: { type: 'string', required: true },
+          to: { type: 'string', required: true },
+          bom: { type: 'boolean', required: true },
+          bytes_before: { type: 'integer', required: true },
+          bytes_after: { type: 'integer', required: true },
+          verified: { type: 'boolean', required: true },
+            dryRun: { type: 'boolean', required: true },
+          },
+        },
+      },
+      async execute(args, exec) {
+        if (typeof args.file_path !== 'string' || args.file_path.length === 0) throw new Error('convert needs `file_path`')
+        if (typeof args.to !== 'string' || args.to.trim().length === 0) throw new Error('convert needs `to`')
+        const toName = args.to.trim().toLowerCase()
+        const to = toName === 'utf8' ? 'utf-8' : toName
+        if (to !== 'utf-8') {
+          throw new Error(
+            `this surface can only convert to UTF-8 (the host filesystem writes UTF-8 text); for "${args.to}" use the CLI: aura basetools convert --file <path> --to ${args.to}`,
+          )
+        }
+        const policyService = sandbox()
+        const policy =
+          policyService === undefined
+            ? undefined
+            : policyService.resolve(exec.agent === undefined ? {} : { session: exec.agent.session })
+        const cwd = policy?.workspaceRoot ?? exec.agent?.session?.header?.cwd
+        const target = await ctx.fs.resolve(args.file_path, {
+          ...(cwd === undefined ? {} : { cwd }),
+          signal: exec.signal,
+        })
+        const info = await ctx.fs.stat(target, exec.signal)
+        if (info === undefined) throw new Error(`cannot convert "${target.displayPath}": not found`)
+        const bytes = Buffer.from(await ctx.fs.readBytes(target, exec.signal, 64 * 1024 * 1024))
+        const fromGiven = typeof args.from === 'string' && args.from.trim().length > 0 ? args.from.trim().toLowerCase() : null
+        let text
+        if (fromGiven !== null) {
+          try {
+            text = new TextDecoder(fromGiven, { fatal: true }).decode(bytes)
+          } catch {
+            throw new Error(`cannot decode "${target.displayPath}" as ${fromGiven} — pass the right \`from\`, or use the CLI which can probe the encoding`)
+          }
+        } else {
+          try {
+            text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+          } catch {
+            throw new Error(`"${target.displayPath}" is not valid UTF-8 — pass \`from: "<encoding>"\` (gb18030, shift_jis, …) so it can be decoded`)
+          }
+        }
+        const hadBom = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf
+        if (text.startsWith('\uFEFF')) text = text.slice(1)
+        const eol = args.eol ?? 'keep'
+        const normalized =
+          eol === 'lf'
+            ? text.replace(/\r\n|\r/g, '\n')
+            : eol === 'crlf'
+              ? text.replace(/\r\n|\r|\n/g, '\n').replace(/\n/g, '\r\n')
+              : text
+        const bomMode = args.bom ?? 'keep'
+        const keepBom = bomMode === 'yes' ? true : bomMode === 'no' ? false : hadBom
+        const out = keepBom ? `\uFEFF${normalized}` : normalized
+        const receipt = {
+          ok: true,
+          outcome: 'applied',
+          path: target.displayPath,
+          from: fromGiven ?? 'utf-8',
+          to: 'utf-8',
+          bom: keepBom,
+          bytes_before: bytes.length,
+          bytes_after: Buffer.byteLength(out, 'utf8'),
+          dryRun: args.dry_run === true,
+        }
+        if (args.dry_run === true) return { ...receipt, verified: false }
+        const written = await ctx.fs.writeText(target, out, { kind: 'replaceIfVersion', version: info.version }, exec.signal, policy)
+        const back = await ctx.fs.readText(target, exec.signal)
+        const backText = back.startsWith('\uFEFF') ? back.slice(1) : back
+        ctx.emit('fs/observed', target, { kind: 'present', version: written.version }, exec)
+        return { ...receipt, verified: backText === normalized }
+      },
+    }),
+  )
+
   ctx.systemPrompt.section({
     name: 'tool:aura-edit',
     order: 1320,
@@ -1479,6 +1602,11 @@ function registerTools(ctx, sandbox) {
           type: 'boolean',
           description:
             'Strict freshness: require this exact revision to have been read (or written) in this session; otherwise refuse with PATCH_UNOBSERVED. Applies to dry_run as well, so a preview matches the real verdict. Creating a new file is exempt.',
+        },
+        retry: {
+          type: 'boolean',
+          description:
+            'When the addressed region drifted, re-locate it by the exact old text from your last read: a unique whole-line match is replayed and the receipt carries rebased (from/to); no match or several matches still refuses. Default false.',
         },
         create: {
           type: 'string',

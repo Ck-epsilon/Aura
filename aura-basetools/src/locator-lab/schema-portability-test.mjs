@@ -115,8 +115,8 @@ for (const tool of tools) {
 
 console.log('\n=== 2. 工具面完整性 ===')
 const names = tools.map((tool) => tool.name).sort()
-const expected = ['aura_basetools_edit', 'aura_basetools_read', 'aura_basetools_tx', 'aura_basetools_write']
-check(JSON.stringify(names) === JSON.stringify(expected), `四个工具都在：${names.join(', ')}`)
+const expected = ['aura_basetools_convert', 'aura_basetools_edit', 'aura_basetools_read', 'aura_basetools_tx', 'aura_basetools_write']
+check(JSON.stringify(names) === JSON.stringify(expected), `五个工具都在：${names.join(', ')}`)
 
 console.log(`\n--- ${pass} 通过 / ${fail} 失败 ---`)
 fs.rmSync(tmp, { recursive: true, force: true })

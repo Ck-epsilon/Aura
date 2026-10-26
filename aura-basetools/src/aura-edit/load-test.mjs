@@ -69,7 +69,7 @@ check(compiled.type === 'object', `编译后的参数是 object schema`)
  */
 check(
   paramKeys.join(',') ===
-    'file_path,targets,hunks,target,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,line,position,dry_run,require_observation,create',
+    'file_path,targets,hunks,target,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,structure,line,position,dry_run,require_observation,retry,create',
   `参数 = ${paramKeys.join(',')}`,
 )
 // `hunks` 不再无条件必填：创建路径用 `create`，此时 hunks 可有可无。
@@ -92,7 +92,7 @@ const hunkKeys = Object.keys(compiled.properties?.hunks?.items?.properties ?? {}
  * 顺序就是 `HUNK_PROPERTIES` 的顺序（声明面与守卫同源）。
  */
 check(
-  hunkKeys.join(',') === 'target,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,line,position',
+  hunkKeys.join(',') === 'target,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,structure,line,position',
   `hunk 字段 = ${hunkKeys.join(',')}`,
 )
 check(

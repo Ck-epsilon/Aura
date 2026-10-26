@@ -41,6 +41,7 @@ import {
   readEnvelope,
   editEnvelope,
   writeEnvelope,
+  convertEnvelope,
   // 多目标（fs-contract-v2）的引擎绑定：与单目标同一处（`lib/ops.mjs`），bin 里不另找引擎。
   readManyWith,
   editManyEnvelope,
@@ -136,7 +137,12 @@ const HUNK_SCHEMA = {
       type: 'string',
       description:
         '`aura_basetools_read` 发的区间句柄（不透明，如 `h9f3ac1b2e4d5:120-160`）：工具读过的**逐字节区间**，于是那段文字不必由你转述。配合 `line` 或 `position` 在区间内／边界定位。句柄优先于 `old`／坐标——被让开的一方会在回执里点名。',
-    },
+      },
+      structure: {
+        type: 'string',
+        description:
+          '结构地址：`symbol:<名字>` / `section:<标题>` / `key:<点号路径>`。按结构定位（符号名、节标题、键路径）而不是坐标：行号漂移、整段正文被改写都不会让它失效。' ,
+      },
     /** 段内**相对**行：整段替换与“只换其中一行”由此分开；越界是**结果**（正常 not_found 回执），不是抛错。 */
     line: {
       type: 'integer',
@@ -202,6 +208,16 @@ const TOOLS = [
         encoding: { type: 'string', description: '源编码覆盖（默认自动探测）：gb18030 / shift_jis / euc-kr / big5 / utf-16le / utf-16be / windows-1252。只对本次调用生效；显式指定过一次后会被记住（文件未被外部改动时）。' },
         since: { type: 'string', description: 'mode=changed：上次回执里的 version 令牌' },
         max_chars: { type: 'integer' },
+        coverage: {
+          type: 'boolean',
+          description:
+            '回执带覆盖集：covered / notCovered（区间字符串，如 "1-9"）与 totalLines；map/digest 的正文覆盖为空数组。默认 false（既有回执形状不变）。',
+        },
+        structure_handle: {
+          type: 'boolean',
+          description:
+            '窗口恰好覆盖一个符号时，回执额外带结构句柄 `s…:symbol=<name>`：行号漂移或整段正文被改写后，仍能按符号重定位。默认 false。',
+        },
         offset: { type: 'integer', description: '与 limit 同用：0-based 行偏移（内置 Read 的分页形状）；与 lines 互斥' },
         limit: { type: 'integer', description: '与 offset 同用：返回行数（默认 2000）；与 lines 互斥' },
         targets: TARGETS_SCHEMA,
@@ -229,6 +245,11 @@ const TOOLS = [
           description: '多次修改时用；**单处修改请用平铺形式**（把 hunk 字段直接放顶层、不传 hunks）：一个对象比“对象数组”少一层嵌套，参数更短、更不容易在流式解码时坏掉。',
         },
         dry_run: { type: 'boolean', description: '只定位不落盘' },
+        retry: {
+          type: 'boolean',
+          description:
+            '地址过期时用旧观测里的原文在当前内容里重定位：整行精确匹配且全文唯一才重放，回执带 rebased（from/to）；找不到或命中多处则照旧拒绝。默认 false。',
+        },
         require_observation: {
           type: 'boolean',
           description: '严格新鲜度：要求这一版文件在本会话里被读过（或由本工具写过）；否则 PATCH_UNOBSERVED。create 不受影响；dry_run 同样执行这条判决。',
@@ -292,6 +313,27 @@ const TOOLS = [
         transaction: { type: 'string', description: '跨调用事务 id（tx begin 返回）；本次修改追加到该事务的回滚日志。**写入立即可见**（tx 不是隔离事务），commit 只做 afterVersion 校验与可选 verify' },
       },
       required: ['file_path', 'content'],
+    },
+  },
+  {
+    name: 'aura_basetools_convert',
+    description:
+      'Convert a file between encodings locally, without sending its content through the model: change encoding, line endings, or BOM in one call. Reads with the same detector as read/edit, verifies the encoded bytes decode back to the same text, and writes atomically with a version guard. Also repairs reversible double-encoding (UTF-8 bytes that were decoded as Latin-1/GBK and saved again).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: '要转换的文件路径' },
+        to: { type: 'string', description: '目标编码，如 utf-8 / gb18030 / utf-16le / windows-1251' },
+        from: { type: 'string', description: '源编码覆盖（默认自动探测）' },
+        bom: { type: 'string', enum: ['keep', 'yes', 'no'], description: 'BOM 策略：keep（默认，保留源 BOM）/ yes / no' },
+        eol: { type: 'string', enum: ['keep', 'lf', 'crlf'], description: '行尾策略：keep（默认）/ lf / crlf' },
+        dry_run: { type: 'boolean', description: '只报计划（from/to/字节数），不写盘' },
+        repair_double_encoding: {
+          type: 'boolean',
+          description: '先修复可逆的双重编码（Ã¤Â¸\u00ad 这一类），再做编码/行尾/BOM 变换；检测不到就拒绝（不假装能救）。',
+        },
+      },
+      required: ['file_path', 'to'],
     },
   },
   {
@@ -391,6 +433,7 @@ async function editTargetsCall(provider, args) {
     targets,
     dryRun: args.dry_run === true,
     ...(args.require_observation === true ? { requireObservation: true } : {}),
+    ...(args.retry === true ? { retry: true } : {}),
     ...(typeof args.verify === 'string' ? { verify: args.verify } : {}),
     ...(typeof args.transaction === 'string' ? { transaction: args.transaction } : {}),
   })
@@ -448,6 +491,17 @@ async function callTool(provider, name, args = {}) {
    * 不传时复位到环境变量——不能把上一次调用的 hint 泄漏给下一次。
    */
   if (typeof provider.setEncodingHint === 'function') provider.setEncodingHint(args.encoding)
+  if (name === 'aura_basetools_convert') {
+    return await convertEnvelope(provider, {
+      file: args.file_path,
+      to: args.to,
+      from: args.from,
+      bom: args.bom ?? 'keep',
+      eol: args.eol ?? 'keep',
+      dryRun: args.dry_run === true,
+      repairDoubleEncoding: args.repair_double_encoding === true,
+    })
+  }
   if (name === 'aura_basetools_tx') {
     const action = args.action
     if (action === 'begin') return beginTransactionEnvelope(provider)
@@ -493,6 +547,7 @@ async function callTool(provider, name, args = {}) {
       dryRun: args.dry_run === true,
       create: creating ? args.create : undefined,
       ...(args.require_observation === true ? { requireObservation: true } : {}),
+      ...(args.retry === true ? { retry: true } : {}),
       ...(typeof args.verify === 'string' ? { verify: args.verify } : {}),
       ...(typeof args.transaction === 'string' ? { transaction: args.transaction } : {}),
     })

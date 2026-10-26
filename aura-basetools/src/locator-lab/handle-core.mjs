@@ -83,6 +83,18 @@ const FINGERPRINT_HEX = 8
 export const HANDLE_RE = /^h([0-9a-f]{4})([0-9a-f]{8}):(\d+)-(\d+)$/
 
 /**
+ * **结构句柄**（0.23）：`s` + 4 位身份标签 + 8 位区间摘要 + `:` + 种类 + `=` + 路径。
+ *
+ * 与行号句柄同族、同一个指纹口径，但地址是**结构路径**而不是坐标：
+ *   `s9f3ac1b2e4d5d:8012:abcd:symbol=parseArgs`、`s...:section=Usage`、`s...:key=db.host`。
+ * 路径用 `encodeURIComponent` 编码（路径里可能有 `:`、`/`、`=`）。
+ *
+ * 为什么它能在“整段内容被同时改写”后仍指得到：行号会漂、原文会变，但**符号名/节标题/键路径**
+ * 是调用方真正要编辑的东西。指纹只用来告诉调用方“你读到的内容变了没有”，不用来决定位置。
+ */
+export const STRUCTURE_RE = /^s([0-9a-f]{4})([0-9a-f]{8}):(symbol|section|key)=(.+)$/
+
+/**
  * 单条回执附带的句柄数上限（契约 §4：超限只报数，不发句柄）。
  *
  * 取值理由见 `read-core.mjs` 的 `HANDLE_MAX_PER_RECEIPT` 注释（那里是实际用它的地方）。
@@ -188,6 +200,21 @@ export function mintHandle({ ledgerKey, regionText, byteOrderMark = false, start
 }
 
 /**
+ * 钓一个**结构句柄**：同样的身份标签 + 区间摘要，地址换成 `kind=path`。
+ *
+ * @param {object} input
+ * @param {string} input.ledgerKey - 已归一化的账本键
+ * @param {string} input.regionText - 该结构节点当前的原文（未加行号）
+ * @param {boolean} [input.byteOrderMark] - 这份文件是否带 UTF-8 BOM
+ * @param {'symbol'|'section'|'key'} input.kind - 结构种类
+ * @param {string} input.path - 结构路径（符号名 / 节标题 / 键路径）
+ */
+export function mintStructureHandle({ ledgerKey, regionText, byteOrderMark = false, kind, path }) {
+  const encoded = encodeURIComponent(String(path))
+  return `s${identityTag(ledgerKey)}${regionFingerprint(regionText, byteOrderMark)}:${kind}=${encoded}`
+}
+
+/**
  * 解析句柄。**不认识就说不知道**，不抛错、不猜。
  *
  * 形状不对（连正则都不匹配）在**参数面**是要抛错的（契约 §5 第 0 步）；
@@ -200,8 +227,20 @@ export function mintHandle({ ledgerKey, regionText, byteOrderMark = false, start
 export function parseHandle(text) {
   if (typeof text !== 'string') return { ok: false }
   const m = HANDLE_RE.exec(text)
-  if (m === null) return { ok: false }
-  const startLine = Number(m[3])
-  const endLine = Number(m[4])
-  return { ok: true, idTag: m[1], fingerprint: m[2], startLine, endLine }
+  if (m !== null) {
+    const startLine = Number(m[3])
+    const endLine = Number(m[4])
+    return { ok: true, kind: 'lines', idTag: m[1], fingerprint: m[2], startLine, endLine }
+  }
+  const s = STRUCTURE_RE.exec(text)
+  if (s !== null) {
+    let path
+    try {
+      path = decodeURIComponent(s[4])
+    } catch {
+      return { ok: false }
+    }
+    return { ok: true, kind: 'structure', idTag: s[1], fingerprint: s[2], structureKind: s[3], path }
+  }
+  return { ok: false }
 }

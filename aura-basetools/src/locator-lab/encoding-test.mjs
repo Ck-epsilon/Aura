@@ -203,6 +203,119 @@ say('=== I. 逐调用 --encoding（不动环境变量）===')
   check(decodeBytes(after, probeEncoding(after)).includes('第二行丁'), 'I3 写回内容正确且仍是 GBK')
 }
 
+// ── J. convert：零 token 的本地变换 ──────────────────────────────────────
+say('')
+say('=== J. convert（换编码 / BOM / 行尾）===')
+{
+  const gbk = encodeText('中文测试\r\n第二行\r\n', { encoding: 'gb18030', bom: [] })
+  const gbkPath = file('j1.txt')
+  fs.writeFileSync(gbkPath, gbk)
+  const c1 = parse(run(['convert', '--file', gbkPath, '--to', 'utf-8', '--pretty']))
+  check(c1?.ok === true && c1.result?.from === 'gb18030' && c1.result?.to === 'utf-8' && c1.result?.verified === true, 'J1 GBK → UTF-8：回执 from/to/verified', JSON.stringify(c1?.result ?? c1))
+  const after = fs.readFileSync(gbkPath)
+  check(decodeBytes(after, probeEncoding(after)).includes('中文测试'), 'J2 转换后文本不变')
+  check(after[0] !== 0xff && after[0] !== 0xfe, 'J3 目标 UTF-8 不带 BOM（默认 keep，源无 BOM）')
+
+  const before = fs.readFileSync(gbkPath)
+  const dry = parse(run(['convert', '--file', gbkPath, '--to', 'gb18030', '--dry-run', '--pretty']))
+  check(dry?.ok === true && dry.result?.dryRun === true && dry.result?.bytes_after === gbk.length, 'J4 dry-run 报计划字节数')
+  check(fs.readFileSync(gbkPath).equals(before), 'J5 dry-run 不写盘')
+
+  const gapPath = file('j3.txt')
+  fs.writeFileSync(gapPath, '中文㐀\n')
+  const bad = parse(run(['convert', '--file', gapPath, '--to', 'gbk', '--pretty']))
+  check(bad?.ok === false && bad?.code === 'ENCODING_UNREPRESENTABLE', 'J6 目标编码表示不了 ⇒ ENCODING_UNREPRESENTABLE')
+  check(fs.readFileSync(gapPath).toString() === '中文㐀\n', 'J7 拒绝时磁盘未动')
+
+  const bomPath = file('j4.txt')
+  fs.writeFileSync(bomPath, 'hello\n')
+  const withBom = parse(run(['convert', '--file', bomPath, '--to', 'utf-8', '--bom', 'yes', '--pretty']))
+  check(withBom?.ok === true && withBom.result?.bom === true, 'J8 --bom yes 写 UTF-8 BOM')
+  const bomBytes = fs.readFileSync(bomPath)
+  check(bomBytes[0] === 0xef && bomBytes[1] === 0xbb && bomBytes[2] === 0xbf, 'J9 BOM 字节正确')
+
+  const eolPath = file('j5.txt')
+  fs.writeFileSync(eolPath, 'a\r\nb\r\n')
+  const lf = parse(run(['convert', '--file', eolPath, '--to', 'utf-8', '--eol', 'lf', '--pretty']))
+  check(lf?.ok === true && !fs.readFileSync(eolPath).toString().includes('\r'), 'J10 --eol lf 去掉 CRLF')
+
+  const badTarget = parse(run(['convert', '--file', bomPath, '--to', 'klingon', '--pretty']))
+  check(badTarget?.ok === false && badTarget?.code === 'CONVERT_BAD_ARGS', 'J11 未知目标编码 ⇒ CONVERT_BAD_ARGS')
+}
+
+// ── K. 单字节代码页 + 无 BOM UTF-16 ───────────────────────────────────────
+say('')
+say('=== K. 单字节代码页 / 无 BOM UTF-16 ===')
+{
+  const cp = file('k1.txt')
+  fs.writeFileSync(cp, encodeText('Привет мир\r\nВторая строка\r\n', { encoding: 'windows-1251', bom: [] }))
+  const r1 = parse(run(['read', '--file', cp, '--mode', 'full', '--encoding', 'windows-1251', '--pretty']))
+  check(r1?.ok === true && String(r1.text).includes('Привет'), 'K1 cp1251 显式读：西里尔文正确', JSON.stringify(r1?.text))
+  const e1 = parse(run(['edit', '--file', cp, '--lines', '1', '--replace', 'Привет мир!', '--encoding', 'windows-1251', '--pretty']))
+  check(e1?.ok === true, 'K2 cp1251 显式写：允许')
+  const cpBytes = fs.readFileSync(cp)
+  check(decodeBytes(cpBytes, probeEncoding(cpBytes, { hint: 'windows-1251' })).includes('Привет мир!'), 'K3 写回仍是 cp1251')
+
+  const u16 = file('k4.txt')
+  fs.writeFileSync(u16, Buffer.from('hello world\nsecond line\n', 'utf16le'))
+  const r2 = parse(run(['read', '--file', u16, '--mode', 'full', '--pretty']))
+  check(r2?.ok === true && String(r2.text).includes('hello world') && r2.encoding === 'utf-16le', 'K4 无 BOM UTF-16LE：按 NUL 分布推断并读出', JSON.stringify({ enc: r2?.encoding, text: r2?.text }))
+  const e2 = parse(run(['edit', '--file', u16, '--lines', '1', '--replace', 'HELLO', '--encoding', 'utf-16le', '--pretty']))
+  check(e2?.ok === true, 'K5 显式 utf-16le 写入')
+  const u16Bytes = fs.readFileSync(u16)
+  check(decodeBytes(u16Bytes, probeEncoding(u16Bytes, { hint: 'utf-16le' })).includes('HELLO'), 'K6 写回仍是 utf-16le')
+}
+
+// ── L. 目录先验 ─────────────────────────────────────────────────────────
+say('')
+say('=== L. 目录先验（短文件）===')
+{
+  const dir = path.join(tmp, 'prior')
+  fs.mkdirSync(dir, { recursive: true })
+  const base = '这是一个用于测试目录先验的中文配置文件，包含足够多的常用汉字以便高置信度地识别为国标编码。配置项包括数据库连接、日志路径、缓存大小与并发数。'
+  for (let i = 0; i < 6; i += 1) fs.writeFileSync(path.join(dir, `sib${i}.txt`), encodeText((base + '\r\n').repeat(4), { encoding: 'gb18030', bom: [] }))
+  const short = path.join(dir, 'short.txt')
+  fs.writeFileSync(short, encodeText('中文测试\r\n第二行\r\n', { encoding: 'gb18030', bom: [] }))
+  const r = parse(run(['read', '--file', short, '--mode', 'full', '--pretty']))
+  check(r?.ok === true && r.encoding === 'gb18030' && r.encoding_confidence === 'high' && r.encoding_source === 'directory-prior', 'L1 短 GBK 文件：目录先验把它抬到 high 并标来源', JSON.stringify({ enc: r?.encoding, conf: r?.encoding_confidence, src: r?.encoding_source }))
+  const edit = parse(run(['edit', '--file', short, '--lines', '2', '--replace', '第二行乙', '--pretty']))
+  check(edit?.ok === true, 'L2 先验之下：不带 --encoding 也能写', JSON.stringify({ ok: edit?.ok, code: edit?.code }))
+  const bytes = fs.readFileSync(short)
+  check(decodeBytes(bytes, probeEncoding(bytes, { hint: 'gb18030' })).includes('第二行乙'), 'L3 写回内容正确')
+}
+
+// ── M. 双重编码（可逆的一类） ───────────────────────────────────
+say('')
+say('=== M. 双重编码检测/修复 ===')
+{
+  const original = '中文测试\r\n第二行\r\n'
+  const mojibake = Buffer.from(Buffer.from(original, 'utf8').toString('latin1'), 'utf8')
+  const p = file('m1.txt')
+  fs.writeFileSync(p, mojibake)
+  const diag = parse(run(['diagnose', '--file', p, '--pretty']))
+  check(diag?.ok === true && diag?.doubleEncoding?.kind === 'latin1-then-utf8', 'M1 diagnose 报出可逆双重编码', JSON.stringify(diag?.doubleEncoding))
+  check(Array.isArray(diag?.warnings) && diag.warnings.some((w) => /double-encoded/.test(w)), 'M2 diagnose 给提醒')
+
+  const repaired = parse(run(['convert', '--file', p, '--to', 'utf-8', '--repair-double-encoding', '--pretty']))
+  check(repaired?.ok === true && repaired?.result?.repaired?.kind === 'latin1-then-utf8', 'M3 convert 修复成功并报 kind', JSON.stringify(repaired?.result?.repaired))
+  check(fs.readFileSync(p).toString('utf8') === original, 'M4 修复后正文还原', JSON.stringify(fs.readFileSync(p).toString('utf8')))
+
+  const normal = file('m2.txt')
+  fs.writeFileSync(normal, 'hello\n')
+  const noNeed = parse(run(['convert', '--file', normal, '--to', 'utf-8', '--repair-double-encoding', '--pretty']))
+  check(noNeed?.ok === false && noNeed?.code === 'CONVERT_NO_DOUBLE_ENCODING', 'M5 正常文本：拒绝（不假装有乱码）')
+
+  const lost = file('m3.txt')
+  fs.writeFileSync(lost, '\uFFFD\uFFFD\n')
+  const lostRes = parse(run(['convert', '--file', lost, '--to', 'utf-8', '--repair-double-encoding', '--pretty']))
+  check(lostRes?.ok === false && lostRes?.code === 'CONVERT_NO_DOUBLE_ENCODING', 'M6 不可逆乱码：拒绝（不假装能救）')
+
+  const dryP = file('m4.txt')
+  fs.writeFileSync(dryP, mojibake)
+  const dry = parse(run(['convert', '--file', dryP, '--to', 'utf-8', '--repair-double-encoding', '--dry-run', '--pretty']))
+  check(dry?.ok === true && dry?.result?.dryRun === true && fs.readFileSync(dryP).equals(mojibake), 'M7 dry-run 报计划且不写盘')
+}
+
 say('')
 say(`--- ${pass} 通过 / ${fail} 失败 ---`)
 fs.rmSync(tmp, { recursive: true, force: true })

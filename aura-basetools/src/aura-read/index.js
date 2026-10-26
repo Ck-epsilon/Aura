@@ -28,7 +28,7 @@
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 // 读取逻辑本身框架无关，住在 locator-lab；本文件是它的 DSH 适配器。
-import { readWith, readManyWith, MODES, BYTE_ORDER_MARK_BYTES, startsWithByteOrderMark } from '../locator-lab/read-core.mjs'
+import { readWith, readManyWith, MODES, BYTE_ORDER_MARK_BYTES, startsWithByteOrderMark, coverageOf } from '../locator-lab/read-core.mjs'
 import { MT_READ_ELEMENT_KEYS, asLinePair, assertKnownArgs, assertReadTargets, assertTargetShape, inferReadMode, lineRangeOf, normalizeReadRequest } from '../locator-lab/args.mjs'
 // 仓库级地图（T26）：引擎驱动遍历，本文件只把 ctx.fs 的两个原始能力接上去。
 import { collectRepoMap } from '../locator-lab/repo-map.mjs'
@@ -100,6 +100,11 @@ export const PASSTHROUGH_FIELDS = [
   'note',
   'truncated',
   'truncatedLines',
+  // 结构句柄（opt-in，0.23）：引擎在窗口恰好覆盖一个符号时发行。
+  'structure_handle',
+  // 覆盖集（opt-in，0.22）：壳层按 `shown` + `totalLines` 现算；放进本名单是因为
+  // 它同样是“回执上可能出现的可选字段”，schema≡PASSTHROUGH 这条接缝必须两边一致。
+  'coverage',
   'relocatable',
   /**
    * fs-contract-v2 / 波H：**区间句柄**（契约 §3/§4）。它落在引擎 `windowEnvelope` 那一层，
@@ -170,6 +175,9 @@ export const READ_ARG_KEYS = [
   'budget',
   'offset',
   'limit',
+  // 覆盖集（opt-in，0.22）。
+  'coverage',
+  'structure_handle',
   // fs-contract-v2 §2.1：多目标形状。它与 `file_path` **互斥**（判据只有一份：`assertReadTargets`）。
   'targets',
 ]
@@ -662,8 +670,18 @@ export function apply(ctx) {
           type: 'integer',
           description: 'Pipeline ceiling in chars; overrides the host pruner threshold for this call.',
         },
-        offset: {
-          type: 'integer',
+            coverage: {
+              type: 'boolean',
+              description:
+                'Return a coverage set (covered / notCovered line ranges + totalLines). Off by default so existing receipts stay byte-identical.',
+            },
+            structure_handle: {
+              type: 'boolean',
+              description:
+                'When the window exactly spans one symbol, also return a structural handle (`s…:symbol=<name>`) that survives line drift and body rewrites. Off by default.',
+            },
+            offset: {
+              type: 'integer',
           description: 'Pagination: 0-based line offset; use with `limit` (mutually exclusive with lines/start_line+end_line).',
         },
         limit: {
@@ -707,6 +725,19 @@ export function apply(ctx) {
              * 并且在 `aura-read-schema-test` 里逐模式逐扩展名地守着。
              */
             totalLines: { type: 'integer' },
+            /**
+             * 覆盖集（opt-in，0.22）：这次回执展示了哪些行、没展示哪些行。
+             * 区间用字符串（与 `shown` 同一套写法），调用方不需要再拆一层嵌套数组。
+             */
+            coverage: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                totalLines: { type: 'integer', required: true },
+                covered: { type: 'array', items: { type: 'string' }, required: true },
+                notCovered: { type: 'array', items: { type: 'string' }, required: true },
+              },
+            },
             // `text` 必须声明。第一版漏了它——而渲染器返回的正是 `text`，
             // 于是**每一条成功路径**都被框架以 `additionalProperties: false` 拒绝：
             //   tool "aura_basetools_read" returned invalid output: "value.text" is not a declared property
@@ -780,6 +811,7 @@ export function apply(ctx) {
             // 而"含内容的模式必须给令牌"这条更强的约束，交给 aura-read-schema-test 去守，
             // 那里能逐模式逐扩展名地断言，比 schema 层能表达的多。
             version: { type: 'string' },
+            structure_handle: { type: 'string' },
             omitted: { type: 'string' },
             // 单行超过内容预算时，引擎会给出行内截断的机器可读事实。
             // 必须声明：这个 schema 是 additionalProperties:false，任何未声明的返回字段
@@ -1093,10 +1125,12 @@ export function apply(ctx) {
          * 行为不变：`ship` 就是本工具在成功路径上**原本就要构造**的那个对象，
          * 每次收敛多量一次而已（纯字符串拼接，无 IO）。
          */
+        const wantCoverage = args?.coverage === true
         const ship = (envelope) => ({
           path: target.displayPath,
           mode: envelope.mode,
           totalLines: envelope.totalLines,
+          ...(wantCoverage ? { coverage: coverageOf(envelope.shown, envelope.totalLines) } : {}),
           // 成功也带 outcome：调用方只看这一个字段就能决定“能不能用这份回执”，
           // 不必按工具名分支，也不必解析 text。
           outcome: 'applied',
@@ -1144,6 +1178,7 @@ export function apply(ctx) {
           ...(args.since === undefined ? {} : { since: args.since }),
           // `max_chars` 是调用方要求**更小**的预算；与 CLI/MCP/多目标同一字段。
           ...(args.max_chars === undefined ? {} : { maxChars: args.max_chars }),
+          ...(args.structure_handle === true ? { structureHandle: true } : {}),
           // 流水线硬上限**现读现传**，不在引擎里抄一个常量。
           // `toolResultPruner.config.thresholdChars` 是可配置的（dsh-base 与三个 preset 都显式写着），
           // 所以"抄进引擎"会在宿主改配置时静默失准（调大→白白少给，调小→中段被剪）。

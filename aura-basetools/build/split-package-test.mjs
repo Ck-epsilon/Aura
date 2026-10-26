@@ -278,7 +278,7 @@ say('C. 从装出来的核心真用：CLI / MCP / npx')
   const byId = new Map(replies.map((reply) => [reply.id, reply]))
   const tools = byId.get(2)?.result?.tools?.map((tool) => tool.name) ?? []
   check(byId.get(1)?.result?.serverInfo?.name === 'aura-basetools' && byId.get(1)?.result?.serverInfo?.version === version, '装出来的 MCP 握手带对名字与版本', JSON.stringify(byId.get(1)?.result?.serverInfo ?? null))
-  check(['aura_basetools_read', 'aura_basetools_edit', 'aura_basetools_write', 'aura_basetools_tx'].every((name) => tools.includes(name)) && tools.length === 4, '装出来的 MCP 列出四个工具', tools.join(','))
+  check(['aura_basetools_read', 'aura_basetools_edit', 'aura_basetools_write', 'aura_basetools_convert', 'aura_basetools_tx'].every((name) => tools.includes(name)) && tools.length === 5, '装出来的 MCP 列出五个工具', tools.join(','))
   check(byId.get(3)?.result?.isError !== true && fs.readFileSync(mcpFile, 'utf8').includes('return 7'), '装出来的 MCP 能改盘', JSON.stringify(byId.get(3)?.result ?? null).slice(0, 100))
   check(String(mcpRes.stderr).trim() === '', 'MCP 全程没有走 stderr 兜底', String(mcpRes.stderr).trim().slice(0, 120))
 

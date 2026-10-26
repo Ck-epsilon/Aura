@@ -173,3 +173,19 @@ DSH 面提供 `aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_wr
 本包的 schema 可直接转换（`locator-lab/strict-schema.mjs` 的 `toStrictSchema` / `strictToolList`），
 `aura basetools doctor` 会打出 recipe。不开 strict 时能做的只有降低概率：
 JSON/JSONC 用 `lines` 定位、hunk 拆小（见 2.3）。
+
+## 9. 错误闭环：预检 / 重定位 / 体检 / 转换（0.22）
+
+- **写前预检**：`edit` 在写盘前检查“计划内容”——JSON 改坏、Markdown 围栏不配平、替换引入 lone CR、
+  未读过的文件一次删 ≥30 行，都直接拒绝并给 `PATCH_*` 码（零写入）。`write` 是逃生口：
+  同样的坏结构只回 `preflight_warnings` + 写后 `structure: broken`。
+- **漂移重定位**：地址过期时加 `--retry`（MCP/DSH `retry: true`），用上次读到的原文在现文里做
+  **整行唯一匹配**，重放并回 `rebased: [{from, to}]`；找不到或多处命中仍然拒绝。
+- **体检**：`aura basetools diagnose --file <路径>` 报编码/置信度/来源、BOM、行尾普查、lone CR、结构。
+- **转换**：`aura basetools convert --file <路径> --to utf-8`（可 `--from`、`--bom keep|yes|no`、
+  `--eol keep|lf|crlf`、`--dry-run`）。内容不经过模型，回执带 `verified: true`。
+- **覆盖集**：`read --coverage` 给 `coverage: {totalLines, covered, notCovered}`（区间字符串）；
+  不带它时回执形状不变。
+
+一次典型闭环：预检拒绝 → 看回执的原因/位置 → 改一个参数重发；漂移拒绝 → 加 `--retry` 一次重放；
+编码写被拒 → `convert --to <目标编码>` 一次转换（零 token），再按新编码编辑。

@@ -34,6 +34,9 @@ import {
  * `write-path → read-core → handle-core` 那类环。
  */
 import { identityTag, mintHandle, parseHandle, regionFingerprint } from './handle-core.mjs'
+import { indexStructure, langOf, resolveTarget } from './struct-core.mjs'
+import { docKindOf, indexDocument } from './doc-structure.mjs'
+import { preflightEdit, structureOf } from './preflight.mjs'
 import {
   BYTE_ORDER_MARK,
   BYTE_ORDER_MARK_BYTES,
@@ -228,6 +231,18 @@ function staleConflicts(observedSource, content, hunks, matches, filePath, revis
   for (const match of matches) {
     const hunk = hunks[match.hunk]
     if (hunk === undefined) continue
+    /**
+     * 结构地址是**路径**，不是字节区间：闸门没有“同一段字节”可比——
+     * 它要改的就是当前那个符号/节/键（整段内容已被改写，正是它存在的理由）。
+     * 代价必须有声：回执的 `tier` 写 `handle symbol` / `handle section` / `handle key`，
+     * 调用方看得出这次用的是结构地址，不是“读过的字节”。
+     */
+    if (hasStructureArg(hunk)) continue
+    /** 结构句柄同理：地址是路径，观测侧没有一组行号可与它对应。 */
+    if (hasHandleArg(hunk)) {
+      const parsed = parseHandle(hunk.handle)
+      if (parsed.ok === true && parsed.kind === 'structure') continue
+    }
     if (hunk.replace_all === true) {
       if (replaceAllReported.has(match.hunk)) continue
       replaceAllReported.add(match.hunk)
@@ -746,6 +761,104 @@ function observedRegionByLines(hunk, rows) {
 /** 地址键 `handle` 是不是真的在场（平铺写法里空值很常见，那不是"给了句柄"）。 */
 function hasHandleArg(hunk) {
   return typeof hunk?.handle === 'string' && hunk.handle.trim().length > 0
+}
+
+/** 结构地址（0.23）：`symbol:<name>` / `section:<title>` / `key:<path>`。 */
+function hasStructureArg(hunk) {
+  return typeof hunk?.structure === 'string' && hunk.structure.trim().length > 0
+}
+
+/**
+ * 结构地址 → `{kind, path}`。形状不对在参数面抛错（与 `handle` 同一条）。
+ */
+function structureAddressOf(hunk) {
+  if (!hasStructureArg(hunk)) return null
+  const raw = String(hunk.structure).trim()
+  const colon = raw.indexOf(':')
+  const kind = colon > 0 ? raw.slice(0, colon) : ''
+  const path = colon > 0 ? raw.slice(colon + 1).trim() : ''
+  if (!['symbol', 'section', 'key'].includes(kind) || path.length === 0) {
+    throw new PatchError(
+      '`structure` must be "symbol:<name>", "section:<title>", or "key:<path>" — nothing was written',
+      'PATCH_STRUCTURE_SHAPE',
+    )
+  }
+  return { kind, path }
+}
+
+/**
+ * 把一个结构路径解析成当前文件里的行区间（**唯一**才收）。
+ *
+ * 判据：
+ *   · `symbol`：交给 `resolveTarget`（支持 `function:foo` / `Outer/Inner` / `#n`）；歧义把候选递回；
+ *   · `section`：Markdown 标题；范围到下一个同级或更高级标题前一行；
+ *   · `key`：JSON/TOML/YAML 的键（`doc-structure` 的条目，名字精确或点号后缀命中）。
+ */
+function resolveStructureRegion(lines, structure, ctx) {
+  const content = ctx.content
+  if (structure.kind === 'symbol') {
+    const lang = langOf(ctx.label)
+    if (lang === null) {
+      throw new PatchError(`"${structure.path}" is a symbol address, but ${ctx.label} has no symbol language — use section:/key: instead; nothing was written`, 'PATCH_STRUCTURE_NOT_FOUND')
+    }
+    let hit
+    try {
+      hit = resolveTarget(indexStructure(content, lang), structure.path)
+    } catch (error) {
+      if (error?.code === 'STRUCT_AMBIGUOUS') {
+        throw new PatchError(
+          `"${structure.path}" matched ${Array.isArray(error.candidates) ? error.candidates.length : 'several'} symbols — add #<n> or a scope (Outer/Inner), or use lines; nothing was written`,
+          'PATCH_STRUCTURE_AMBIGUOUS',
+          { candidates: error.candidates },
+        )
+      }
+      throw new PatchError(`no symbol matching "${structure.path}" in ${ctx.label} — nothing was written`, 'PATCH_STRUCTURE_NOT_FOUND')
+    }
+    const rows = regionRowsAt(lines, hit.startLine, hit.endLine)
+    if (rows === null) throw new PatchError(`"${structure.path}" resolves outside the current file — nothing was written`, 'PATCH_STRUCTURE_NOT_FOUND')
+    return { startLine: hit.startLine, endLine: hit.endLine, rows, moved: false, structure: { kind: 'symbol', path: structure.path } }
+  }
+  const docKind = docKindOf(ctx.label)
+  if (docKind === null) {
+    throw new PatchError(`"${structure.path}" is a ${structure.kind} address, but ${ctx.label} is not a document/config file; nothing was written`, 'PATCH_STRUCTURE_NOT_FOUND')
+  }
+  const doc = indexDocument(content, docKind)
+  if (structure.kind === 'section') {
+    const headings = doc.entries.filter((entry) => entry.kind === 'heading')
+    const matches = headings.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.name === structure.path)
+    if (matches.length === 0) throw new PatchError(`no section titled "${structure.path}" in ${ctx.label} — nothing was written`, 'PATCH_STRUCTURE_NOT_FOUND')
+    if (matches.length > 1) {
+      throw new PatchError(`"${structure.path}" matched ${matches.length} sections — use a unique title; nothing was written`, 'PATCH_STRUCTURE_AMBIGUOUS', {
+        candidates: matches.map(({ entry }) => ({ name: entry.name, startLine: entry.startLine })),
+      })
+    }
+    const { entry, index } = matches[0]
+    let endLine = lines.length
+    for (let i = index + 1; i < headings.length; i += 1) {
+      if (headings[i].depth <= entry.depth) {
+        endLine = headings[i].startLine - 1
+        break
+      }
+    }
+    /** 尾部的空行是**节与节之间的分隔**，不属于上一节的正文：换掉一节不该吃掉分隔行。 */
+    while (endLine > entry.startLine && String(lines[endLine - 1] ?? '').trim() === '') endLine -= 1
+    const rows = regionRowsAt(lines, entry.startLine, endLine)
+    if (rows === null) throw new PatchError(`section "${structure.path}" has no rows in the current file — nothing was written`, 'PATCH_STRUCTURE_NOT_FOUND')
+    return { startLine: entry.startLine, endLine, rows, moved: false, structure: { kind: 'section', path: structure.path } }
+  }
+  // key
+  const matches = doc.entries.filter((entry) => entry.name === structure.path || entry.name.endsWith(`.${structure.path}`))
+  if (matches.length === 0) throw new PatchError(`no key "${structure.path}" in ${ctx.label} — nothing was written`, 'PATCH_STRUCTURE_NOT_FOUND')
+  if (matches.length > 1) {
+    throw new PatchError(`"${structure.path}" matched ${matches.length} keys — use the full dotted path; nothing was written`, 'PATCH_STRUCTURE_AMBIGUOUS', {
+      candidates: matches.map((entry) => ({ name: entry.name, startLine: entry.startLine })),
+    })
+  }
+  const entry = matches[0]
+  const endLine = Number.isInteger(entry.endLine) && entry.endLine >= entry.startLine ? entry.endLine : entry.startLine
+  const rows = regionRowsAt(lines, entry.startLine, endLine)
+  if (rows === null) throw new PatchError(`key "${structure.path}" has no rows in the current file — nothing was written`, 'PATCH_STRUCTURE_NOT_FOUND')
+  return { startLine: entry.startLine, endLine, rows, moved: false, structure: { kind: 'key', path: structure.path } }
 }
 
 /**
@@ -2362,6 +2475,12 @@ function resolveHandleRegion(lines, parsed, ctx) {
       'PATCH_HANDLE_IDENTITY_MISMATCH',
     )
   }
+  /** 结构句柄：地址是路径，不是坐标；指纹只回答“你读到的内容变了没有”。 */
+  if (parsed.kind === 'structure') {
+    const region = resolveStructureRegion(lines, { kind: parsed.structureKind, path: parsed.path }, ctx)
+    const fingerprint = regionFingerprint(region.rows.join('\n'), ctx.byteOrderMark)
+    return { ...region, changed: fingerprint !== parsed.fingerprint }
+  }
   const own = regionRowsAt(lines, parsed.startLine, parsed.endLine)
   if (own !== null && regionFingerprint(own.join('\n'), ctx.byteOrderMark) === parsed.fingerprint) {
     return { startLine: parsed.startLine, endLine: parsed.endLine, rows: own, moved: false }
@@ -2518,8 +2637,8 @@ function locateOldInRegion(lines, region, hunk, oldText, ctx) {
  * `handleRegion` 是给闸门用的：句柄的凭据覆盖**整个区间**，而 `line: k` / `old` 只是区间内部的
  * 相对定位 ⇒ 闸门要比对的是整个区间，不是这次替换的那一小段（{@link staleConflicts}）。
  */
-function locateByHandle(lines, hunk, parsed, ctx) {
-  const region = resolveHandleRegion(lines, parsed, ctx)
+function locateByHandle(lines, hunk, parsed, ctx, preResolved = null) {
+  const region = preResolved ?? resolveHandleRegion(lines, parsed, ctx)
   const total = region.rows.length
   const regionText = region.rows.join('\n')
   const handleRegion = { startLine: region.startLine, endLine: region.endLine, text: regionText }
@@ -2572,9 +2691,24 @@ function locateByHandle(lines, hunk, parsed, ctx) {
   return finish({
     startLine: region.startLine,
     endLine: region.endLine,
-    tier: HANDLE_TIER,
+    tier: region.structure === undefined ? HANDLE_TIER : `${HANDLE_TIER} ${region.structure.kind}`,
     actual: regionText,
   })
+}
+
+/**
+ * 结构地址 → 区间 → 复用句柄的相对定位（`position` / `line` / `old` / 整段）。
+ * 不另写一份相对定位：那会造出第二个“区间内怎么定点”的真值源。
+ */
+function locateByStructure(lines, hunk, structure, ctx) {
+  const region = resolveStructureRegion(lines, structure, ctx)
+  return locateByHandle(
+    lines,
+    hunk,
+    { ok: true, kind: 'structure', startLine: region.startLine, endLine: region.endLine, fingerprint: regionFingerprint(region.rows.join('\n'), ctx.byteOrderMark) },
+    ctx,
+    region,
+  )
 }
 
 
@@ -2681,6 +2815,8 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
     }
     /** 句柄的形状在这里判（不对就抛错）；`{handle, old}` 那一支的 `old` 仍然要命中区间内部。 */
     const parsedHandle = handleAddressOf(hunk)
+    /** 结构地址：`handle` 优先（与 D7 同一口径）；句柄在场时不再看它。 */
+    const structureAddress = parsedHandle === null ? structureAddressOf(hunk) : null
     /**
      * `line` / `position` 是**句柄形状的从属键**：只有和 `handle` 同时在场才成立。
      *
@@ -2694,21 +2830,21 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
      * 码取 `PATCH_NO_ADDRESS`：它是"这个 hunk 一种地址都没成形"那一族，且**刻意不进**壳层的
      * 结果通道（参数没成形要大声抛错，与"地址对不上"是两件事）。
      */
-    if (parsedHandle === null && hunk.line !== undefined && hunk.line !== null) {
+    if (parsedHandle === null && structureAddress === null && hunk.line !== undefined && hunk.line !== null) {
       throw new PatchError(
-        '`line` needs `handle`: it addresses a row **inside** the region a handle names — for an absolute line range use `lines` / `start_line`+`end_line`; nothing was written',
+        '`line` needs `handle` or `structure`: it addresses a row **inside** the region a handle/structure names — for an absolute line range use `lines` / `start_line`+`end_line`; nothing was written',
         'PATCH_NO_ADDRESS',
       )
     }
-    if (parsedHandle === null && hunk.position !== undefined && hunk.position !== null) {
+    if (parsedHandle === null && structureAddress === null && hunk.position !== undefined && hunk.position !== null) {
       throw new PatchError(
-        '`position` needs `handle`: it inserts at the edge of the region a handle names — for an absolute line range use `lines` / `start_line`+`end_line`; nothing was written',
+        '`position` needs `handle` or `structure`: it inserts at the edge of the region a handle/structure names — for an absolute line range use `lines` / `start_line`+`end_line`; nothing was written',
         'PATCH_NO_ADDRESS',
       )
     }
-    if (oldText === null && parsedHandle === null && !hasTarget && range === undefined && !hasCue && !hasAnchor) {
+    if (oldText === null && parsedHandle === null && structureAddress === null && !hasTarget && range === undefined && !hasCue && !hasAnchor) {
       throw new PatchError(
-        gaveLineAddress(hunk) ? LINE_ADDRESS_HINT : 'each hunk needs one of: old, target, lines, line_cue, anchor',
+        gaveLineAddress(hunk) ? LINE_ADDRESS_HINT : 'each hunk needs one of: old, target, lines, line_cue, anchor, handle, structure',
         'PATCH_NO_ADDRESS',
       )
     }
@@ -2720,6 +2856,8 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
        * 句柄是工具自己那份逐字节副本，拄的 `old` 正是不可信的那一半。
        */
       hits = [locateByHandle(lines, hunk, parsedHandle, handleCtx)]
+    } else if (structureAddress !== null) {
+      hits = [locateByStructure(lines, hunk, structureAddress, handleCtx)]
     } else if (oldText !== null) {
       /**
        * `old` 在场 ⇒ 走内容寻址，**其余地址字段一律不再决定位置**（坐标只用于核对与披露）。
@@ -3244,6 +3382,84 @@ export function requireObservedRevision({ displayPath, identityKey, content, byt
  * @returns 回执字段（与 DSH 版同形：applied / dryRun / write_verify / unverified_region / operation）
  * @throws PatchError（PATCH_STALE_REGION / PATCH_UNOBSERVED / WRITE_VERIFY_FAILED / PATCH_NOT_FOUND …）
  */
+/**
+ * 漂移重定位（`--retry`）：地址过期时，用**旧观测里的那段原文**在当前内容里找回它。
+ *
+ * 判据就一条：整行精确匹配**全文唯一**。不看行号、不看相似度——行号已经不可信，
+ * 相似度会把“改错了地方”卖成“改对了”。找不到 / 找到多处 ⇒ 该 hunk 原样留下，
+ * 闸门照旧判它陈旧。纯函数（无 IO）：旧观测与当前内容都由调用方递进来。
+ */
+function rebaseHunks(hunks, observedSource, freshContent) {
+  const oldLines = observedSource.split(/\r?\n/)
+  const freshLines = freshContent.split(/\r?\n/)
+  const rebased = []
+  const out = []
+  let changed = false
+  for (const hunk of hunks) {
+    if (hunk === null || typeof hunk !== 'object') {
+      out.push(hunk)
+      continue
+    }
+    // 句柄里的 `line`/`position` 是**段内相对地址**：换成绝对行号会把语义改掉。
+    if (typeof hunk.line === 'number' || hunk.position !== undefined) {
+      out.push(hunk)
+      continue
+    }
+    let start
+    let end
+    try {
+      const range = lineRangeOf(hunk)
+      if (range !== undefined && range !== null) {
+        start = range.start
+        end = range.end
+      }
+    } catch {
+      start = undefined
+    }
+    if (start === undefined && typeof hunk.handle === 'string') {
+      const parsed = parseHandle(hunk.handle)
+      if (parsed.ok === true) {
+        start = parsed.startLine
+        end = parsed.endLine
+      }
+    }
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start || end > oldLines.length) {
+      out.push(hunk)
+      continue
+    }
+    const span = end - start
+    const oldText = oldLines.slice(start - 1, end).join('\n')
+    if (oldText.length === 0) {
+      out.push(hunk)
+      continue
+    }
+    let hit = -1
+    for (let i = 0; i + span < freshLines.length; i += 1) {
+      if (freshLines[i] !== oldLines[start - 1]) continue
+      if (freshLines.slice(i, i + span + 1).join('\n') !== oldText) continue
+      if (hit !== -1) {
+        hit = -2 // 多处命中 = 无法确定落点
+        break
+      }
+      hit = i
+    }
+    if (hit < 0) {
+      out.push(hunk)
+      continue
+    }
+    const newStart = hit + 1
+    if (newStart === start && hunk.handle === undefined) {
+      out.push(hunk) // 没漂
+      continue
+    }
+    const { handle: _handle, ...rest } = hunk
+    out.push({ ...rest, lines: [newStart, newStart + span] })
+    rebased.push({ from: [start, end], to: [newStart, newStart + span] })
+    changed = true
+  }
+  return changed ? { hunks: out, rebased } : null
+}
+
 async function planEditToProvider(provider, request) {
   const { displayPath, hunks = [], dryRun = false, create, signal, wholeFile, eol, skipStaleGate } = request
   if (wholeFile !== undefined && typeof wholeFile !== 'string') {
@@ -3275,7 +3491,23 @@ async function planEditToProvider(provider, request) {
         'PATCH_NOT_FOUND',
       )
     }
-    return { kind: 'create', ledgerKey, displayPath, content: create, create: true, dryRun: dryRun === true }
+    /**
+     * 新建也要预检：新文件写下去就无从“回读原文”——JSON/Markdown 结构与 lone CR 在
+     * 这里就能判。删除闸不适用（没有原文）。
+     */
+    const createdPreflight = preflightEdit({ displayPath, source: '', planned: create, basis: 'create' })
+    if (createdPreflight.fatal.length > 0) {
+      throw new PatchError(createdPreflight.fatal[0].message, createdPreflight.fatal[0].code, { preflight: { reasons: createdPreflight.fatal } })
+    }
+    return {
+      kind: 'create',
+      ledgerKey,
+      displayPath,
+      content: create,
+      create: true,
+      dryRun: dryRun === true,
+      ...(createdPreflight.warnings.length === 0 ? {} : { preflight_warnings: createdPreflight.warnings }),
+    }
   }
 
   const content = await provider.readText(displayPath, signal)
@@ -3299,10 +3531,26 @@ async function planEditToProvider(provider, request) {
    * 旧实现由调用方先读一次算总行数、这里再读一次，两次之间文件变长就会只替换前缀、
    * 把旧尾巴留在盘上（`allow_unobserved` 下没有观测闸兜底，实测可复现）。
    */
-  const planningHunks =
+  let planningHunks =
     wholeFile === undefined
       ? hunks
       : [{ lines: [1, content.split(/\r?\n/).length], replace: wholeFile, ...(typeof eol === 'string' ? { eol } : {}) }]
+  /**
+   * `--retry`：**计划之前**先用旧观测里的原文把地址重定位。
+   * 重定位成功的 hunk 换成新行号；之后闸门直接跳过（“整行精确且全文唯一”比闸门的区域比对更硬）。
+   */
+  let rebased = null
+  if (request.retry === true && wholeFile === undefined) {
+    console.error('DEBUG plan retry', request.retry, 'hunks', JSON.stringify(planningHunks))
+    const observed = latestObservation(ledgerKey, { source: content })
+    if (observed !== null && typeof observed.source === 'string') {
+      const pass = rebaseHunks(planningHunks, observed.source, content)
+      if (pass !== null) {
+        planningHunks = pass.hunks
+        rebased = pass.rebased
+      }
+    }
+  }
   let planned
   try {
     /**
@@ -3350,12 +3598,24 @@ async function planEditToProvider(provider, request) {
   const gate =
     skipStaleGate === true
       ? { clean: true, basis: request.requireObservation === true ? 'observation' : 'none' }
-      : regionGate(planningHunks, content, planned, displayPath, {
-          byteOrderMark: byteOrderMarks > 0,
-          // 身份键往下传（有才传）：闸门按**同一个磁盘文件**记账，而回执与诊断里的路径仍是 displayPath。
-          ...(request.identityKey === undefined ? {} : { identityKey: request.identityKey }),
-        })
+      : rebased !== null
+        ? { clean: true, basis: 'fresh' }
+        : regionGate(planningHunks, content, planned, displayPath, {
+            byteOrderMark: byteOrderMarks > 0,
+            // 身份键往下传（有才传）：闸门按**同一个磁盘文件**记账，而回执与诊断里的路径仍是 displayPath。
+            ...(request.identityKey === undefined ? {} : { identityKey: request.identityKey }),
+          })
   if (!gate.clean) throw new PatchError(gate.message, 'PATCH_STALE_REGION', gate.extras)
+  /**
+   * 写前预检：在**计划内容**上跑本地不变量，任何字节落盘之前。
+   *
+   * 位置必须在 `dry_run` 之前（与陈旧闸门同一条理由）：预演要预演出真写的判决。
+   */
+  const finalContent = carryingByteOrderMarks(planned.content, byteOrderMarks)
+  const preflight = preflightEdit({ displayPath, source: content, planned: finalContent, basis: gate.basis, wholeFile: wholeFile !== undefined })
+  if (preflight.fatal.length > 0) {
+    throw new PatchError(preflight.fatal[0].message, preflight.fatal[0].code, { preflight: { reasons: preflight.fatal } })
+  }
   if (dryRun) {
     /**
      * 预演**不铸可复用句柄**：句柄指向“盘上那段字节”，而 dry-run 一个字节都没写；
@@ -3363,7 +3623,16 @@ async function planEditToProvider(provider, request) {
      * 足以让调用方判断“会落到哪几行”；要句柄就真写（或写完再读）。
      */
     const applied = planned.applied.map(({ handle: _handle, ...rest }) => rest)
-    return { kind: 'dry_run', ledgerKey, displayPath, applied, basis: gate.basis, dryRun: true }
+    return {
+      kind: 'dry_run',
+      ledgerKey,
+      displayPath,
+      applied,
+      basis: gate.basis,
+      dryRun: true,
+      ...(rebased === null ? {} : { rebased }),
+      ...(preflight.warnings.length === 0 ? {} : { preflight_warnings: preflight.warnings }),
+    }
   }
   return {
     kind: 'patch',
@@ -3375,7 +3644,7 @@ async function planEditToProvider(provider, request) {
      * 新内容：BOM 的**个数**只能从字节补（`content` 里那个前导 BOM 已被解码器吃掉）。
      * 计算位置与改前一致 —— 在 `dry_run` 那条早退之后（预演不做这份拼接）。
      */
-    content: carryingByteOrderMarks(planned.content, byteOrderMarks),
+    content: finalContent,
     version: info.version,
     basis: gate.basis,
     /**
@@ -3384,6 +3653,8 @@ async function planEditToProvider(provider, request) {
      */
     original: content,
     dryRun: false,
+    ...(rebased === null ? {} : { rebased }),
+    ...(preflight.warnings.length === 0 ? {} : { preflight_warnings: preflight.warnings }),
   }
 }
 
@@ -3443,6 +3714,8 @@ async function finishEditPlan(provider, request, plan) {
       dryRun: true,
       // 预演也要如实说“这次没有可核对的基准”，否则它比不上真写诚实。
       ...(plan.basis === 'none' ? { unverified_region: true } : {}),
+      ...(plan.rebased === undefined ? {} : { rebased: plan.rebased }),
+      ...(plan.preflight_warnings === undefined ? {} : { preflight_warnings: plan.preflight_warnings }),
     }
   }
   /**
@@ -3455,12 +3728,19 @@ async function finishEditPlan(provider, request, plan) {
       operation: 'create',
       applied: [{ line: 1, tier: 'create', actual: '', replaced: plan.content }],
       dryRun: true,
+      ...(plan.preflight_warnings === undefined ? {} : { preflight_warnings: plan.preflight_warnings }),
     }
   }
   const verification = await verifyWriteBack(provider, displayPath, plan.content, displayPath, signal)
   const view = providerView(plan.content)
   const byteOrderMark = plan.content.startsWith(BYTE_ORDER_MARK)
   rememberRead(plan.ledgerKey, contentToken(view, byteOrderMark), view, byteOrderMark)
+  /**
+   * 写后结构状态：只在此刻能判的格式上给结论（JSON / Markdown）；**只在坏的时候出现**，
+   * 保持既有成功回执逐字节不变（黄金集靠这条）。
+   */
+  const structure = structureOf(plan.content, displayPath)
+  const structureField = structure.ok === false ? { structure: { kind: structure.kind, ok: false, ...(structure.error === undefined ? {} : { error: structure.error }), ...(structure.fences === undefined ? {} : { fences: structure.fences }) } } : {}
   if (plan.kind === 'create') {
     return {
       path: displayPath,
@@ -3468,16 +3748,21 @@ async function finishEditPlan(provider, request, plan) {
       applied: [{ line: 1, tier: 'create', actual: '', replaced: plan.content }],
       dryRun: false,
       write_verify: verification,
+      ...structureField,
+      ...(plan.preflight_warnings === undefined ? {} : { preflight_warnings: plan.preflight_warnings }),
     }
   }
   return {
     path: displayPath,
     applied: plan.applied,
     dryRun: false,
+    ...(plan.rebased === undefined ? {} : { rebased: plan.rebased }),
     write_verify: verification,
     // 没有基准时如实标注。调用方（CLI/MCP/DSH 壳）都把它透进回执：
     // "没核对过"与"核对过且没变"必须是两句话，否则回执在撒谎。
     ...(plan.basis === 'none' ? { unverified_region: true } : {}),
+    ...structureField,
+    ...(plan.preflight_warnings === undefined ? {} : { preflight_warnings: plan.preflight_warnings }),
   }
 }
 
@@ -3568,6 +3853,9 @@ function singleRequestFrom(item, request) {
   /** 严格新鲜度是整批的默认值；元素自己给了就听元素的（与 `dryRun` 同一口径）。 */
   const requireObservation = item.requireObservation === undefined ? request?.requireObservation : item.requireObservation
   if (requireObservation !== undefined) out.requireObservation = requireObservation
+  // 漂移重定位是整批的默认值；元素自己给了就听元素的（与上面两条同一口径）。
+  const retry = item.retry === undefined ? request?.retry : item.retry
+  if (retry !== undefined) out.retry = retry
   if (request?.signal !== undefined) out.signal = request.signal
   return out
 }

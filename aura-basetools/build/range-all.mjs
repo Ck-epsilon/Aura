@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * range-all.mjs —— 一条命令跑完三套靶场（格式矩阵 / 字节形态 / 参数形态）。
+ * range-all.mjs —— 一条命令跑完四套靶场（格式矩阵 / 字节形态 / 参数形态 / 错误闭环）。
  *
  *   node build/range-all.mjs           # 人看
  *   node build/range-all.mjs --json    # 机器看
@@ -18,6 +18,7 @@ const RANGES = [
   ['格式矩阵', 'src/locator-lab/range-formats-test.mjs'],
   ['字节形态', 'src/aura-standalone/test/range-bytes-test.mjs'],
   ['参数形态', 'src/locator-lab/range-args-test.mjs'],
+  ['错误闭环', 'src/locator-lab/range-error-lifecycle-test.mjs'],
 ]
 
 const rows = []

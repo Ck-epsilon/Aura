@@ -6,7 +6,7 @@
 **0.7.0 起拆成两个 npm 包**：
 
 - `aura-basetools`：引擎 + CLI + MCP，**不依赖 DSH**；
-- `aura-basetools-dsh`：DSH 的 `aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write` 适配器，依赖 core。
+- `aura-basetools-dsh`：DSH 的 `aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write` / `aura_basetools_convert` 适配器，依赖 core。
 
 DSH 插件 · MCP 服务（Codex / Claude Code / Cursor）· CLI 三条入口共用同一份引擎。
 
@@ -116,7 +116,7 @@ exact 命中的那一段、拒绝带首/尾换行的 `old`；`targets` 元素上
 `require_observation`，以及非法元素值的参数面拒绝（不再吐 Node 栈或先建事务）。
 
 **0.12.0 起对外工具标识统一为 `aura_basetools_*`**：MCP / DSH 工具名为
-`aura_basetools_read`、`aura_basetools_edit`、`aura_basetools_write`。包名与 bin 名不变。
+`aura_basetools_read`、`aura_basetools_edit`、`aura_basetools_write`、`aura_basetools_convert`（MCP 面另有 `aura_basetools_tx`）。包名与 bin 名不变。
 历史会话日志仍含旧名；分析件同时认旧名与新名。0.14.0 移除了公开
 `aura_basetools_undo` / `aura_basetools_transactions`（采用率 0）。
 
@@ -230,6 +230,46 @@ aura basetools edit --file a.js --lines 10 --replace 'const x = 1'
 - 观测缓存目录 `0700`、文件 `0600`（POSIX）；`AURA_NO_OBSERVATION_CACHE=1` 可完全关闭落盘缓存。
 - 临时文件写完后执行 fsync，再 rename；不支持 fsync 的文件系统上退化为尽力而为。
 
+## 错误闭环（0.22）
+
+这一版的重点不是“更多格式”，而是**把错误压缩成一次调用内被看见、一次调用内被改回**。
+
+- **写前预检**（`edit`/`write`，写盘之前）：
+  - JSON：改前可解析、改后会不可解析 ⇒ `PATCH_STRUCTURE_BROKEN`，零写入；
+  - Markdown：围栏配平 → 不配平 ⇒ 同上；
+  - 替换文本引入 lone CR ⇒ `PATCH_LONE_CR`；
+  - 未读过的文件一次删掉 ≥30 行且 ≥30% ⇒ `PATCH_DESTRUCTIVE_UNOBSERVED`；
+  - 整份替换（`write`）是**显式逃生口**：同样的坏结构只降为 `preflight_warnings`，
+    写后回执带 `structure: broken`。
+- **漂移重定位** `edit --retry`（MCP/DSH 同名参数）：地址过期时，用上次读到的原文在当前内容里
+  整行精确匹配；**全文唯一**才重放，回执带 `rebased: [{from, to}]`；找不到或多处命中仍拒绝。
+- **只读体检** `aura basetools diagnose --file <路径>`：编码/置信度/来源、BOM、crlf/lf/cr 普查、
+  lone CR、结构是否可解析（JSON / Markdown）、行数。它不做判定，exit 0。
+- **零 token 转换** `aura basetools convert --file <路径> --to <编码> [--from] [--bom keep|yes|no]
+  [--eol keep|lf|crlf] [--dry-run]`：换编码 / 换行尾 / 增删 BOM，内容不经过模型；
+  原子写 + 文本相等校验，目标编码表示不了的字符 ⇒ `ENCODING_UNREPRESENTABLE`，零写入。
+- **编码补全**：单字节代码页（cp1250–1258、ISO-8859-2/5/7/9/15、KOI8-R/U）可显式读写；
+  无 BOM 的 UTF-16 按 NUL 奇偶位推断端序（纯 CJK 的 UTF-16 仍拒绝：信息上不可判）；
+  短 CJK 文件在“猜不准”时用**同目录高置信兄弟**投票（≥5 个样本、≥90% 一致），
+  再按逐字节可逆复核；`read` 回执会标 `encoding_source: "directory-prior"`。
+- **覆盖集** `read --coverage`（MCP/DSH 同名参数）：回执带 `coverage: {totalLines, covered,
+  notCovered}`（区间字符串，如 `"1-9"`）；只有显式请求才出现，既有回执形状不变。
+
+判据在闸里：`preflight-test`（29）、`retry-test`（19）、`coverage-test`（7）、
+`encoding-test`（54），以及**错误闭环靶场** `range-error-lifecycle-test`（13 类故障：预检/定位全中、
+误拒 0、除两条按设计例外均可一次修复）；只读探针 `probes/error-lifecycle.mjs` 负责打印完整矩阵。
+
+## 结构地址 / 结构句柄 / 双重编码（0.23）
+
+- **改文件不必先落到坐标**：`edit` 接受 `structure`——`symbol:<名字>` / `section:<标题>` /
+  `key:<点号路径>`。行号漂移、甚至**整段正文被外部改写**，按结构仍指得到；歧义/找不到直接拒绝。
+- **结构句柄**：`read --structure-handle` 在窗口恰好覆盖一个符号时发 `s…:symbol=<name>`，
+  与行号句柄同族（身份标签 + 区间指纹），编辑侧按符号重定位。
+- **双重编码修复**：`diagnose` 报 `doubleEncoding`；`convert --repair-double-encoding` 还原
+  “UTF-8 字节被当 Latin-1/GBK 再存一次”的可逆损坏；`锟斤拷` 这类不可逆的明确拒绝。
+- **convert 三面可用**：CLI 全编码；MCP `aura_basetools_convert` 全编码；DSH 同名工具目标只支持
+  UTF-8（宿主 fs 只能写 UTF-8 文本），其余目标编码走 CLI。
+
 ## 发布
 
 ```bash
@@ -277,7 +317,7 @@ npm 官方源发**两个包**（构建在 `dist/npm/`，由 `make-bundle.mjs --p
 | 包 | 内容 | 入口 |
 |---|---|---|
 | `aura-basetools` | 核心：引擎 + CLI + MCP，**无 DSH 依赖** | `aura` / `aura-mcp`；`npx -y --package aura-basetools aura basetools mcp` |
-| `aura-basetools-dsh` | DSH 适配器：三个工具壳（`aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write`）+ patch，依赖同版本核心 | `dsh plugin add aura-basetools-dsh` |
+| `aura-basetools-dsh` | DSH 适配器：四个工具壳（`aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write` / `aura_basetools_convert`）+ patch，依赖同版本核心 | `dsh plugin add aura-basetools-dsh` |
 
 发布顺序：先核心、后适配器。两包都能装上且适配器按包名解析核心，由
 `build/split-package-test.mjs` 守着（已入 `release-check` 与 CI）。

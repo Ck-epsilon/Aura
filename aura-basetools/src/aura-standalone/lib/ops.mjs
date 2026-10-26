@@ -16,8 +16,9 @@ import { createNodeFsProvider, DEFAULT_MAX_TEXT_BYTES } from './fs-provider.mjs'
 import { withWorkspaceLock } from './workspace-lock.mjs'
 import { createTransaction, getTransactionMeta, openTransaction } from './transaction-store.mjs'
 import { createDiskStore } from './observation-store.mjs'
-import { probeEncoding, decodeBytes } from './encoding.mjs'
+import { probeEncoding, decodeBytes, encodeText, SUPPORTED_ENCODINGS, detectDoubleEncoding, repairDoubleEncoding as repairDoubleEncodedText } from './encoding.mjs'
 import { recallEncoding, rememberEncoding } from './encoding-memory.mjs'
+import { refineWithDirectory } from './encoding-context.mjs'
 
 /**
  * ── 引擎位置：两种布局各一个候选，选一次之后就冻住 ─────────────────────────────
@@ -81,6 +82,7 @@ const engineArgs = await import(engineUrl('args.mjs'))
 const writePath = await import(engineUrl('write-path.mjs'))
 const structCore = await import(engineUrl('struct-core.mjs'))
 const handleCore = await import(engineUrl('handle-core.mjs'))
+const preflight = await import(engineUrl('preflight.mjs'))
 
 /**
  * 0.9.9：运行时可查询的能力清单（与 build/capabilities.mjs 同一份源码常量）。
@@ -257,6 +259,159 @@ function resolvedOrRaw(provider, file) {
  * 用**排除法**而不是白名单：以后有人往 `extra` 里加字段，这里自动带上，不会再漏一次。
  */
 const ERROR_NOISE = new Set(['code', 'name', 'message', 'stack'])
+/**
+ * `diagnose`：只读体检——把“这个文件现在到底是什么状态”一次说清。
+ *
+ * 它不解码不了的文件、不改盘、不判定；所有事实都是本地可复算的。
+ */
+export function diagnoseEnvelope(provider, { file, encoding } = {}) {
+  const displayPath = provider.resolve(file)
+  const got = readFileBytes(displayPath, { encoding })
+  if (got.error !== undefined) return got.error
+  const source = got.source
+  const eol = preflight.eolCensus(source)
+  const loneCr = preflight.countLoneCr(source)
+  const structure = preflight.structureOf(source, displayPath)
+  const docKind = preflight.docKindOf(displayPath)
+  const lang = structCore.langOf(displayPath)
+  const dot = displayPath.lastIndexOf('.')
+  const language = lang !== null && dot >= 0 ? displayPath.slice(dot + 1).toLowerCase() : null
+  const warnings = []
+  if (loneCr > 0) warnings.push(`${loneCr} lone CR (carriage return without LF) — line-oriented edits will refuse this file until it is normalized`)
+  if (eol.crlf > 0 && eol.lf > 0) warnings.push(`mixed line endings (crlf ${eol.crlf} / lf ${eol.lf}) — per-line endings are preserved, but a whole-file rewrite will normalize`)
+  if (structure.ok === false) warnings.push(`${structure.kind} structure is broken${structure.error === undefined ? '' : `: ${structure.error}`}`)
+  const doubleEncoding = detectDoubleEncoding(source)
+  if (doubleEncoding !== null) warnings.push(`double-encoded text detected (${doubleEncoding.kind}) — \`convert --repair-double-encoding\` can recover the original text`)
+  return {
+    ok: true,
+    path: displayPath,
+    bytes: got.size,
+    totalLines: source.split(/\r?\n/).length,
+    encoding: got.encoding.encoding,
+    ...(got.encoding.encoding === 'utf-8' ? {} : { encoding_confidence: got.encoding.confidence }),
+    bom: got.byteOrderMark,
+    eol,
+    loneCr,
+    ...(structure.kind === null ? {} : { structure }),
+    ...(docKind === null ? {} : { docKind }),
+    ...(language === null ? {} : { language }),
+    ...(doubleEncoding === null ? {} : { doubleEncoding }),
+    ...(warnings.length === 0 ? {} : { warnings }),
+  }
+}
+
+const CONVERT_ALIASES = {
+  utf8: 'utf-8',
+  gbk: 'gb18030',
+  gb2312: 'gb18030',
+  latin1: 'windows-1252',
+  'iso-8859-1': 'windows-1252',
+  utf16le: 'utf-16le',
+  utf16be: 'utf-16be',
+  sjis: 'shift_jis',
+  'shift-jis': 'shift_jis',
+  cp1251: 'windows-1251',
+  cp1252: 'windows-1252',
+}
+const BOM_BYTES_BY_ENCODING = {
+  'utf-8': [0xef, 0xbb, 0xbf],
+  'utf-16le': [0xff, 0xfe],
+  'utf-16be': [0xfe, 0xff],
+}
+const normalizeEncodingName = (name) => {
+  if (typeof name !== 'string') return null
+  const lower = name.trim().toLowerCase()
+  return CONVERT_ALIASES[lower] ?? lower
+}
+
+/**
+ * `convert`：**零 token** 的本地变换——换编码 / 换行尾 / 增删 BOM。
+ *
+ * 为什么它不是一个“read + write”组合：那样整份内容要过一次模型，既贵又给了模型
+ * “抄错一个字节”的机会。转换是字节层的事，回执只报事实（from/to/bytes/verified）。
+ */
+export async function convertEnvelope(provider, { file, to, from, bom = 'keep', eol = 'keep', dryRun = false, repairDoubleEncoding = false } = {}) {
+  if (typeof file !== 'string' || file.length === 0) {
+    return { ok: false, error: 'convert needs a file path', code: 'CONVERT_BAD_ARGS' }
+  }
+  const target = normalizeEncodingName(to)
+  if (target === null || !SUPPORTED_ENCODINGS.includes(target)) {
+    return { ok: false, error: `unsupported target encoding ${JSON.stringify(to)}`, code: 'CONVERT_BAD_ARGS' }
+  }
+  if (!['keep', 'yes', 'no'].includes(bom)) return { ok: false, error: 'convert `bom` must be keep, yes, or no', code: 'CONVERT_BAD_ARGS' }
+  if (!['keep', 'lf', 'crlf'].includes(eol)) return { ok: false, error: 'convert `eol` must be keep, lf, or crlf', code: 'CONVERT_BAD_ARGS' }
+  if (typeof provider.writeBytes !== 'function') {
+    return { ok: false, error: 'convert is not available on this surface', code: 'CONVERT_UNSUPPORTED' }
+  }
+  const displayPath = provider.resolve(file)
+  const info = provider.stat(displayPath)
+  if (info === undefined) return { ok: false, error: `cannot convert "${displayPath}": not found`, code: 'FS_NOT_FOUND' }
+  if (info.type !== 'file') return { ok: false, error: `cannot convert "${displayPath}": not a regular file`, code: 'FS_NOT_REGULAR_FILE' }
+  const got = readFileBytes(displayPath, { encoding: normalizeEncodingName(from) ?? undefined })
+  if (got.error !== undefined) return got.error
+  const text = got.source
+  /** 双重编码修复：先还原正文，再做编码/行尾/BOM 变换。 */
+  let repaired = null
+  let effectiveText = text
+  if (repairDoubleEncoding === true) {
+    const detected = detectDoubleEncoding(text)
+    if (detected === null) {
+      return {
+        ok: false,
+        error: 'no reversible double-encoding detected (irreversible mojibake such as U+FFFD cannot be repaired)',
+        code: 'CONVERT_NO_DOUBLE_ENCODING',
+      }
+    }
+    try {
+      const recovered = repairDoubleEncodedText(text, detected)
+      repaired = { kind: detected.kind, via: detected.via, chars_before: [...text].length, chars_after: [...recovered].length }
+      effectiveText = recovered
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error), code: typeof error?.code === 'string' ? error.code : 'CONVERT_NO_DOUBLE_ENCODING' }
+    }
+  }
+  const normalized =
+    eol === 'lf'
+      ? effectiveText.replace(/\r\n|\r/g, '\n')
+      : eol === 'crlf'
+        ? effectiveText.replace(/\r\n|\r|\n/g, '\n').replace(/\n/g, '\r\n')
+        : effectiveText
+  const bomCapable = BOM_BYTES_BY_ENCODING[target] ?? null
+  let bomBytes = []
+  if (bom === 'yes') {
+    if (bomCapable === null) return { ok: false, error: `${target} does not use a byte-order mark`, code: 'CONVERT_BAD_ARGS' }
+    bomBytes = bomCapable
+  } else if (bom === 'keep') {
+    bomBytes = got.encoding.bom.length > 0 && bomCapable !== null ? bomCapable : []
+  }
+  const probe = { encoding: target, bom: bomBytes, confidence: 'high', roundTrip: true, readOnly: false, explicit: true }
+  let buffer
+  try {
+    buffer = encodeText(normalized, probe)
+  } catch (error) {
+    return { ok: false, error: String(error?.message ?? error), code: typeof error?.code === 'string' ? error.code : 'ENCODING_UNREPRESENTABLE' }
+  }
+  if (decodeBytes(buffer, probe) !== normalized) {
+    return { ok: false, error: 'convert verification failed: re-decoding the encoded bytes produced different text', code: 'CONVERT_VERIFY_FAILED' }
+  }
+  const result = {
+    path: displayPath,
+    from: got.encoding.encoding,
+    to: target,
+    bom: bomBytes.length > 0,
+    ...(eol === 'keep' ? {} : { eol }),
+    bytes_before: got.size,
+    bytes_after: buffer.length,
+    verified: true,
+    ...(repaired === null ? {} : { repaired }),
+    dryRun,
+  }
+  if (dryRun) return { ok: true, result }
+  const written = await provider.writeBytes(displayPath, buffer, { kind: 'replaceIfVersion', version: info.version })
+  if (target !== 'utf-8') rememberEncoding(displayPath, target, written.stat)
+  return { ok: true, result: { ...result, write_verify: { level: 'bytes', bytes: buffer.length } } }
+}
+
 export function errorEvidence(error) {
   if (error === null || typeof error !== 'object') return {}
   const out = {}
@@ -318,7 +473,8 @@ export function readFileBytes(displayPath, { encoding: hint } = {}) {
    */
   const explicitHint = hint ?? process.env.AURA_ENCODING
   const effectiveHint = explicitHint ?? recallEncoding(displayPath, stat)
-  const probe = probeEncoding(bytes, { hint: effectiveHint })
+  let probe = probeEncoding(bytes, { hint: effectiveHint })
+  if (explicitHint === undefined) probe = refineWithDirectory(bytes, probe, displayPath)
   if (explicitHint !== undefined) rememberEncoding(displayPath, probe.encoding, stat)
   if (probe.encoding === null) {
     // 两个分支分开：含 NUL 的二进制仍说 “binary file”（既有判据靠这句话），
@@ -405,6 +561,7 @@ export async function readEnvelope(provider, args) {
       ...(context === undefined ? {} : { context }),
       ...(kind === undefined ? {} : { kind }),
       ...(budget === undefined ? {} : { budget }),
+      ...(args.structure_handle === true ? { structureHandle: true } : {}),
       byteOrderMark: got.byteOrderMark,
       // probe 用的元信息：文件真实字节数与探测到的编码（DSH 面没有这两个，probe 会降级）。
       fileSize: got.size,
@@ -424,6 +581,15 @@ export async function readEnvelope(provider, args) {
       receipt.encoding = got.encoding.encoding
       receipt.encoding_confidence = got.encoding.confidence
       if (got.encoding.explicit === true) receipt.encoding_source = 'explicit'
+      else if (got.encoding.directory_prior !== undefined) {
+        receipt.encoding_source = 'directory-prior'
+        receipt.encoding_prior = got.encoding.directory_prior
+      }
+    }
+    /** 覆盖集：只有显式请求才出现（既有回执逐字节不变）。 */
+    if (args.coverage === true) {
+      const coverage = readCore.coverageOf(receipt.shown, receipt.totalLines)
+      if (coverage !== null) receipt.coverage = coverage
     }
     return receipt
   } catch (error) {
@@ -449,13 +615,14 @@ export async function readEnvelope(provider, args) {
 }
 
 /** 改一次（规划 → 陈旧闸门 → 逐字节写 + CAS → 回读校验 → 刷新观测）。 */
-async function editEnvelopeInner(provider, { file, hunks, dryRun, create, requireObservation, wholeFile, eol, skipStaleGate, toolName = 'aura_basetools_edit' }) {
+async function editEnvelopeInner(provider, { file, hunks, dryRun, create, requireObservation, retry, wholeFile, eol, skipStaleGate, toolName = 'aura_basetools_edit' }) {
   try {
     const result = await applyEditToProvider(provider, {
       displayPath: provider.resolve(file),
       hunks: hunks ?? [],
       dryRun: dryRun === true,
       ...(requireObservation === true ? { requireObservation: true } : {}),
+      ...(retry === true ? { retry: true } : {}),
       ...(typeof wholeFile === 'string' ? { wholeFile } : {}),
       ...(typeof eol === 'string' ? { eol } : {}),
       ...(skipStaleGate === true ? { skipStaleGate: true } : {}),
@@ -845,6 +1012,9 @@ function compactWriteReceipt(env, content) {
       dryRun,
       ...(result.write_verify === undefined ? {} : { write_verify: result.write_verify }),
       ...(result.unverified_region === true ? { unverified_region: true } : {}),
+      // 写前预检的提醒与写后结构状态：只在存在时出现（合法写的回执形状不变）。
+      ...(result.preflight_warnings === undefined ? {} : { preflight_warnings: result.preflight_warnings }),
+      ...(result.structure === undefined ? {} : { structure: result.structure }),
     },
   }
 }

@@ -155,6 +155,14 @@ const SUITES = [
   ['encoding', 'src/locator-lab/encoding-test.mjs'],
   // 文档/配置的结构目录（Markdown / JSON / YAML / TOML）。
   ['doc-map', 'src/locator-lab/doc-map-test.mjs'],
+  // 写前预检 / 写后结构状态 / diagnose（0.22 错误闭环）。
+  ['preflight', 'src/locator-lab/preflight-test.mjs'],
+  // 漂移重定位（--retry，0.22 P3）。
+  ['retry', 'src/locator-lab/retry-test.mjs'],
+  // 覆盖集（opt-in，0.22 P4）。
+  ['coverage', 'src/locator-lab/coverage-test.mjs'],
+  // 结构地址 / 结构句柄（0.23）。
+  ['structure', 'src/locator-lab/structure-test.mjs'],
   // probe 模式（只给元信息、不发正文）。
   ['probe', 'src/locator-lab/probe-test.mjs'],
   // 同一工具在 MCP 与 DSH 两面必须是同一张形状（顶层键集合差只允许文档化清单；
@@ -186,6 +194,7 @@ const SUITES = [
   ['old-fragment-fallback', 'src/locator-lab/old-fragment-fallback-test.mjs'],
   ['range-args', 'src/locator-lab/range-args-test.mjs'],
   ['range-formats', 'src/locator-lab/range-formats-test.mjs'],
+  ['range-error-lifecycle', 'src/locator-lab/range-error-lifecycle-test.mjs'],
   ['read-continuation', 'src/locator-lab/read-continuation-test.mjs'],
   ['write-gate-cost', 'src/locator-lab/write-gate-cost-test.mjs'],
   // **探针形状**：文件名不匹配 `*-test.mjs`，但有 13 条自有判据并以退出码表态
@@ -791,6 +800,7 @@ const CENSUS_EXEMPT = [
   //   ③ 读数挂在**活语料**上（现扫 `~/.dsh/sessions`，随日志增长而变，本波数字只是快照）。
   ['probes/change-cost.mjs', '变更成本量具：读会话日志打印逐条成本。守恒自检（C47 加、C48 接退出码：`--split-at` 下两窗计数之和 != 不切窗总计数 ⇒ exitCode=1）只在切窗分支里跑，判的是探针自己的分窗记账自洽性，读数又挂在活语料上 ⇒ 不是可复现回归线'],
   ['probes/edit-failure-census.mjs', '失败计数普查：只打印"同一 (判据,文件) 撞 ≥2 次"的分组计数，没有退出码'],
+  ['probes/error-lifecycle.mjs', '错误闭环基线探针：注入 12 类故障，只打印 预检/定位/一次修复 矩阵与汇总（恒 exit 0）；等预检/写后校验落地后，再把关键行提升成闸内 range'],
   // C61 新增：缩进吞噬普查（问的是「`old` 省掉行首空白 ⇒ 归一化命中 ⇒ 整行被替换 ⇒ 缩进没了」
   // 这个机制在真实会话里有多频繁）。它不是回归线，三条理由都不随波漂：
   //   ① 读数挂在**活语料**上（现扫 ~/.dsh/sessions，660MB / 1,527 个会话文件、全量一趟 ~40s，
