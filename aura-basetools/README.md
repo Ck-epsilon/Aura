@@ -272,8 +272,9 @@ aura basetools edit --file a.js --lines 10 --replace 'const x = 1'
 
 ```bash
 node build/make-bundle.mjs --pack       # 重建 dist/（含 dist/npm 两个包）
-cd dist/npm/aura-basetools && npm publish       # 先 npm login
-cd ../aura-basetools-dsh && npm publish
+cd dist/npm/aura-basetools && npm publish --registry=https://registry.npmjs.org
+cd ../aura-basetools-dsh && npm publish --registry=https://registry.npmjs.org
+# GitHub：把变更落到 monorepo 的 aura-basetools/，打 tag aura-basetools-v<版本> 并 push
 ```
 
 可选 `AURA_REPO_URL` / `AURA_AUTHOR` 环境变量决定生成的 `repository` / `author` 字段；不设则不写（也不写假值）。
