@@ -67,9 +67,9 @@ export function buildCapabilities() {
           lineAddressNeedsExpect: ['lines', 'start_line', 'end_line'],
         },
         writeSafety: {
-          cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          dsh: ['stale-region-gate', 'observation-gate', 'byte-verify'],
+          cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'delivered-coverage', 'byte-verify'],
+          mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'delivered-coverage', 'byte-verify'],
+          dsh: ['stale-region-gate', 'observation-gate', 'delivered-coverage', 'byte-verify'],
         },
       },
     ],

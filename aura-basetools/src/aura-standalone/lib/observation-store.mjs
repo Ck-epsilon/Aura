@@ -300,6 +300,8 @@ export function createDiskStore(file = observationsPath()) {
         const accounted = accountKeys(filePath, aliases)
         if (accounted.canonical !== null) aliases.set(accounted.canonical, accounted.key)
         const key = `${accounted.key}@${version}`
+        // 同一版本重记（同一份内容读了两次）不能把上一次的交付覆盖抹掉：写闸要看的就是它。
+        const previous = data.seen.find((e) => e.key === key)
         data.seen = data.seen.filter((e) => e.key !== key)
         data.seen.push({
           key,
@@ -307,6 +309,7 @@ export function createDiskStore(file = observationsPath()) {
           source: omitted ? null : source,
           ...(omitted ? { source_omitted: true } : {}),
           byteOrderMark: byteOrderMark === true,
+          delivered: Array.isArray(previous?.delivered) ? previous.delivered : [],
           at: Date.now(),
         })
         while (data.seen.length > LIMIT) data.seen.shift()
@@ -315,6 +318,26 @@ export function createDiskStore(file = observationsPath()) {
         const alive = new Set(data.seen.map((e) => e.key))
         for (const [p, k] of Object.entries(data.latest)) if (!alive.has(k)) delete data.latest[p]
         dropDanglingAliases()
+        save()
+      } finally {
+        releaseLock(lock)
+      }
+    },
+    /**
+     * 交付覆盖（1.0.2）：读侧渲染完之后补的那一步。条目不在就什么都不做——
+     * 没有交付事实的后果是写闸拒绝，而不是造一条假观测。
+     */
+    deliver(filePath, version, labels) {
+      if (!Array.isArray(labels)) return
+      const lock = acquireLock()
+      try {
+        mergeDisk(loadDisk())
+        const accounted = accountKeys(filePath, aliases)
+        const wanted = new Set([`${accounted.key}@${version}`])
+        if (accounted.canonical !== null) wanted.add(`${accounted.canonical}@${version}`)
+        const entry = data.seen.find((e) => wanted.has(e.key))
+        if (entry === undefined) return
+        entry.delivered = labels
         save()
       } finally {
         releaseLock(lock)
@@ -343,19 +366,20 @@ export function createDiskStore(file = observationsPath()) {
         source: entry.source,
         byteOrderMark: entry.byteOrderMark === true,
         source_omitted: entry.source_omitted === true,
+        delivered: Array.isArray(entry.delivered) ? entry.delivered : [],
       }
     },
     entry(filePath, version) {
       refresh()
       const direct = findEntry(filePath, version)
       if (direct !== null) {
-        return { source: direct.source, byteOrderMark: direct.byteOrderMark === true, source_omitted: direct.source_omitted === true }
+        return { source: direct.source, byteOrderMark: direct.byteOrderMark === true, source_omitted: direct.source_omitted === true, delivered: Array.isArray(direct.delivered) ? direct.delivered : [] }
       }
       const accounted = accountKeys(filePath, aliases)
       const entry = findEntry(accounted.key, version) ?? (accounted.canonical === null ? null : findEntry(accounted.canonical, version))
       return entry === null
         ? null
-        : { source: entry.source, byteOrderMark: entry.byteOrderMark === true, source_omitted: entry.source_omitted === true }
+        : { source: entry.source, byteOrderMark: entry.byteOrderMark === true, source_omitted: entry.source_omitted === true, delivered: Array.isArray(entry.delivered) ? entry.delivered : [] }
     },
     recall(filePath, version) {
       refresh()

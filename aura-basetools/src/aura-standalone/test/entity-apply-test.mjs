@@ -321,6 +321,13 @@ say('=== K. 行号写：必须带 expect，dry_run 可先看 actual ===')
   check(refused.ok === false && refused.code === 'PATCH_LINES_NEED_EXPECT', 'K1 多 hunk 纯行号写拒绝 PATCH_LINES_NEED_EXPECT', JSON.stringify(refused).slice(0, 220))
   check(fs.readFileSync(batchFile, 'utf8') === before, 'K2 拒绝时磁盘一字未写')
 
+  // 1.0.2：预演同样要过交付覆盖闸（预演的判决必须等于真写的判决），所以先按真实流程读一次。
+  const previewRead = mcpCall([
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file_path: batchFile, mode: 'lines', lines: [1, 3] } } },
+  ])
+  check(envOf(previewRead, 2).ok === true, 'K2b 预演之前先读一次（覆盖闸要求）')
+
   const preview = mcpCall([
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
     {
@@ -401,6 +408,88 @@ say('=== L. 多目标平铺形状与 line 单数：展开后仍走同一条行�
   )
   check(singular.ok === false && singular.code === 'PATCH_NO_ADDRESS', 'L4 line 单数（无 handle）仍报 PATCH_NO_ADDRESS，不被行号 expect 规则顶替', JSON.stringify(singular).slice(0, 180))
   check(fs.readFileSync(singularFile, 'utf8') === singularBefore, 'L5 line 单数拒绝时磁盘一字未写')
+}
+
+say('')
+say('=== M. 交付覆盖：没交付过的行，写前拒绝（1.0.2）===')
+{
+  const envOf = (replies, id) => JSON.parse(replies.get(id)?.result?.content?.[0]?.text ?? '{}')
+  const invoke = (name, args) =>
+    mcpCall([
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } },
+    ])
+
+  // ① 只看了一眼元数据（probe）就想整份覆写。
+  const bigFile = write('coverage-big.txt', Array.from({ length: 600 }, (_, i) => `row ${i + 1} ${'x'.repeat(40)}`).join('\n') + '\n')
+  const bigBefore = fs.readFileSync(bigFile, 'utf8')
+  const probe = envOf(invoke('aura_basetools_read', { file_path: bigFile, mode: 'probe' }), 2)
+  const blindWrite = envOf(invoke('aura_basetools_apply', { op: 'write', file_path: bigFile, content: 'short\n' }), 2)
+  check(
+    probe.ok === true && blindWrite.ok === false && blindWrite.code === 'PATCH_UNSEEN_REGION',
+    'M1 probe 读之后整份覆写被拒 PATCH_UNSEEN_REGION',
+    JSON.stringify({ read: probe.ok, code: blindWrite.code }).slice(0, 200),
+  )
+  check(fs.readFileSync(bigFile, 'utf8') === bigBefore, 'M2 拒绝时磁盘一字未写')
+
+  // ② 预演必须预演出同一条判决。
+  const preview = envOf(invoke('aura_basetools_apply', { op: 'write', file_path: bigFile, content: 'short\n', dry_run: true }), 2)
+  check(preview.ok === false && preview.code === 'PATCH_UNSEEN_REGION', 'M3 dry_run 预演同一条拒绝（预演不撒谎）', JSON.stringify(preview).slice(0, 160))
+
+  // ③ `full` 被内容预算截断：同样不算交付，拒绝里点名缺的区间。
+  const full = envOf(invoke('aura_basetools_read', { file_path: bigFile, mode: 'full' }), 2)
+  const clipped = envOf(invoke('aura_basetools_apply', { op: 'write', file_path: bigFile, content: 'short\n' }), 2)
+  check(
+    full.ok === true && typeof full.omitted === 'string' && clipped.ok === false && clipped.code === 'PATCH_UNSEEN_REGION' &&
+      Array.isArray(clipped.undelivered) && clipped.undelivered.length > 0,
+    'M4 full 被预算截断 ⇒ 覆写被拒并点名未交付区间',
+    JSON.stringify({ omitted: full.omitted, code: clipped.code, undelivered: clipped.undelivered }).slice(0, 260),
+  )
+
+  // ④ 显式逃生口：允许盲写，但回执必须标出来。
+  const escaped = envOf(invoke('aura_basetools_apply', { op: 'write', file_path: bigFile, content: 'short\n', allow_unobserved: true }), 2)
+  check(
+    escaped.ok === true && escaped.result?.write_verify?.level === 'bytes' && escaped.result?.unverified_region === true,
+    'M5 allow_unobserved 落盘并在回执标 unverified_region',
+    JSON.stringify(escaped).slice(0, 220),
+  )
+
+  // ⑤ 读过整份之后，同一次覆写照常通过。
+  const small = write('coverage-small.txt', 'one\ntwo\nthree\n')
+  envOf(invoke('aura_basetools_read', { file_path: small, mode: 'full' }), 2)
+  const smallWrite = envOf(invoke('aura_basetools_apply', { op: 'write', file_path: small, content: 'one\nTWO\nthree\n' }), 2)
+  check(smallWrite.ok === true && fs.readFileSync(small, 'utf8') === 'one\nTWO\nthree\n', 'M6 读过整份之后覆写照常通过', JSON.stringify(smallWrite).slice(0, 160))
+
+  // ⑥ 实体整段替换：正文被预算剪过 ⇒ 拒绝；读全区间 ⇒ 通过。
+  const parts = ['class Big {']
+  for (let i = 0; i < 200; i += 1) parts.push(`  method${i}(a, b) { return a + b + ${i}; }`)
+  parts.push('}')
+  const entityFile = write('coverage-entity.js', `${parts.join('\n')}\n`)
+  const entityBefore = fs.readFileSync(entityFile, 'utf8')
+  const clippedEntity = envOf(invoke('aura_basetools_read', { file_path: entityFile, entity: 'Big' }), 2)
+  const entityBlind = envOf(invoke('aura_basetools_apply', { op: 'replace-body', file_path: entityFile, entity: 'Big', change: 'class Big {}' }), 2)
+  check(
+    clippedEntity.ok === true && entityBlind.ok === false && entityBlind.code === 'PATCH_UNSEEN_REGION',
+    'M7 实体正文被截断 ⇒ replace-body 拒绝',
+    JSON.stringify({ shown: clippedEntity.shown, code: entityBlind.code }).slice(0, 200),
+  )
+  check(fs.readFileSync(entityFile, 'utf8') === entityBefore, 'M8 实体拒绝时磁盘一字未写')
+  envOf(invoke('aura_basetools_read', { file_path: entityFile, mode: 'lines', lines: [1, parts.length], budget: 40000 }), 2)
+  const entityOk = envOf(invoke('aura_basetools_apply', { op: 'replace-body', file_path: entityFile, entity: 'Big', change: 'class Big {}' }), 2)
+  check(entityOk.ok === true && fs.readFileSync(entityFile, 'utf8').includes('class Big {}'), 'M9 读过整个区间之后 replace-body 通过', JSON.stringify(entityOk).slice(0, 160))
+
+  // ⑦ convert 是不可逆写：源编码必须显式（UTF-8 与 BOM 锚定的除外）。
+  const gbk = path.join(tmp, 'coverage-gbk.txt')
+  fs.writeFileSync(gbk, Buffer.from('b2e2cad4d6d0cec4c4dac8dd', 'hex'))
+  const gbkBefore = fs.readFileSync(gbk)
+  const convertBlind = envOf(invoke('aura_basetools_apply', { op: 'convert', file_path: gbk, to: 'utf-8' }), 2)
+  check(
+    convertBlind.ok === false && convertBlind.code === 'CONVERT_FROM_REQUIRED' && fs.readFileSync(gbk).equals(gbkBefore),
+    'M10 convert 猜源编码被拒（零写入）',
+    JSON.stringify(convertBlind).slice(0, 200),
+  )
+  const convertOk = envOf(invoke('aura_basetools_apply', { op: 'convert', file_path: gbk, to: 'utf-8', from: 'gb18030' }), 2)
+  check(convertOk.ok === true && fs.readFileSync(gbk, 'utf8').includes('测试中文内容'), 'M11 显式 from 之后 convert 通过', JSON.stringify(convertOk).slice(0, 160))
 }
 
 say('')

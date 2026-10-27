@@ -6,7 +6,7 @@
  *
  * ## 怎么跑
  *
- *   mkdir /tmp/lab && cp ../../../src/locator-lab/{read-core,locator-api,struct-core,anchor-core,write-path,args,repo-map}.mjs /tmp/lab/
+ *   mkdir /tmp/lab && cp ../../../src/locator-lab/{read-core,coverage-core,locator-api,struct-core,anchor-core,write-path,args,repo-map}.mjs /tmp/lab/
  *   cp demo.mjs /tmp/lab/ && cd /tmp/lab && node demo.mjs
  *
  * ## 设计上的要点（都是踩出来的，不是风格偏好）

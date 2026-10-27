@@ -39,6 +39,13 @@ import { HANDLE_MAX_PER_RECEIPT, fnv1a32, handleCharsFor, mintHandle, mintStruct
  * 放进 targets 里就报参数错"——而两边各自的测试都会绿（契约 §2.1 那句"同一个校验器"）。
  */
 import { MT_MAX_TARGETS, MT_POOL, asLinePair, normalizeReadRequest } from './args.mjs'
+/**
+ * 交付覆盖（1.0.2）：读侧只负责**记账**，判据在写侧。
+ *
+ * `coverage-core.mjs` 也是叶子，这条 import 同样不构成环；区间解析/合并只有它一份，
+ * 写闸与回执用的是同一套 `"1-166"` 写法。
+ */
+import { formatRanges, mergeLabels, parseRange } from './coverage-core.mjs'
 
 /**
  * 多目标形状的**契约上限**（fs-contract-v2 §2.1）不是本地判据，而是从参数面 `args.mjs` **转出**：
@@ -439,19 +446,25 @@ function digestResume(signatures, keptRows, headingRows, syms, exportedSyms, dro
  * 上一轮的观测必须活到进程外，否则区域级新鲜度闸门在那边永远拿不到基准。引擎只管语义
  * （"最近一次观测" + "按版本回取全文" + 有界淘汰），存哪儿由宿主决定。
  *
- * 存储契约（五个方法）：remember / latest / entry / recall / count。
+ * 存储契约（六个方法）：remember / deliver / latest / entry / recall / count。
+ *
+ * `deliver` 与 `remember` 分开的原因只有一个：**读侧要先记账、后渲染**。
+ * 版本令牌在渲染之前就有，而"这次交付了哪些行"只有渲染完才知道——先 remember 建条目，
+ * 渲染完再 deliver 补上覆盖，两步之间不可能失败（同一版本，同一条目）。
  *
  * @param limit - 条目上限；超出按插入顺序淘汰（淘汰时同步清"最近观测"指针，
  *   否则它会指向一条不存在的全文）。
  */
 export function createMemoryStore(limit = 8) {
-  const seen = new Map() // `路径@版本` → { source, byteOrderMark }
+  const seen = new Map() // `路径@版本` → { source, byteOrderMark, delivered }
   const latest = new Map() // 路径 → `路径@版本`
   return {
     remember(filePath, version, source, byteOrderMark = false) {
       const key = `${filePath}@${version}`
+      const previous = seen.get(key)
       seen.delete(key)
-      seen.set(key, { source, byteOrderMark: byteOrderMark === true })
+      // 同一版本重记（同一份内容读了两次）不能把上一次的交付覆盖抹掉。
+      seen.set(key, { source, byteOrderMark: byteOrderMark === true, delivered: previous?.delivered ?? [] })
       latest.set(filePath, key)
       while (seen.size > limit) {
         const oldest = seen.keys().next().value
@@ -459,12 +472,16 @@ export function createMemoryStore(limit = 8) {
         for (const [p, k] of latest) if (k === oldest) latest.delete(p)
       }
     },
+    deliver(filePath, version, labels) {
+      const entry = seen.get(`${filePath}@${version}`)
+      if (entry !== undefined) entry.delivered = labels
+    },
     latest(filePath) {
       const key = latest.get(filePath)
       if (key === undefined) return null
       const entry = seen.get(key)
       if (entry === undefined) return null
-      return { version: key.slice(filePath.length + 1), source: entry.source, byteOrderMark: entry.byteOrderMark === true }
+      return { version: key.slice(filePath.length + 1), source: entry.source, byteOrderMark: entry.byteOrderMark === true, delivered: entry.delivered ?? [] }
     },
     entry(filePath, version) {
       return seen.get(`${filePath}@${version}`) ?? null
@@ -933,6 +950,56 @@ export function latestObservation(filePath, evidence, identityKey = undefined) {
 function seenEntry(filePath, version, identityKey = undefined) {
   if (typeof filePath !== 'string' || typeof version !== 'string') return null
   return STORE.entry(resolveLedgerKey(filePath, { token: version }, identityKey), version)
+}
+
+/**
+ * 记下"这一次交付了哪些行"（1.0.2）。
+ *
+ * 与 {@link rememberRead} 分开是一步刻意的最小化：版本令牌在渲染之前就有，
+ * 而交付范围只有渲染完才知道。条目已经由 `rememberRead` 建好；这里只补一个字段。
+ *
+ * `filePath` 是**已归一的账本键**（调用方已经过 `ledgerIdentityKey`）——写侧查的是同一个键。
+ * 宿主换了自己的存储实现而不认识 `deliver` 时**静默跳过**：没有交付事实的后果是写闸拒绝，
+ * 不是崩溃。
+ */
+/**
+ * 条目**实际**落在哪把键下。
+ *
+ * `rememberRead` 在调用方没给身份键时会把写法登记成一个注册键（`ledgerPathKey` 归一后的），
+ * 而调用方手里的 `ledgerKey` 仍是原样写法。1.0.2 的交付记账与写闸查询都是从调用方那把键出发的，
+ * 不做这一步就会"记了、查不到"（实测：同一条路径的正斜线与反斜线两种写法是两把键）。
+ *
+ * 先试归一后的键（绝大多数情况），没有再试调用方原样给的键（身份键/已注册键的路径）。
+ */
+function locateEntryKey(filePath, version) {
+  const resolved = resolveLedgerKey(filePath, { token: version })
+  if (STORE.entry(resolved, version) !== null) return resolved
+  if (STORE.entry(filePath, version) !== null) return filePath
+  return resolved
+}
+
+export function rememberDeliveredRows(filePath, version, ranges) {
+  if (typeof filePath !== 'string' || filePath.length === 0) return
+  if (typeof version !== 'string' || version.length === 0) return
+  if (!Array.isArray(ranges) || ranges.length === 0) return
+  if (typeof STORE.deliver !== 'function') return
+  const key = locateEntryKey(filePath, version)
+  const existing = STORE.entry(key, version)?.delivered ?? []
+  STORE.deliver(key, version, mergeLabels(existing, ranges))
+}
+
+/**
+ * 这一版交付过哪些行（`["1-166"]`；没交付过 ⇒ `[]`）。
+ *
+ * 写闸用它回答"要替换的那段，调用方到底看没看过"。查不到不等于"看过"——
+ * 空数组就是空数组，闸门据此拒绝（这是 1.0.2 修的那条：probe/map 读之后整份覆写过闸）。
+ */
+export function deliveredRanges(filePath, version, identityKey = undefined) {
+  if (typeof filePath !== 'string' || typeof version !== 'string') return []
+  if (typeof STORE.entry !== 'function') return []
+  const resolved = resolveLedgerKey(filePath, { token: version }, identityKey)
+  const entry = STORE.entry(resolved, version) ?? STORE.entry(filePath, version)
+  return Array.isArray(entry?.delivered) ? entry.delivered : []
 }
 
 /**
@@ -1694,6 +1761,11 @@ function renderIncremental(base, lines, symbolsIndex, plan, budget, total, handl
  */
 function recordDelivery(filePath, result, version, total, bom, record) {
   if (typeof filePath !== 'string' || filePath.length === 0) return
+  /**
+   * 行覆盖**无条件**落账（1.0.2）：布尔账本只回答"有没有全文"，写闸要回答"哪几行交过"。
+   * 两条判据各有各的用途，互不替代。
+   */
+  rememberDeliveredRows(filePath, version, deliveredLabels(result, total, record))
   if (record !== null) {
     ledgerSet(filePath, version, record.covered, bom)
     return
@@ -1709,6 +1781,23 @@ function recordDelivery(filePath, result, version, total, bom, record) {
     const holed = result.omitted !== undefined && /\blines \d+-\d+ \(content budget/.test(result.omitted)
     ledgerSet(filePath, version, !holed && result.truncated === undefined, bom)
   }
+}
+
+/**
+ * 这次回执**逐字交出去**的行；拿不准就是空（空 = 没交付，写闸会拒绝）。
+ *
+ * 增量层说"调用方已有全文"（`record.covered`）时记整份：差量读没逐行重发，
+ * 但调用方手上的旧全文＋这份差量合起来就是新全文，这与布尔账本的语义是同一件事。
+ */
+function deliveredLabels(result, total, record) {
+  if (record !== null) {
+    return record.covered === true && Number.isInteger(total) && total > 0 ? [`1-${total}`] : []
+  }
+  if (typeof result.shown === 'string') {
+    const range = parseRange(result.shown)
+    if (range !== null) return formatRanges([range])
+  }
+  return []
 }
 
 /**
@@ -2468,7 +2557,9 @@ export function readWith(source, request = {}) {
     // 记账必须发生在**确定要发哪一份之后**：账本决定下一次还能不能做差量。
     // probe（`suggestMode` 的选型探针）只量渲染长度，不改账本、也不触发增量。
     if (request.probe !== true) {
-      recordDelivery(ledgerKey, minimal, version, total, bom, delivery)
+      // `recordDelivery:false` 是**工具内部**那次读（apply 自建观测基准）：它的回执不发给模型，
+      // 记成"交付过"会让写闸把没看过的正文当成看过。
+      if (request.recordDelivery !== false) recordDelivery(ledgerKey, minimal, version, total, bom, delivery)
       recordScan(mode, ledgerKey, version, minimal, total)
     }
     if (minimalSize <= ceiling) return minimal
@@ -2482,7 +2573,7 @@ export function readWith(source, request = {}) {
     }
   }
   if (request.probe !== true) {
-    recordDelivery(ledgerKey, result, version, total, bom, delivery)
+    if (request.recordDelivery !== false) recordDelivery(ledgerKey, result, version, total, bom, delivery)
     recordScan(mode, ledgerKey, version, result, total)
   }
   return result

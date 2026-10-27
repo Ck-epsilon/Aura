@@ -42,12 +42,18 @@ import {
   BYTE_ORDER_MARK_BYTES,
   contentToken,
   countByteOrderMarks,
+  deliveredRanges,
   hasObservedVersion,
   latestObservation,
   leadingByteOrderMarks,
   ledgerIdentityKey,
+  rememberDeliveredRows,
   rememberRead,
 } from './read-core.mjs'
+/**
+ * 交付覆盖的判据本体（1.0.2）：本文件只把"要替换哪些行"喂进去，区间算术在叶子里。
+ */
+import { formatRanges, missingRanges, parseRange } from './coverage-core.mjs'
 
 
 /**
@@ -650,7 +656,58 @@ function regionGate(hunks, content, planned, displayPath, options = {}) {
 }
 
 /**
- * 这个 hunk 是不是**按行号**寻址的（而不是按内容）。
+ * 交付覆盖闸（1.0.2）：要替换的那几行，调用方到底看过没有。
+ *
+ * 与 {@link regionGate} 的分工：那条问"读之后这块被别人动过吗"，这条问"这块本来就没交到你手里"。
+ * 两条都排在 `dry_run` 之前——预演必须预演出真写的判决。
+ *
+ * 内容证据豁免：`old` / `anchor` 是抄来的原文，`handle` 是工具自己算的指纹，
+ * `expect` **整段等于**被替换区域时同样算数。只覆盖一行的 `expect` 不算：
+ * 它证明不了同一 hunk 里的其余几行——那正是"读了半份、写了整段"要拦的形态。
+ *
+ * @returns null（通过）或 `{ message, extras }`
+ */
+export function coverageGate(hunks, planned, content, displayPath, options = {}) {
+  const version = contentToken(content, options.byteOrderMark === true)
+  const delivered = deliveredRanges(displayPath, version, options.identityKey)
+  const gaps = []
+  for (const match of planned.matches) {
+    const hunk = hunks[match.hunk]
+    if (hunk === undefined || hunkRegionIsProven(hunk, match.actual)) continue
+    // `matches` 里的行号字段是 `line` 与 `end`（0 基起点那一对叫 start/end；`end` 已是 1 基）。
+    const endLine = Number.isSafeInteger(match.end) ? match.end : match.line
+    const missing = missingRanges(delivered, match.line, endLine)
+    if (missing.length > 0) gaps.push({ line: match.line, endLine, missing })
+  }
+  if (gaps.length === 0) return null
+  const undelivered = formatRanges(gaps.flatMap((gap) => gap.missing))
+  const where = gaps
+    .map((gap) => (gap.line === gap.endLine ? `line ${gap.line}` : `lines ${gap.line}-${gap.endLine}`))
+    .join(', ')
+  const first = gaps[0].missing[0]
+  const what = delivered.length === 0 ? 'not one line of this file has been delivered to you in this session' : `you never received ${undelivered}`
+  return {
+    message:
+      `cannot patch "${displayPath}": ${what}, yet the hunks replace ${where} — that would destroy text you have not seen. Nothing was written. ` +
+      `\nnext: read the missing lines first: aura_basetools_read { file_path: "${displayPath}", mode: "lines", lines: [${first[0]}, ${first[1]}] } — then retry. ` +
+      `Addressing the region by content (\`old\` or \`anchor\`, which quote the text) is proof enough; ` +
+      `a deliberate whole-file overwrite can pass \`allow_unobserved: true\` (the receipt will say \`unverified_region\`).`,
+    extras: { undelivered, delivered, lines: gaps.map((gap) => ({ line: gap.line, endLine: gap.endLine })) },
+  }
+}
+
+/** 这条 hunk 手上的证据是否**覆盖了整个被替换区域**（见 {@link coverageGate}）。 */
+function hunkRegionIsProven(hunk, actual) {
+  if (oldAddressOf(hunk) !== null) return true
+  if (typeof hunk.handle === 'string' && hunk.handle.trim().length > 0) return true
+  if (typeof hunk.anchor === 'string' && hunk.anchor.length > 0) return true
+  if (typeof hunk.expect === 'string' && (hunk.expect.length > 0 || actual.length === 0)) {
+    return normSpace(hunk.expect) === normSpace(actual)
+  }
+  return false
+}
+
+/**
  * 这个 hunk 是不是**按行号**寻址的（而不是按内容）。
  *
  * 判据必须与 {@link planHunks} / {@link locate} 的优先级一致：定位器先看 `target`，再看行区间。
@@ -3579,7 +3636,6 @@ async function planEditToProvider(provider, request) {
    */
   let rebased = null
   if (request.retry === true && wholeFile === undefined) {
-    console.error('DEBUG plan retry', request.retry, 'hunks', JSON.stringify(planningHunks))
     const observed = latestObservation(ledgerKey, { source: content })
     if (observed !== null && typeof observed.source === 'string') {
       const pass = rebaseHunks(planningHunks, observed.source, content)
@@ -3644,6 +3700,17 @@ async function planEditToProvider(provider, request) {
             ...(request.identityKey === undefined ? {} : { identityKey: request.identityKey }),
           })
   if (!gate.clean) throw new PatchError(gate.message, 'PATCH_STALE_REGION', gate.extras)
+  /**
+   * 交付覆盖闸（1.0.2）：公开写面传 `requireDelivered:true`。位置与陈旧闸门同一条——
+   * 规划之后、任何字节落盘之前，`dry_run` 之前。
+   */
+  if (request.requireDelivered === true && skipStaleGate !== true) {
+    const unseen = coverageGate(planningHunks, planned, content, displayPath, {
+      byteOrderMark: byteOrderMarks > 0,
+      ...(request.identityKey === undefined ? {} : { identityKey: request.identityKey }),
+    })
+    if (unseen !== null) throw new PatchError(unseen.message, 'PATCH_UNSEEN_REGION', unseen.extras)
+  }
   /**
    * 写前预检：在**计划内容**上跑本地不变量，任何字节落盘之前。
    *
@@ -3723,6 +3790,25 @@ async function writeEditPlan(provider, request, plan) {
 }
 
 /**
+ * 写完之后调用方手里确实拥有的行（1.0.2 的覆盖账）。
+ *
+ * 坐标取 `afterLine` / `afterEndLine`（**写后**坐标）：调用方写下去的正是那段文本，
+ * 它当然见过；没被寻址的行不记——那些来自写之前那一版，行号可能已经漂了。
+ * 整份替换与新建 ⇒ 整份（它的那一个 hunk 本来就覆盖全部行）。
+ */
+function writtenDeliveredRows(plan, view) {
+  if (plan.kind === 'create') return formatRanges([[1, view.split(/\r?\n/).length]])
+  const rows = []
+  for (const applied of plan.applied ?? []) {
+    const start = Number.isSafeInteger(applied.afterLine) ? applied.afterLine : applied.line
+    const end = Number.isSafeInteger(applied.afterEndLine) ? applied.afterEndLine : start
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) continue
+    rows.push([start, end])
+  }
+  return formatRanges(rows)
+}
+
+/**
  * 阶段三：**写后回读校验**（多目标契约 §3.3）—— 与今天同一条路径：
  * `verifyWriteBack` → 刷新观测账本 → 装配回执（`applied` / `write_verify` / `unverified_region`）。
  *
@@ -3772,7 +3858,15 @@ async function finishEditPlan(provider, request, plan) {
   const verification = await verifyWriteBack(provider, displayPath, plan.content, displayPath, signal)
   const view = providerView(plan.content)
   const byteOrderMark = plan.content.startsWith(BYTE_ORDER_MARK)
-  rememberRead(plan.ledgerKey, contentToken(view, byteOrderMark), view, byteOrderMark)
+  const writtenToken = contentToken(view, byteOrderMark)
+  rememberRead(plan.ledgerKey, writtenToken, view, byteOrderMark)
+  /**
+   * 写完之后调用方手里有什么：**它自己写下去的那几段**。整份覆写与新建 ⇒ 整份。
+   *
+   * 不把"没动过的行"也记成交付：那些行的内容来自写之前的那一版，行号可能已经漂了。
+   * 记多了就等于把覆盖闸关掉，记少了最坏只是多读一次。
+   */
+  rememberDeliveredRows(plan.ledgerKey, writtenToken, writtenDeliveredRows(plan, view))
   /**
    * 写后结构状态：只在此刻能判的格式上给结论（JSON / Markdown）；**只在坏的时候出现**，
    * 保持既有成功回执逐字节不变（黄金集靠这条）。
@@ -3836,6 +3930,7 @@ const MT_NEXT = {
   PATCH_NOT_FOUND: 're-read the file, then address the hunk again — the text you quoted is not in it',
   PATCH_AMBIGUOUS: 'quote more of the surrounding text so the address picks exactly one place',
   PATCH_STALE_REGION: 're-read the region first — the lines you addressed have moved',
+  PATCH_UNSEEN_REGION: 'read the lines you were never given (mode=lines over the reported range), then retry',
   PATCH_OVERLAP: 'merge the overlapping hunks into one',
   PATCH_NO_ADDRESS: 'give each hunk one of: old, target, lines, line_cue, anchor, handle',
   PATCH_NO_HUNKS: 'pass at least one hunk, or use `create` for a new file',
@@ -3891,6 +3986,9 @@ function singleRequestFrom(item, request) {
   /** 严格新鲜度是整批的默认值；元素自己给了就听元素的（与 `dryRun` 同一口径）。 */
   const requireObservation = item.requireObservation === undefined ? request?.requireObservation : item.requireObservation
   if (requireObservation !== undefined) out.requireObservation = requireObservation
+  /** 交付覆盖闸同理：整批默认、元素可覆盖。 */
+  const requireDelivered = item.requireDelivered === undefined ? request?.requireDelivered : item.requireDelivered
+  if (requireDelivered !== undefined) out.requireDelivered = requireDelivered
   // 漂移重定位是整批的默认值；元素自己给了就听元素的（与上面两条同一口径）。
   const retry = item.retry === undefined ? request?.retry : item.retry
   if (retry !== undefined) out.retry = retry
@@ -3967,6 +4065,12 @@ function groupRequest(group, request) {
         member.requireObservation === undefined ? request?.requireObservation === true : member.requireObservation === true,
       )
         ? { requireObservation: true }
+        : {}),
+      /** 覆盖闸同理：任一成员要求严格 ⇒ 整组严格。 */
+      ...(group.members.some((member) =>
+        member.requireDelivered === undefined ? request?.requireDelivered === true : member.requireDelivered === true,
+      )
+        ? { requireDelivered: true }
         : {}),
     },
     request,

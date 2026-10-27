@@ -26,8 +26,9 @@
 ## 2. 改：地址从“最确定”到“最自然”
 
 先记一条**安全等级**（`capabilities` 的 `addressSafety` 同源）：`old` 是内容地址、`handle` 绑定版本，
-两者自带校验；`target` 是结构定位；`lines` / `line_cue` / `anchor` 只是坐标/线索——**未读过的文件也能写**，
-回执会标 `unverified_region: true`，要强制先读用 `require_observation`（`--require-observation`）。
+两者自带校验；`target` 是结构定位；`lines` / `line_cue` 只是坐标/线索。坐标写只允许落在**交付过**的行上：
+`probe` / `map` 读、或 `full` 被内容预算截断，都不算交付——落在未交付区间会被拒
+（`PATCH_UNSEEN_REGION`，零写入并点名缺的区间）；`require_observation` 另外要求这一版被读过。
 
 优先顺序（越靠前越不容易错）：
 
@@ -50,6 +51,13 @@
 - **高风险编辑带 `expect`**：它是“我以为这里是什么”的断言；不符会整批拒绝，磁盘不动。
   纯行号地址（`lines` / `start_line`+`end_line`）**必须**带 `expect`，单 hunk 与批量一视同仁，
   否则整条拒绝（`PATCH_LINES_NEED_EXPECT`，零写入）——坐标不是内容断言，数错一行就会覆盖别人。
+- **写只覆盖交付过的行**（1.0.2）：读回执真正交给你的那些行才算数；`probe` / `map` / `digest`
+  不交付正文，被预算截断的 `full` 只交付了前半。整份覆写与 `structure` / 实体整段替换都按这条判：
+  缺哪段就拒绝并点名（`PATCH_UNSEEN_REGION`）。恢复动作是 `mode=lines` 读缺的那段再重试；
+  `old` / `anchor` / `handle` 自带内容证据，不受这条限制。整份覆写确属故意时用
+  `allow_unobserved: true`，回执会标 `unverified_region: true`。
+- **`convert` 的源编码必须显式**（1.0.2）：覆盖原文不可撤，而探测在单字节编码上会猜错还报 high。
+  UTF-8 与带 BOM 的 UTF-16 可以省略 `from`，其余一律 `CONVERT_FROM_REQUIRED`。
 - **换行风格**：`replace` 默认 `eol: "auto"`，新行跟被替换区域（CRLF 文件写 CRLF）。
   要保留输入原样用 `"preserve"`；要强制统一用 `"lf"` / `"crlf"`。回执的 `eolAdapted`
   说明这次有没有改写过换行。

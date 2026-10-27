@@ -91,6 +91,9 @@ const m = readWith(SRC, { filePath: target, mode: 'map' })
 // 断言必须跟着真实行为走，而不是跟着我的期待。
 check(m.ok && m.symbols === 3, `地图报出 ${m.symbols} 个符号（含局部变量 let sum）`)
 check(m.text.includes('total') && m.text.includes('label'), '地图里两个函数都在')
+// 1.0.2：整段替换要落在**交付过**的正文上；map 只给结构，先读一次正文。
+// 用 lines 而不是 full：full 会写下增量基线，后面那条"小文件 auto 选全文"的判据会拿到"无变化"回执。
+readWith(SRC, { filePath: target, mode: 'lines', lines: [1, SRC.split('\n').length] })
 const r1 = await registered.execute(
   { file_path: target, hunks: [{ target: 'label', replace: 'export function label(count) {\n  return `count=${count}`;\n}' }] },
   exec,

@@ -1,12 +1,13 @@
 # aura-basetools 状态说明与提交注意事项
 
-> 当前版本：**1.0.1（已发布到 npm；GitHub release `aura-basetools-v1.0.1`）**
+> 当前版本：**1.0.2（已发布到 npm；GitHub release `aura-basetools-v1.0.2`）**
 > 工作树：发布提交已落盘（见 `git log`；monorepo `Ck-epsilon/Aura` 同名 tag）
-> npm：`aura-basetools@1.0.1`、`aura-basetools-dsh@1.0.1`（registry.npmjs.org）
-> GitHub：`Ck-epsilon/Aura` 的 `aura-basetools/` 子目录，tag `aura-basetools-v1.0.1`
+> npm：`aura-basetools@1.0.2`、`aura-basetools-dsh@1.0.2`（registry.npmjs.org）
+> GitHub：`Ck-epsilon/Aura` 的 `aura-basetools/` 子目录，tag `aura-basetools-v1.0.2`
+> 1.0.2：写只覆盖**交付过**的行（`PATCH_UNSEEN_REGION`）；实体整段替换同判据；convert 源编码显式
 > 1.0.1：行号写必须带 `expect`（单 hunk 与批量一致）；`anchor` 片段拒绝；多目标平铺元素修复
 > 1.0.0：公开面收成 `aura_basetools_read` + `aura_basetools_apply`；entity-first、目录 grep、图片读、单元层归档
-> 闸读数：57 件闸内实跑 + 拆包 75/75 + src↔dist 33 文件逐字节一致；entity-apply 51/51
+> 闸读数：57 件闸内实跑 + 拆包 75/75 + src↔dist 34 文件逐字节一致；entity-apply 63/63；DSH load 99/99
 > 性能（本机 CLI，10k 行）：entity read p50 187 ms / apply 289 ms / read+apply 474 ms；仓库 grep 200 ms（102 文件）；图片元数据 106 ms
 
 ---

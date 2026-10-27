@@ -19,6 +19,8 @@ import { locate } from '../locator-lab/locator-api.mjs'
 import { contextServices } from '../locator-lab/mock-ctx.mjs'
 
 const plugin = await import('./index.js')
+// 1.0.2 覆盖闸要的是"真读过"：段 10 起用**真读插件**建立交付事实，而不是手工塞账本。
+const readPlugin = await import('../aura-read/index.js')
 
 const results = []
 const check = (ok, label, detail = '') => {
@@ -87,7 +89,7 @@ check(compiled.type === 'object', `编译后的参数是 object schema`)
  */
 check(
   paramKeys.join(',') ===
-    'file_path,targets,hunks,target,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,structure,line,position,dry_run,require_observation,retry,create',
+    'file_path,targets,hunks,target,lines,start_line,end_line,line_cue,anchor,old,context,replace,replace_all,eol,expect,near,handle,structure,line,position,dry_run,require_observation,require_delivered,retry,create',
   `参数 = ${paramKeys.join(',')}`,
 )
 // `hunks` 不再无条件必填：创建路径用 `create`，此时 hunks 可有可无。
@@ -550,6 +552,35 @@ console.log('=== 10. aura_basetools_apply：实体地址的一步写入 ===')
   ].join('\n')
   fs.writeFileSync(applyTarget, APPLY_SRC, 'utf8')
 
+  // 1.0.2：没读过实体就整段替换 ⇒ 拒绝（DSH 面同样过覆盖闸）。
+  const blindTarget = path.join(applyTmp, 'blind.js')
+  fs.writeFileSync(blindTarget, APPLY_SRC, 'utf8')
+  const blindBefore = fs.readFileSync(blindTarget, 'utf8')
+  let blindErr = null
+  try {
+    await applyTool.execute(
+      { file_path: blindTarget, entity: 'function:beta', op: 'replace-body', change: 'export function beta() {\n  return 20\n}' },
+      exec,
+    )
+  } catch (error) {
+    blindErr = error
+  }
+  check(blindErr?.code === 'PATCH_UNSEEN_REGION', `没读过实体 ⇒ replace-body 被拒（${blindErr?.code}）`)
+  check(fs.readFileSync(blindTarget, 'utf8') === blindBefore, '覆盖闸拒绝时零写入')
+
+  // 真读一次（真读插件 + 真 fs 服务）：覆盖闸认的就是这条事实。
+  let readTool = null
+  readPlugin.apply({
+    fs: fsService,
+    ...contextServices(),
+    tools: { register: (t) => { if (t?.name === 'aura_basetools_read') readTool = t } },
+    systemPrompt: { section: () => () => {} },
+    emit: () => {},
+    waterfall: async () => {},
+  })
+  const observed = await readTool.execute({ file_path: applyTarget, mode: 'full' }, exec)
+  check(typeof observed?.version === 'string', `真读插件给出观测（version=${String(observed?.version).slice(0, 24)}…）`)
+
   // 预演：拿证据、不动盘。
   const preview = await applyTool.execute(
     {
@@ -583,6 +614,8 @@ console.log('=== 10. aura_basetools_apply：实体地址的一步写入 ===')
   check(landed.evidence?.version !== undefined, '回执 evidence 带观测版本')
 
   // 证据过期：实体在证据之后被改过 ⇒ PATCH_ENTITY_STALE，零写入。
+  // 上一步的 beta 真写换了一版，先重新读一次（真模型也是这样拿到新证据的）。
+  await readTool.execute({ file_path: applyTarget, mode: 'full' }, exec)
   const staleEvidence = (
     await applyTool.execute(
       { file_path: applyTarget, entity: 'function:alpha', op: 'replace-body', change: 'export function alpha() {\n  return 1\n}', dry_run: true },

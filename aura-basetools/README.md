@@ -5,6 +5,10 @@
 **1.0.1 起行号写必须带内容断言**：`apply op=patch` 用 `lines` / `start_line`+`end_line` 时
 必须同时给 `expect`（该区间当前文本），单 hunk 与批量一致；`anchor` 只接受整行原文，
 行内片段会被拒绝，行内替换用 `old`。
+**1.0.2 起写只覆盖你真正拿到过的行**：`probe` / `map` 读、或 `full` 被内容预算截断，都不算交付；
+整份覆写或整段替换落到未交付的行 ⇒ `PATCH_UNSEEN_REGION`，零写入并点名缺的区间。
+按内容寻址（`old` / `anchor`）可豁免，或 `allow_unobserved: true` 显式盲写（回执标 `unverified_region`）。
+`convert` 不再猜源编码：非 UTF-8 且无 BOM 时必须给 `from`（`CONVERT_FROM_REQUIRED`）。
 
 **1.0.0 起公开面只有这两个工具**（0.7.0 起引擎/适配器是两个 npm 包）：
 

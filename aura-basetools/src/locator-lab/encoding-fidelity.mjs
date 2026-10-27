@@ -95,7 +95,13 @@ const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
 check(readTool !== null && editTool !== null, 'aura_basetools_read 与 aura_basetools_edit 都注册成功', `${readTool?.name} / ${editTool?.name}`)
 
 const read = (file, args = {}) => readTool.execute({ file_path: file, ...args }, exec)
-const edit = (file, hunks, extra = {}) => editTool.execute({ file_path: file, hunks, ...extra }, exec)
+// 1.0.2 覆盖闸：整段替换要落在交付过的正文上——先按真实读走一次全份。
+// 用 lines 而不是 full：full 会写下增量基线，后面按版本令牌取回执的判据会拿到"无变化"。
+const edit = async (file, hunks, extra = {}) => {
+  const total = fs.readFileSync(file, 'utf8').split('\n').length
+  await read(file, { mode: 'lines', lines: [1, total] })
+  return editTool.execute({ file_path: file, hunks, ...extra }, exec)
+}
 
 // ── mock 自检：readText 真的会丢 BOM（否则本文件测不出东西） ─────────────────
 say('')

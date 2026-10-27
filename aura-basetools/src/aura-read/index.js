@@ -28,7 +28,7 @@
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 // 读取逻辑本身框架无关，住在 locator-lab；本文件是它的 DSH 适配器。
-import { readWith, readManyWith, MODES, BYTE_ORDER_MARK_BYTES, startsWithByteOrderMark, coverageOf } from '../locator-lab/read-core.mjs'
+import { readWith, readManyWith, MODES, BYTE_ORDER_MARK_BYTES, startsWithByteOrderMark, coverageOf, ledgerIdentityKey, rememberDeliveredRows } from '../locator-lab/read-core.mjs'
 import { MT_READ_ELEMENT_KEYS, asLinePair, assertKnownArgs, assertReadTargets, assertTargetShape, inferReadMode, lineRangeOf, normalizeReadRequest } from '../locator-lab/args.mjs'
 // 仓库级地图（T26）：引擎驱动遍历，本文件只把 ctx.fs 的两个原始能力接上去。
 import { collectRepoMap } from '../locator-lab/repo-map.mjs'
@@ -1393,8 +1393,19 @@ export function apply(ctx) {
               ? { identityKey: target.targetKey }
               : {}),
             byteOrderMark,
+            // 回执正文是 `view.text`，不是这次 readWith 的渲染 ⇒ 交付覆盖按实体视图单独记。
+            recordDelivery: false,
           })
           if (observation.ok === false) throw new Error(`${observation.code}: ${observation.message}`)
+          /**
+           * 正文被预算剪过 ⇒ 一行都不算交付：写侧据此拒绝"拿半份正文整段替换"。
+           * 定义与引用不参与这条判据。
+           */
+          rememberDeliveredRows(
+            ledgerIdentityKey(target.displayPath, typeof target.targetKey === 'string' && target.targetKey.length > 0 ? target.targetKey : undefined),
+            observation.version,
+            view.bodyClipped === true ? [] : [`${view.entity.startLine}-${view.entity.endLine}`],
+          )
           ctx.emit('fs/observed', target, { kind: 'present', version: info.version }, exec)
           return {
             path: target.displayPath,

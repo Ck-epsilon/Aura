@@ -1,4 +1,4 @@
-# aura-tools 版本变更表（0.6.2 → 1.0.1）
+# aura-tools 版本变更表（0.6.2 → 1.0.2）
 
 > **这份表是补记的**：`docs/aura-tools-<版本>.md` 只覆盖到 0.6.1，然后直接跳到 0.6.16/0.6.17；
 > 中间的 0.6.2–0.6.15 与 0.6.18 当时只写在交接单与工作单里。C72 收口审计把这 15 个版本的**一句话变更 + 读数**
@@ -7,6 +7,26 @@
 > - 详细施工记录：`.polaris/读写工具重做-交接单.md`（§三 波1–19、§八 句柄化、§九 多目标、§十 判定内联、§十二 回执准确化）
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
+
+## 1.0.2：写只覆盖交付过的行 · convert 源编码显式
+
+- **交付覆盖闸**：读侧按版本记下“这次真正交付了哪些行”（`observations.json` 的 `delivered`），
+  写侧在规划之后、落盘之前核对要替换的区间。`probe` / `map` / `digest` 不交付正文，被内容预算截断的
+  `full` 只交付前半 ⇒ 整份覆写或整段替换落到未交付行时 `PATCH_UNSEEN_REGION` 零写入，
+  拒绝里点名缺的区间与下一步。改前实测：200 行文件 `probe` 之后用 10 行 `op=write` 直接落盘，
+  回执 `ok:true`、无 `unverified_region`；改后同一路径被拒且磁盘逐字节不变。
+- **实体整段替换同一条判据**：实体回执被 `body clipped` 截断时记 0 行交付，`replace-body` 拒绝；
+  读全区间后放行。`rename` 的 hunk 带整行 `expect`，属内容证据，不受影响。
+- **内容证据豁免**：`old` / `anchor` / `handle` 与“整段等于被替换区域的 `expect`”免于覆盖闸。
+- **convert 不再猜源编码**：非 UTF-8 且无 BOM ⇒ `CONVERT_FROM_REQUIRED` 零写入，拒绝里给探测结果、
+  置信度与候选。依据：探测在单字节编码上会猜错还报 high（实测 windows-1251 的俄文被判成 windows-1252 high），
+  而 convert 覆盖原文不可撤。
+- **旧代码同步改造**：落盘观测存储（CLI/MCP 的 `observations.json`）与内存存储都实现 `deliver`，
+  同版本重记保留既有覆盖；DSH 单目标编辑的内联路径调用同一份 `coverageGate`（不是第二份实现）；
+  apply 自建观测的那次内部读标 `recordDelivery:false`（回执不发给模型，不能洗成交付）。
+- **契约**：`capabilities.writeSafety.*` 增加 `delivered-coverage`。
+- **判据**：`node build/release-check.mjs` exit 0；`entity-apply` 63/63（含 M 段覆盖闸 11 条）；
+  DSH `load-test` 99/99（真读插件 → 真 apply 的覆盖链）。
 
 ## 1.0.1：坐标写必须带内容断言 · anchor 片段拒绝
 

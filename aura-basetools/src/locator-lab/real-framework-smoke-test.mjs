@@ -207,6 +207,8 @@ const cases = [
   ['aura_basetools_write 盲写（allow_unobserved）', writeTool, { file_path: path.join(tmp, 'external.txt'), content: 'external-new\n', allow_unobserved: true }],
   ['aura_basetools_write eol preserve', writeTool, { file_path: path.join(tmp, 'written.txt'), content: 'exact\n', eol: 'preserve' }],
   // 0.23：实体地址的一步写入（apply 自己建立观测，调用方不必先 read）。
+  // 1.0.2 覆盖闸：前面几次编辑换了版本，整段替换之前先重读一次（真模型也是这么做的）。
+  ['aura_basetools_read 重读（apply 之前）', readTool, { file_path: file }],
   ['aura_basetools_apply 替换实体正文', applyTool, { file_path: file, entity: 'function:beta', op: 'replace-body', change: 'export function beta() {\n  return 22\n}' }],
   ['aura_basetools_apply 重命名实体', applyTool, { file_path: file, entity: 'function:beta', op: 'rename', new_name: 'betaRenamed', scope: 'file' }],
 ]
@@ -228,6 +230,8 @@ say('=== B2. apply 的拒绝回执同样要过真输出校验（零写入路径�
 {
   const staleFile = path.join(tmp, 'stale.mjs')
   fs.writeFileSync(staleFile, 'export function omega() {\n  return 1\n}\n')
+  // 1.0.2：整段替换要落在交付过的正文上。
+  await readTool.execute({ file_path: staleFile }, exec)
   const seeded = await applyTool.execute(
     { file_path: staleFile, entity: 'function:omega', op: 'replace-body', change: 'export function omega() {\n  return 10\n}', dry_run: true },
     exec,

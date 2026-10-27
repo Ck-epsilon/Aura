@@ -82,6 +82,18 @@ const SELF = path.join(here, 'index-scaling-test.mjs')
 const GATE = path.join(ROOT, 'build', 'release-check.mjs')
 const CORE_URL = pathToFileURL(path.join(here, 'struct-core.mjs')).href
 
+/**
+ * 把本套件的索引缓存额度**钉死**。
+ *
+ * 默认额度按"当时的可用内存 / 16"算（上下夹住），而闸里同时跑着别的进程：内存紧的时候
+ * 额度可能装不下 10 万符号那一档，于是"同一实例的第二次调用命中缓存"退化成"又解析了一遍"，
+ * 段A 测的就不再是算法，而是这台机器当时剩下多少内存（实测：同一份代码，单独跑热 10 ms，
+ * 闸里某一轮热 487 ms ⇒ 误红）。256 MiB 是额度常量上限，与算法无关。
+ *
+ * 只有动态创建的引擎实例（`freshCore()`）读这个变量，而它们都在下面才创建，所以这行有效。
+ */
+process.env.AURA_INDEX_CACHE_MB = '256'
+
 /** 每行一个符号的形态（施工单上的那个悬崖）。 */
 const symbolSrc = (n) => {
   const out = new Array(n)

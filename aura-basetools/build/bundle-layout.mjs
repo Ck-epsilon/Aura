@@ -32,6 +32,8 @@ export const ENGINE = [
   'repo-map.mjs',
   // 区间句柄（HD1）：`aura_basetools_read` 发、`aura_basetools_edit` 解析。两个壳都经引擎碰到它，漏打包 = 包内直接崩。
   'handle-core.mjs',
+  // 交付覆盖（1.0.2）：读侧记账、写侧判据共用的叶子。`read-core` 与 `write-path` 都静态 import 它。
+  'coverage-core.mjs',
   // 写前预检 / 写后结构状态（0.22）：`write-path` 静态 import，漏打包 = 包内直接崩。
   'preflight.mjs',
   // 文档/配置目录（0.21）：`read-core` 静态 import 它；漏打包 = 包内直接崩。

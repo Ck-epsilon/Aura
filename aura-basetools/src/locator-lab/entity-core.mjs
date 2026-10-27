@@ -255,8 +255,10 @@ export function entityView({
 
   let text = head
   let shownBody = body
+  let bodyClipped = false
   const bodyRoom = limit - text.length - 1
   if (shownBody.length > bodyRoom) {
+    bodyClipped = true
     // Reserve the marker's own width, then recompute after the omitted-count digits change.
     let omitted = shownBody.length
     let suffix = ` ⋯ [body clipped, ${omitted} chars omitted]`
@@ -298,6 +300,7 @@ export function entityView({
     references,
     evidence: { version: version ?? null, contentHash: entity.evidence.contentHash, spanHash: entity.evidence.spanHash },
     text,
+    ...(bodyClipped ? { bodyClipped: true } : {}),
     ...(shown < total ? { referencesOmitted: { total, shown, cap: MAX_REFERENCES } } : {}),
     ...(omissions.length > 0 ? { omitted: omissions.join('; ') } : {}),
   }

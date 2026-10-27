@@ -78,6 +78,9 @@ import {
   // 并把逐项回执渲染出来——本文件里**不写第二份**提交纪律。
   applyEditToProvider,
   applyEditsToProvider,
+  // 1.0.2 交付覆盖闸：DSH 的单目标编辑是内联规划（不走 applyEditToProvider），
+  // 判据本体必须借引擎那一份，否则同一条规则会在两处各写一遍。
+  coverageGate,
 } from '../locator-lab/write-path.mjs'
 
 export const name = 'dsh-tool-aura-edit'
@@ -439,6 +442,7 @@ export const EDIT_ARG_KEYS = [
   'dry_run',
   'create',
   'require_observation',
+  'require_delivered',
   'retry',
   // fs-contract-v2 §2.2：多目标形状。它与 `file_path`/`hunks` **互斥**——
   // 判据只有一份（引擎与壳共调 `assertEditTargets`），这里只登记名字。
@@ -1268,6 +1272,7 @@ async function applyEditTargets(ctx, exec, args, targets, policy) {
     targets,
     ...(args.dry_run === undefined ? {} : { dryRun: args.dry_run }),
     ...(args.require_observation === true ? { requireObservation: true } : {}),
+    ...(args.require_delivered === true ? { requireDelivered: true } : {}),
     ...(args.retry === true ? { retry: true } : {}),
     ...(signal === undefined ? {} : { signal }),
   })
@@ -1470,8 +1475,9 @@ function registerTools(ctx, sandbox) {
               : {
                   wholeFile: args.content,
                   eol,
-                  // 覆写默认要求先读过这一版；allow_unobserved 同时越过严格闸与区域闸。
+                  // 覆写默认要求先读过这一版；allow_unobserved 同时越过严格闸、区域闸与覆盖闸。
                   requireObservation: args.allow_unobserved !== true,
+                  requireDelivered: args.allow_unobserved !== true,
                   skipStaleGate: args.allow_unobserved === true,
                 }),
             dryRun: args.dry_run === true,
@@ -1645,6 +1651,9 @@ function registerTools(ctx, sandbox) {
             // 而对**不改行数**的编辑，它是**零成本**的（收敛率不变）。
             // 也就是说：这一项是唯一把"静默写错行"变成诚实失败的机制，而它的代价是零。
             'Pass `expect` (the text you believe is at that location) on every hunk when you address by `lines`, `start_line`/`end_line`, or `line_cue`: if the file shifted since you read it, `expect` turns a silent wrong-line write into a loud failure, and it costs nothing on edits that do not move lines. A line-number-only hunk without `expect` is refused (PATCH_LINES_NEED_EXPECT, nothing written), single hunk or batch alike.',
+            // 1.0.2：覆盖闸。同一类事故的另一种形态——读了半份（probe/map，或 full 被预算截断）
+            // 然后整份覆写／整段替换，没看过的行静默消失。判据在引擎，这里只把恢复路径说清。
+            'You may only replace lines you were actually given. A probe/map/digest read, or a `full` cut at the content budget, does not entitle you to rewrite the rest: such a hunk is refused (PATCH_UNSEEN_REGION) with the exact undelivered range. Read that range with mode=lines and retry, address it by content (`old`/`anchor`), or pass `allow_unobserved: true` for a deliberate whole-file overwrite (the receipt then says `unverified_region`).',
             // 刻意**不再**写"未知扩展名请用内置 edit"。那句话是错的：只有 `target` 需要语言配置
             // （符号表只对已索引的扩展名存在），而 `lines`／`line_cue`／`anchor` 三种寻址根本不看语言，
             // 创建路径更是与寻址无关。它恰好在工具可用的地方把模型赶回内置工具。
@@ -1874,7 +1883,7 @@ function registerTools(ctx, sandbox) {
           assertLineAddressesNeedExpect(applyHunks, { dryRun })
           const result = Array.isArray(args.targets)
             ? await editTool.execute(
-                definedArgs({ targets: args.targets, dry_run: dryRun, require_observation: args.require_observation, retry: args.retry }),
+                definedArgs({ targets: args.targets, dry_run: dryRun, require_observation: args.require_observation, require_delivered: true, retry: args.retry }),
                 exec,
               )
             : await editTool.execute(
@@ -1884,6 +1893,7 @@ function registerTools(ctx, sandbox) {
                   create: args.create,
                   dry_run: dryRun,
                   require_observation: args.require_observation,
+                  require_delivered: true,
                   retry: args.retry,
                 }),
                 exec,
@@ -1982,7 +1992,7 @@ function registerTools(ctx, sandbox) {
         }
         /**
          * Auto-observation: apply establishes its own "this revision was just read" basis,
-         * so the caller does not have to read first; the edit path then requires it.
+         * so the caller does not have to read first for freshness — but 1.0.2 still refuses a whole-body replacement whose lines were never delivered (PATCH_UNSEEN_REGION).
          */
         const observation = readWith(source, {
           mode: 'lines',
@@ -1990,6 +2000,8 @@ function registerTools(ctx, sandbox) {
           filePath: target.displayPath,
           ...(typeof target.targetKey === 'string' && target.targetKey.length > 0 ? { identityKey: target.targetKey } : {}),
           byteOrderMark: (await fileByteOrderMarkCount(ctx.fs, target, exec.signal)) > 0,
+          // 这次读只用来建"刚读过这一版"的基准，回执不发给模型 ⇒ 不能记成交付。
+          recordDelivery: false,
         })
         if (observation.ok === false) throw new Error(`${observation.code}: ${observation.message}`)
         const evidence = entityEvidenceOf(view.evidence, observation.version)
@@ -2010,7 +2022,7 @@ function registerTools(ctx, sandbox) {
         }
         // The edit tool is the one execution path: no second copy of planning/gates/write/verify.
         const editResult = await editTool.execute(
-          { file_path: args.file_path, hunks, dry_run: dryRun, require_observation: true },
+          { file_path: args.file_path, hunks, dry_run: dryRun, require_observation: true, require_delivered: true },
           exec,
         )
         return {
@@ -2134,6 +2146,11 @@ function registerTools(ctx, sandbox) {
           type: 'boolean',
           description:
             'Strict freshness: require this exact revision to have been read (or written) in this session; otherwise refuse with PATCH_UNOBSERVED. Applies to dry_run as well, so a preview matches the real verdict. Creating a new file is exempt.',
+        },
+        require_delivered: {
+          type: 'boolean',
+          description:
+            'Require the addressed lines to have been delivered to you (read, or written by you) in this session; otherwise refuse with PATCH_UNSEEN_REGION and name the lines that are missing. Public apply always sets this; `old`/`anchor`/`handle`/full-range `expect` are content proof and are exempt.',
         },
         retry: {
           type: 'boolean',
@@ -2647,6 +2664,19 @@ function registerTools(ctx, sandbox) {
             : {}),
         })
         if (!gate.clean) throw new PatchError(gate.message, 'PATCH_STALE_REGION', gate.extras)
+        /**
+         * 交付覆盖闸（1.0.2）：`require_delivered` 由公开写面（apply）传进来。
+         * 与陈旧闸门同一条位置纪律——规划之后、预演之前、落盘之前。
+         */
+        if (args.require_delivered === true) {
+          const unseen = coverageGate(hunks, planned, content, target.displayPath, {
+            byteOrderMark: byteOrderMarks > 0,
+            ...(typeof target.targetKey === 'string' && target.targetKey.length > 0
+              ? { identityKey: target.targetKey }
+              : {}),
+          })
+          if (unseen !== null) throw new PatchError(unseen.message, 'PATCH_UNSEEN_REGION', unseen.extras)
+        }
         // 闸门过了才轮到预演：此刻“预演通过”与“真写会成功”是同一句话。
         if (args.dry_run === true) {
           return { path: target.displayPath, outcome: 'applied', applied, dryRun: true }

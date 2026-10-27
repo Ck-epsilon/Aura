@@ -115,9 +115,9 @@ export function capabilitiesEnvelope() {
           lineAddressNeedsExpect: ['lines', 'start_line', 'end_line'],
         },
         writeSafety: {
-          cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
-          dsh: ['stale-region-gate', 'observation-gate', 'byte-verify'],
+          cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'delivered-coverage', 'byte-verify'],
+          mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'delivered-coverage', 'byte-verify'],
+          dsh: ['stale-region-gate', 'observation-gate', 'delivered-coverage', 'byte-verify'],
         },
       },
     ],
@@ -348,8 +348,35 @@ export async function convertEnvelope(provider, { file, to, from, bom = 'keep', 
   const info = provider.stat(displayPath)
   if (info === undefined) return { ok: false, error: `cannot convert "${displayPath}": not found`, code: 'FS_NOT_FOUND' }
   if (info.type !== 'file') return { ok: false, error: `cannot convert "${displayPath}": not a regular file`, code: 'FS_NOT_REGULAR_FILE' }
-  const got = readFileBytes(displayPath, { encoding: normalizeEncodingName(from) ?? undefined })
+  /**
+   * 源编码必须显式（1.0.2）：convert **覆盖原文那一版字节**，不可撤。
+   * 探测在单字节编码上会猜错还报 high（实测：windows-1251 的俄文被判成 windows-1252 high），
+   * 于是"猜错的编码"会直接变成"写坏的盘"。UTF-8 与带 BOM 的 UTF-16 由字节本身锚定，可以省。
+   */
+  const sourceEncoding = from === undefined || from === null ? null : normalizeEncodingName(from)
+  if (from !== undefined && from !== null && sourceEncoding === null) {
+    return { ok: false, error: `unsupported source encoding ${JSON.stringify(from)}`, code: 'CONVERT_BAD_ARGS' }
+  }
+  const got = readFileBytes(displayPath, { encoding: sourceEncoding ?? undefined })
   if (got.error !== undefined) return got.error
+  if (sourceEncoding === null) {
+    const bomAnchored = Array.isArray(got.encoding?.bom) && got.encoding.bom.length > 0
+    if (got.encoding?.encoding !== 'utf-8' && !bomAnchored) {
+      const alternatives = Array.isArray(got.encoding?.alternatives) ? got.encoding.alternatives.join(', ') : ''
+      return {
+        ok: false,
+        code: 'CONVERT_FROM_REQUIRED',
+        error:
+          `cannot convert "${displayPath}": the source encoding was detected as ${got.encoding?.encoding} ` +
+          `(${got.encoding?.confidence ?? 'unknown'} confidence${alternatives === '' ? '' : `, alternatives: ${alternatives}`}) — ` +
+          `conversion overwrites the original bytes and cannot be undone, so pass \`from\` explicitly ` +
+          `(from: "${got.encoding?.encoding}"). Nothing was written.`,
+        detected: got.encoding?.encoding,
+        confidence: got.encoding?.confidence,
+        ...(alternatives === '' ? {} : { alternatives }),
+      }
+    }
+  }
   const text = got.source
   /** 双重编码修复：先还原正文，再做编码/行尾/BOM 变换。 */
   let repaired = null
@@ -623,8 +650,19 @@ export async function readEnvelope(provider, args) {
         lines: [view.entity.startLine, view.entity.endLine],
         filePath: displayPath,
         byteOrderMark: gotEntity.byteOrderMark,
+        // 这次读不发给模型（回执正文是 `view.text`），所以不能记成"交付过"。
+        recordDelivery: false,
       })
       if (observed.ok === false) return observed
+      /**
+       * 交付覆盖按**实体视图自己**的裁剪记账：正文被预算剪过 ⇒ 一行都不算交付，
+       * 写侧据此拒绝"拿半份正文整段替换"。定义与引用不算正文，不参与这条。
+       */
+      readCore.rememberDeliveredRows(
+        readCore.ledgerIdentityKey(displayPath, undefined),
+        observed.version,
+        view.bodyClipped === true ? [] : [`${view.entity.startLine}-${view.entity.endLine}`],
+      )
       const receipt = {
         ok: true,
         ...observed,
@@ -712,13 +750,14 @@ export async function readEnvelope(provider, args) {
 }
 
 /** 改一次（规划 → 陈旧闸门 → 逐字节写 + CAS → 回读校验 → 刷新观测）。 */
-async function editEnvelopeInner(provider, { file, hunks, dryRun, create, requireObservation, retry, wholeFile, eol, skipStaleGate, toolName = 'aura_basetools_edit' }) {
+async function editEnvelopeInner(provider, { file, hunks, dryRun, create, requireObservation, requireDelivered, retry, wholeFile, eol, skipStaleGate, toolName = 'aura_basetools_edit' }) {
   try {
     const result = await applyEditToProvider(provider, {
       displayPath: provider.resolve(file),
       hunks: hunks ?? [],
       dryRun: dryRun === true,
       ...(requireObservation === true ? { requireObservation: true } : {}),
+      ...(requireDelivered === true ? { requireDelivered: true } : {}),
       ...(retry === true ? { retry: true } : {}),
       ...(typeof wholeFile === 'string' ? { wholeFile } : {}),
       ...(typeof eol === 'string' ? { eol } : {}),
@@ -962,7 +1001,7 @@ function inferApplyOp(args) {
 /**
  * `applyEnvelope`（`aura_basetools_apply`）—— 唯一写入口。
  * op=replace-body|rename 走实体；patch/write/convert/tx 分别转发到既有实现；
- * 实体路径自带新鲜观测，调用方不必先 read。
+ * 实体路径自带新鲜观测（新鲜度基准），但 1.0.2 起整段替换仍要求正文交付过。
  */
 export async function applyEnvelope(provider, args = {}) {
   const {
@@ -1002,10 +1041,10 @@ export async function applyEnvelope(provider, args = {}) {
         { dryRun },
       )
       if (Array.isArray(targets)) {
-        return await editManyEnvelope(provider, { targets, dryRun, requireObservation, retry, verify, transaction })
+        return await editManyEnvelope(provider, { targets, dryRun, requireObservation, requireDelivered: true, retry, verify, transaction })
       }
       return await editEnvelope(provider, {
-        file, hunks: Array.isArray(hunks) ? hunks : [], create, dryRun, requireObservation, retry, verify, transaction,
+        file, hunks: Array.isArray(hunks) ? hunks : [], create, dryRun, requireObservation, requireDelivered: true, retry, verify, transaction,
       })
     }
     if (operation !== 'replace-body' && operation !== 'rename') {
@@ -1059,17 +1098,19 @@ export async function applyEnvelope(provider, args = {}) {
       return { ok: false, error: `unknown op ${JSON.stringify(operation)}; expected replace-body or rename`, code: 'APPLY_BAD_ARGS' }
     }
     /**
-     * ── 自动观测：apply 自己建立“刚读过这一版”的基准，调用方不必先 read ────────
+     * ── 自动观测：apply 自己建立“刚读过这一版”的新鲜度基准（覆盖闸另算，见 PATCH_UNSEEN_REGION）──
      */
     const observation = readWith(source, {
       mode: 'lines',
       lines: [view.entity.startLine, view.entity.endLine],
       filePath: displayPath,
       byteOrderMark: got.byteOrderMark,
+      // apply 自建观测基准：回执不发给模型，记成"交付过"会把没看过的正文洗白。
+      recordDelivery: false,
     })
     if (observation.ok === false) return observation
     const entityEvidence = { ...view.evidence, version: observation.version }
-    const editEnv = await editEnvelope(provider, { file, hunks: hunksForEntity, dryRun, verify, transaction, requireObservation: true })
+    const editEnv = await editEnvelope(provider, { file, hunks: hunksForEntity, dryRun, verify, transaction, requireObservation: true, requireDelivered: true })
     if (editEnv.ok !== true) return editEnv
     return {
       ...editEnv,
@@ -1311,6 +1352,8 @@ export async function writeEnvelope(provider, { file, content, dryRun = false, n
         eol,
         dryRun,
         requireObservation: allowUnobserved !== true,
+        // 覆写要替换整份文件：没有"这些行交付过"的事实就不许写，除非显式盲写。
+        requireDelivered: allowUnobserved !== true,
         skipStaleGate: allowUnobserved === true,
         toolName: 'aura_basetools_write',
         verify,

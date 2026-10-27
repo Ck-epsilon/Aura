@@ -19,6 +19,8 @@ import path from 'node:path'
 import { indexStructure, langOf } from './struct-core.mjs'
 import { locate } from './locator-api.mjs'
 import { contextServices } from './mock-ctx.mjs'
+// 1.0.2 覆盖闸：整段替换要落在交付过的正文上。本套件只验跨度，读侧用引擎那一份记账即可。
+import { readWith } from './read-core.mjs'
 
 const say = (m) => fs.writeSync(1, `${m}\n`)
 const results = []
@@ -256,6 +258,8 @@ async function runEdit(fileName, lines, hunk) {
   const p = path.join(tmp, fileName)
   fs.writeFileSync(p, lines.join('\n'), 'utf8')
   const before = fs.readFileSync(p, 'utf8')
+  // 读一次全份：覆盖闸认的是"这些行交付过"，整段替换才有依据。
+  readWith(before, { filePath: p, mode: 'lines', lines: [1, before.split('\n').length] })
   let out = null
   let error = null
   try {
