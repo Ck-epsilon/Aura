@@ -41,6 +41,8 @@ check('A4b apply 选项含 replace_all', apply?.options?.includes('replace_all')
 check('A4c apply 选项含 require_observation；写入口默认带观察闸', apply?.options?.includes('require_observation') && apply?.writeSafety?.cli?.includes('observation-gate') && apply?.writeSafety?.mcp?.includes('observation-gate'), JSON.stringify({ options: apply?.options, safety: apply?.writeSafety }))
 check('A4d apply 含 write 操作且选项含 eol', apply?.operations?.includes('write') && apply?.options?.includes('eol'), JSON.stringify({ operations: apply?.operations, options: apply?.options }))
 check('A4e apply 在 DSH 面也宣称观察闸/区域闸/回读（不宣称事务/undo/锁）', apply?.writeSafety?.dsh?.includes('observation-gate') && apply.writeSafety.dsh.includes('stale-region-gate') && apply.writeSafety.dsh.includes('byte-verify') && !apply.writeSafety.dsh.includes('transaction') && !apply.writeSafety.dsh.includes('undo') && !apply.writeSafety.dsh.includes('workspace-lock'), JSON.stringify(apply?.writeSafety))
+// 1.0.2：交付覆盖闸是写路径的常开判据，三个面都得宣称——声明面掉一个，模型就会以为那一面可以盲写。
+check('A4f apply 三面都宣称交付覆盖闸（delivered-coverage）', ['cli', 'mcp', 'dsh'].every((face) => apply?.writeSafety?.[face]?.includes('delivered-coverage')), JSON.stringify(apply?.writeSafety))
 check('A5 命令含 doctor', cap.commands.includes('basetools doctor'), cap.commands.join(','))
 check('A5b 命令含 capabilities（运行时命令与构建清单同源）', cap.commands.includes('basetools capabilities'), cap.commands.join(','))
 check('A5d 命令含 apply（唯一写入口）', cap.commands.includes('basetools apply'), cap.commands.join(','))

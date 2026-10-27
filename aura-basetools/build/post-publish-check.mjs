@@ -165,6 +165,25 @@ say('=== B. 真装：CLI / MCP 从装出来的那份能跑 ===')
   const read = spawnSync(process.execPath, [path.join(installedCore, 'bin', 'aura.mjs'), 'basetools', 'read', '--file', sample, '--mode', 'map', '--pretty'], { cwd: tmp, env, encoding: 'utf8', timeout: 30000 })
   check('装出来的 CLI 能取景', read.status === 0 && String(read.stdout ?? '').includes('alpha'), `${read.status} ${String(read.stderr ?? '').trim().slice(0, 120)}`)
 
+  /**
+   * 1.0.2 交付覆盖闸：**装出来的那一份**也必须拒绝"没看过就覆写"。
+   *
+   * 放在发布物验收里而不是只放源码套件里，是 0.7.0 的教训：源码绿、发布物不生效。
+   * 这里用 probe 读（零正文）打底，再整份覆写——期望被拒且磁盘逐字节不变。
+   */
+  const gateFile = path.join(tmp, 'gate.txt')
+  fs.writeFileSync(gateFile, `${Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n')}\n`)
+  const gateBefore = fs.readFileSync(gateFile, 'utf8')
+  spawnSync(process.execPath, [path.join(installedCore, 'bin', 'aura.mjs'), 'basetools', 'read', '--file', gateFile, '--mode', 'probe'], { cwd: tmp, env, encoding: 'utf8', timeout: 30000 })
+  const refusedWrite = spawnSync(process.execPath, [path.join(installedCore, 'bin', 'aura.mjs'), 'basetools', 'apply', '--file', gateFile, '--content', 'short\n'], { cwd: tmp, env, encoding: 'utf8', timeout: 30000 })
+  let refusedReply = null
+  try { refusedReply = JSON.parse(String(refusedWrite.stdout ?? '').trim().split('\n').pop()) } catch { refusedReply = null }
+  check(
+    '装出来的 CLI 拒绝未交付的覆写（PATCH_UNSEEN_REGION，零写入）',
+    refusedReply?.ok === false && refusedReply?.code === 'PATCH_UNSEEN_REGION' && fs.readFileSync(gateFile, 'utf8') === gateBefore,
+    `${refusedWrite.status} ${refusedReply?.code ?? String(refusedWrite.stdout ?? '').trim().slice(0, 80)}`,
+  )
+
   const frames = [
     JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'post-publish', version: '1' } } }),
     JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
