@@ -31,7 +31,7 @@ import { locate, directoryHint } from '../locator-lab/locator-api.mjs'
 import { normSpace } from '../locator-lab/anchor-core.mjs'
 // 单个 hunk 的“平铺形状”容错**只有一份**（住在 args.mjs，与行区间收敛同一层）：
 // DSH 壳与 CLI 共用它。同一套容错规则写两处，就一定会有一处与另一处不一致。
-import { MT_EDIT_ELEMENT_KEYS, assertEditTargets, assertKnownArgs, assertTargetShape, flatHunk } from '../locator-lab/args.mjs'
+import { MT_EDIT_ELEMENT_KEYS, assertEditTargets, assertKnownArgs, assertLineAddressesNeedExpect, assertTargetShape, editTargetHunks, flatHunk } from '../locator-lab/args.mjs'
 // BOM 的字符形态与字节判据都住在引擎里：读路径（aura_basetools_read 的令牌）与写路径（这里）共用一份，
 // 否则"令牌说没 BOM、写回却带 BOM"这类不自洽会两处各修一遍。
 import {
@@ -119,15 +119,15 @@ const HUNK_PROPERTIES = {
   lines: {
     oneOf: [{ type: 'array' }, { type: 'string' }, { type: 'integer' }, { type: 'object', additionalProperties: true }],
     description:
-      'Exact line range `[start, end]` (1-based, inclusive), as printed by the read tool. Use this to edit inside a function without reproducing its text. `[n]` means one line. Also accepts "4,6" or a single 4. Preferred instead: `start_line` + `end_line`.',
+      'Exact line range `[start, end]` (1-based, inclusive), as printed by the read tool. `[n]` means one line. Also accepts "4,6" or a single 4. Preferred instead: `start_line` + `end_line`. A line-number-only address must also pass `expect` (the current text of that range), otherwise it is refused (PATCH_LINES_NEED_EXPECT, nothing written); use `old` for a change inside one line.',
   },
   start_line: {
     type: 'integer',
-    description: 'Preferred over `lines`: first line of the range, 1-based inclusive.',
+    description: 'Preferred over `lines`: first line of the range, 1-based inclusive. A line-number-only address must also pass `expect`.',
   },
   end_line: {
     type: 'integer',
-    description: 'Preferred over `lines`: last line of the range, 1-based inclusive. Defaults to start_line.',
+    description: 'Preferred over `lines`: last line of the range, 1-based inclusive. Defaults to start_line. A line-number-only address must also pass `expect`.',
   },
   line_cue: {
     type: 'string',
@@ -137,7 +137,7 @@ const HUNK_PROPERTIES = {
   anchor: {
     type: 'string',
     description:
-      'The text to find. May carry whitespace drift; keep at least 2 lines for safety. The fallback when no address above is available.',
+      'A whole-line address: the line (or consecutive lines) you remember, tolerant of whitespace drift and rewording; `replace` overwrites the whole matched line(s). For a change inside one line use `old` (it replaces only the matched span). An anchor that matches only part of a line is refused (PATCH_ANCHOR_FRAGMENT, nothing written).',
   },
   /**
    * 内容地址（fs-contract-v2 / C2 的契约）：`old` 就是地址，坐标降为提示。
@@ -658,6 +658,8 @@ const OUTCOME_BY_CODE = new Map([
   // 要改的原文不在文件里（含坐标在文件里不存在）
   ['PATCH_NOT_FOUND', 'not_found'],
   ['PATCH_ANCHOR_NOT_FOUND', 'not_found'],
+  // 锚点是整行地址，却只引用了行内一段：写前拒绝（零写入），不是工具故障。
+  ['PATCH_ANCHOR_FRAGMENT', 'not_found'],
   ['LOCATOR_CUE_NOT_FOUND', 'not_found'],
   ['PATCH_EXPECT_MISMATCH', 'not_found'],
   ['LOCATOR_ASSERT_MISMATCH', 'not_found'],
@@ -1633,7 +1635,7 @@ function registerTools(ctx, sandbox) {
             // 三条保证是**量出来的差异**（不是宣传）：字节保真、陈旧区域拒绝、落盘后回读。
             // 内置 edit 同条件下会丢 BOM、把混合行尾整份归一（2026-09-22 两侧实测）。
             'It writes back byte-for-byte (a leading BOM and each line\'s own ending survive), refuses a hunk whose addressed region changed since your last read, and reads the file back to verify the write.',
-            'Address each hunk the cheapest way: `target` (a symbol name) when you know it, else `start_line` + `end_line` (or `lines: [a, b]`) for the range a read printed, else `line_cue` (one word unique to that line), else `old` (the verbatim text you are replacing); `anchor` (remembered text) is the last resort and tolerates whitespace drift, rewording, and added or removed lines.',
+            'Address each hunk the cheapest way: `target` (a symbol name) when you know it, else `start_line` + `end_line` (or `lines: [a, b]`) for the range a read printed, else `line_cue` (one word unique to that line), else `old` (the verbatim text you are replacing); `anchor` (remembered whole lines) is the last resort and tolerates whitespace drift, rewording, and added or removed lines — its `replace` overwrites the whole matched line(s), so use `old` for a change inside one line.',
             // replace_all：批量替换只有这一条路，且次数变化会拒（不是“尽力而为”）。
             'When `old` should change more than one place, set `replace_all: true`: every non-overlapping occurrence is replaced left-to-right in the same call, and if the number of occurrences changed since your last read the whole patch is refused.',
             // 措辞从"可以传"改成"应当传"，依据是一次受控并发实验（N 个写者改同一文件）：
@@ -1642,7 +1644,7 @@ function registerTools(ctx, sandbox) {
             // 加上 `expect` 后附带损伤降到 0.00，100% 得到干净合入；
             // 而对**不改行数**的编辑，它是**零成本**的（收敛率不变）。
             // 也就是说：这一项是唯一把"静默写错行"变成诚实失败的机制，而它的代价是零。
-            'Pass `expect` (the text you believe is at that location) on every hunk when you address by `lines`, `start_line`/`end_line`, or `line_cue`: if the file shifted since you read it, `expect` turns a silent wrong-line write into a loud failure, and it costs nothing on edits that do not move lines.',
+            'Pass `expect` (the text you believe is at that location) on every hunk when you address by `lines`, `start_line`/`end_line`, or `line_cue`: if the file shifted since you read it, `expect` turns a silent wrong-line write into a loud failure, and it costs nothing on edits that do not move lines. A line-number-only hunk without `expect` is refused (PATCH_LINES_NEED_EXPECT, nothing written), single hunk or batch alike.',
             // 刻意**不再**写"未知扩展名请用内置 edit"。那句话是错的：只有 `target` 需要语言配置
             // （符号表只对已索引的扩展名存在），而 `lines`／`line_cue`／`anchor` 三种寻址根本不看语言，
             // 创建路径更是与寻址无关。它恰好在工具可用的地方把模型赶回内置工具。
@@ -1865,6 +1867,11 @@ function registerTools(ctx, sandbox) {
           return { ok: true, ...result, applied: result.applied ?? [] }
         }
         if (op === 'patch') {
+          // 公开写面的坐标地址必须有内容断言：单 hunk 与批量一视同仁；预演不写盘，放行。
+          const applyHunks = Array.isArray(args.targets)
+            ? editTargetHunks(args.targets.filter((target) => target?.dry_run !== true))
+            : (hunkListOf(args) ?? [])
+          assertLineAddressesNeedExpect(applyHunks, { dryRun })
           const result = Array.isArray(args.targets)
             ? await editTool.execute(
                 definedArgs({ targets: args.targets, dry_run: dryRun, require_observation: args.require_observation, retry: args.retry }),

@@ -38,7 +38,9 @@
 2. `lines` / `start_line`+`end_line`：刚从 read 回执抄来的绝对行号。
 3. `old`（+ `context`）：你手里有逐字原文；比坐标更接近“你想改的是这里”。
    `old` + `replace_all: true`（CLI `--replace-all`）改**全部非重叠出现**，见 §2.2。
-4. `anchor` / `line_cue`：记得一段原文 / 一个唯一词；容错最高，但最容易指错。
+4. `anchor` / `line_cue`：记得一段**整行**原文 / 一个唯一词；容错最高，但最容易指错。
+   `anchor` 是整行地址，`replace` 替换命中的整行；只改行内一段用 `old`。锚点只覆盖行内片段时
+   整条拒绝（`PATCH_ANCHOR_FRAGMENT`，零写入），不会替你猜“只换这一段”。
 5. `handle`：`aura_basetools_read` 发的不透明区间句柄。**下一次编辑首选**；区间与字节由工具账本保证。
 
 规则：
@@ -46,6 +48,8 @@
 - **地址优先级**：`handle` 在场时其余地址只作披露；`old` 优先于坐标/符号名；
   `replace_all` 只认 `old` + 动作字段。`intent` 已在 0.14.0 移除。
 - **高风险编辑带 `expect`**：它是“我以为这里是什么”的断言；不符会整批拒绝，磁盘不动。
+  纯行号地址（`lines` / `start_line`+`end_line`）**必须**带 `expect`，单 hunk 与批量一视同仁，
+  否则整条拒绝（`PATCH_LINES_NEED_EXPECT`，零写入）——坐标不是内容断言，数错一行就会覆盖别人。
 - **换行风格**：`replace` 默认 `eol: "auto"`，新行跟被替换区域（CRLF 文件写 CRLF）。
   要保留输入原样用 `"preserve"`；要强制统一用 `"lf"` / `"crlf"`。回执的 `eolAdapted`
   说明这次有没有改写过换行。

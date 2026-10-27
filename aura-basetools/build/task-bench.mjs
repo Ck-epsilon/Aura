@@ -153,8 +153,8 @@ const TASKS = [
     source: ['export const A = 1;', 'export const B = 2;', 'export const C = 3;', ''].join('\n'),
     read: { mode: 'auto', budget: 8192 },
     hunks: [
-      { lines: [1, 1], replace: 'export const A = 10;' },
-      { lines: [3, 3], replace: 'export const C = 30;' },
+      { lines: [1, 1], expect: 'export const A = 1;', replace: 'export const A = 10;' },
+      { lines: [3, 3], expect: 'export const C = 3;', replace: 'export const C = 30;' },
     ],
     expect: ['A = 10', 'C = 30'],
   },

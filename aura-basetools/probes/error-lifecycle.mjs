@@ -250,7 +250,10 @@ add({
   label: '两个 hunk 区间重叠',
   async run() {
     const p = text('overlap.txt', 'alpha\nbravo\ncharlie\n')
-    const hunks = JSON.stringify([{ lines: [2, 2], replace: 'B1' }, { lines: [2, 3], replace: 'B2' }])
+    const hunks = JSON.stringify([
+      { lines: [2, 2], expect: 'bravo', replace: 'B1' },
+      { lines: [2, 3], expect: 'bravo\ncharlie', replace: 'B2' },
+    ])
     const r = edit(['--file', p, '--hunks', hunks])
     const preempt = !ok(r) && disk(p).equals(Buffer.from('alpha\nbravo\ncharlie\n'))
     const localized = /OVERLAP|BAD_HUNK/.test(String(codeOf(r))) && hasEvidence(r, /hunk|overlap/i)
@@ -301,7 +304,7 @@ add({
   label: '[对照] 两个不重叠 hunk',
   async run() {
     const p = text('ctl-multi.txt', 'a\nb\nc\nd\n')
-    const hunks = JSON.stringify([{ lines: [1, 1], replace: 'A' }, { lines: [3, 3], replace: 'C' }])
+    const hunks = JSON.stringify([{ lines: [1, 1], expect: 'a', replace: 'A' }, { lines: [3, 3], expect: 'c', replace: 'C' }])
     const r = edit(['--file', p, '--hunks', hunks])
     controls.push({ id: 'control-multihunk', ok: ok(r) })
     return { preempt: false, localized: false, fixable: false, note: ok(r) ? 'ok' : String(codeOf(r)) }

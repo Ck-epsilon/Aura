@@ -219,7 +219,7 @@ say('=== A. 三类可判定失败：isError=false，outcome 正确，磁盘不�
     {
       label: 'A1 范围非法（行号越界）',
       file: 'a1.js',
-      args: (p) => ({ file_path: p, hunks: [{ lines: [99, 99], replace: 'X' }] }),
+      args: (p) => ({ file_path: p, hunks: [{ lines: [99, 99], expect: 'anything', replace: 'X' }] }),
       outcome: 'not_found',
     },
     {
@@ -364,9 +364,8 @@ say('=== B. 工具级故障：必须仍然抛错（不许被降级成"结果"）
   /**
    * B7 地址漂移（`PATCH_STALE_REGION`）：**刻意仍然抛错**，这条断言就是那个边界的记录。
    *
-   * 它不是"判定不出意图"，而是安全闸门：调用方指的区间在它读完之后被别人改了。
-   * 恢复动作是**重读**，不是重挑地址；降级成结果会让"磁盘没动"看起来像办完了。
-   * 所以本单只收三类可判定失败 + "原文不在"那一族，闸门原样保留。
+   * 本套件走未注册的 legacy edit 描述符（不做公开 apply 的行号 `expect` 前置检查），
+   * 因此这里仍能测到引擎的区域陈旧闸门；公开 apply 的写前拒绝由 `entity-apply` 覆盖。
    */
   const staleFile = writeFixture('b6.js', SRC)
   const first = await run({ file_path: staleFile, hunks: [{ anchor: '  return n;', replace: '  return n;' }] })

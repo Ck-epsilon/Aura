@@ -56,7 +56,8 @@ check('B1 languages 等于 LANGS 的键', JSON.stringify(cap.langs) === JSON.str
     'A6 寻址安全等级与实测一致（coordinate 默认不设闸）',
     apply?.addressSafety?.coordinate?.includes('lines') &&
       apply?.addressSafety?.contentVerified?.includes('old') &&
-      apply.addressSafety.coordinateNeedsObservation === false,
+      apply.addressSafety.coordinateNeedsObservation === false &&
+      apply.addressSafety.lineAddressNeedsExpect?.includes('lines'),
     JSON.stringify(apply?.addressSafety),
   )
   check(

@@ -117,6 +117,8 @@ const mkCtx = () => ({
 })
 readPlugin.apply(mkCtx())
 editPlugin.apply(mkCtx())
+// 本套件钉的是引擎写回/校验语义，走未注册的 legacy edit 描述符；公开 apply 的行号断言由 entity-apply 覆盖。
+editTool = editPlugin.lastLegacyTools.edit
 const exec = { agent: { session: { header: { cwd: TMP } } }, signal: undefined }
 const read = (file, args = {}) => readTool.execute({ file_path: file, ...args }, exec)
 const call = async (args) => {

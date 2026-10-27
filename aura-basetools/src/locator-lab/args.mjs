@@ -289,6 +289,66 @@ export function lineRangeOf(source) {
   return undefined
 }
 
+/**
+ * 公开写面的行号内容断言：**纯坐标 hunk 必须带 `expect`**。
+ *
+ * 2026-10-27 两次实测事故（zcode）：
+ *   · 第一次 5 个单 hunk 调用把行内片段当 `anchor`，整行被顶掉；
+ *   · 第二次 5-hunk 批量全用 `start_line`/`end_line`，模型从 `sed` 输出手数行号整体偏一行，
+ *     bagend 的 child、bombadil 的 hobbit、mirrormere 的 guard、henneth 的 guard
+ *     被新行覆盖，laketown 的 subject 被顶掉。
+ * 回执逐条给了 `actual` 和 `unverified_region: true`，但写已经发生——披露只能事后止损。
+ *
+ * 坐标不是内容断言：只有行号时，工具无法区分“想改这一行”与“数错了一行”。所以公开面
+ * （MCP/DSH/CLI 的 apply patch）在**写前**检查：单 hunk 与批量一视同仁，纯行号地址没有
+ * `expect` 就抛 `PATCH_LINES_NEED_EXPECT`，磁盘一个字节不动。自带内容/结构校验的地址
+ * （`old` / `anchor` / `target` / `handle` / `structure` / `line_cue`）不受影响。
+ * `dry_run` 例外：它不写盘，正好用来先看 `actual` 再补 `expect`。
+ *
+ * @param hunks - 已展开的 hunk 数组（平铺形状由调用方先 `flatHunk`）
+ * @param options.dryRun - 预演不检查（零写入）
+ * @throws Error，code 为 PATCH_LINES_NEED_EXPECT
+ */
+export function assertLineAddressesNeedExpect(hunks, options = {}) {
+  if (options.dryRun === true) return
+  if (!Array.isArray(hunks)) return
+  for (const [index, hunk] of hunks.entries()) {
+    if (hunk === null || typeof hunk !== 'object') continue
+    const hasExpect =
+      hunk.expect !== undefined && hunk.expect !== null && !(typeof hunk.expect === 'string' && hunk.expect.length === 0)
+    if (hasExpect) continue
+    /**
+     * 优先级必须与 `planHunks` 一致：`old` / 句柄 / 结构 / `target` 在场时**它们**决定位置，
+     * 行号只是提示；`line` 单数是句柄的段内相对键，不是绝对行号（单独给由引擎报 PATCH_NO_ADDRESS）。
+     * 只有真正按绝对行号定位的 hunk 才要求 `expect`——即使它同时带了 `line_cue`/`anchor`
+     * 也不行：`locate()` 的层序是 target > lines > cue > anchor，行号会赢。
+     */
+    if (typeof hunk.old === 'string' && hunk.old.trim().length > 0) continue
+    if (typeof hunk.handle === 'string' && hunk.handle.trim().length > 0) continue
+    if (typeof hunk.structure === 'string' && hunk.structure.trim().length > 0) continue
+    if (typeof hunk.target === 'string' && hunk.target.trim().length > 0) continue
+    const absolute =
+      hunk.lines !== undefined ||
+      hunk.range !== undefined ||
+      hunk.start_line !== undefined ||
+      hunk.startLine !== undefined ||
+      hunk.end_line !== undefined ||
+      hunk.endLine !== undefined
+    if (!absolute) continue
+    const range = lineRangeOf(hunk)
+    if (range === undefined) continue
+    const error = new Error(
+      `hunk ${index + 1} addresses lines ${range.start}-${range.end} by number alone: ` +
+        `one stale line number silently overwrites a different line. Add \`expect\` (the text ` +
+        `you believe is at those lines), or address by old/anchor/target. Nothing was written.`,
+    )
+    error.code = 'PATCH_LINES_NEED_EXPECT'
+    error.line = range.start
+    error.endLine = range.end
+    throw error
+  }
+}
+
 /** 行区间参数写坏时的统一说法：告诉调用方**接受哪些形状**，而不是只说"参数不对"。 */
 /**
  * 引擎两处要的形状不同，而且必须是它们各自那个：
@@ -482,8 +542,9 @@ export function assertEditTargets(source, options = {}) {
  * 把参数面的目标元素收敛成**引擎请求形状**（`{displayPath, hunks, create?, identityKey?, dryRun?}`）。
  *
  * 为什么也放在这里：形状判据与取值归一一旦分家，就会出现“判的是 A、读的是 B”那种错位；
- * 两个壳 + 引擎入口共用的必须是同一份。**元素内部一个字都不解读** —— hunks、地址、`expect`
- * 原样递下去，由既有单目标校验器判（契约 §2.2）。
+ * 两个壳 + 引擎入口共用的必须是同一份。元素内部的 `hunks` / 地址 / `expect` 原样递下去，
+ * 由既有单目标校验器判（契约 §2.2）；**平铺形状**（元素直接写 `start_line`/`replace` 等）
+ * 由 {@link hunksOfEditElement} 走与单目标同一条 `flatHunk` 归一，不能在这里静默丢掉。
  *
  * @param targets - {@link assertEditTargets} 放行的数组
  * @returns `Array<{index, displayPath, hunks, create?, identityKey?, dryRun?}>`（顺序 = 输入顺序）
@@ -554,15 +615,34 @@ export function assertTargetShape(source, options = {}) {
  * 把参数面的目标元素收敛成**引擎请求形状**（`{displayPath, hunks, create?, identityKey?, dryRun?}`）。
  *
  * 为什么也放在这里：形状判据与取值归一一旦分家，就会出现“判的是 A、读的是 B”那种错位；
- * 两个壳 + 引擎入口共用的必须是同一份。**元素内部一个字都不解读** —— hunks、地址、`expect`
- * 原样递下去，由既有单目标校验器判（契约 §2.2）。
+ * 两个壳 + 引擎入口共用的必须是同一份。元素内部的 `hunks` / 地址 / `expect` 原样递下去，
+ * 由既有单目标校验器判（契约 §2.2）；**平铺形状**（元素直接写 `start_line`/`replace` 等）
+ * 由 {@link hunksOfEditElement} 走与单目标同一条 `flatHunk` 归一，不能在这里静默丢掉。
  *
  * @param targets - {@link assertEditTargets} 放行的数组
  * @returns `Array<{index, displayPath, hunks, create?, identityKey?, dryRun?}>`（顺序 = 输入顺序）
  */
+function hunksOfEditElement(element) {
+  if (element === null || typeof element !== 'object') return undefined
+  if (Array.isArray(element.hunks) && element.hunks.length > 0) return element.hunks
+  const flat = flatHunk(element)
+  return flat === null ? element.hunks : [flat]
+}
+
+/**
+ * 多目标元素展开后的 hunk 列表（公开写面的行号断言与执行共用同一份展开）。
+ *
+ * `MT_EDIT_ELEMENT_KEYS` 允许元素用平铺形状（`{file_path, start_line, end_line, replace}`），
+ * 而旧 `editTargetRequests` 只读 `element.hunks`，于是平铺元素被参数面收下、进引擎后变成空 hunk
+ * ——调用方以为改了一处，实际什么都没发生。这里把同一份展开提出来，执行与校验都读它。
+ */
+export function editTargetHunks(targets) {
+  return Array.isArray(targets) ? targets.flatMap((element) => hunksOfEditElement(element) ?? []) : []
+}
+
 export function editTargetRequests(targets) {
   return targets.map((element, index) => {
-    const request = { index, displayPath: targetPathOf(element), hunks: element.hunks }
+    const request = { index, displayPath: targetPathOf(element), hunks: hunksOfEditElement(element) }
     for (const key of ['create', 'identityKey', 'dryRun']) {
       if (element[key] !== undefined) request[key] = element[key]
     }

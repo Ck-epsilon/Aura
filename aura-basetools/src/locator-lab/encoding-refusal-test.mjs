@@ -314,7 +314,8 @@ const writeTexts = {}
   )
   check(String(readCli.env?.text ?? '').includes('中文'), 'A/读·CLI 真进程：正文是正确的中文')
 
-  const hunks = [{ start_line: 1, end_line: 1, replace: 'export const a = 9;' }]
+  // 公开 apply 的行号写要求内容断言；这里只为走到“非 UTF-8 拒绝”那条路，expect 不会被执行。
+  const hunks = [{ start_line: 1, end_line: 1, expect: 'export const a = 1;', replace: 'export const a = 9;' }]
   for (const shape of ['raw', 'local']) {
     const out = await runShell(editPlugin, shape, { file_path: gbkPath, hunks })
     check(out.threw === true, `A/写·${shape} 被拒：仍然**抛错**（不是结果通道里的 not_found / needs_choice）`)

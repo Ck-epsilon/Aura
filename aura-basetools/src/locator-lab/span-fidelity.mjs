@@ -299,7 +299,7 @@ for (const c of refuseCases) {
 }
 
 // C3：拒绝只针对"跨度不完整"这一种情形——同一个文件用 lines= 仍然可改
-const byLines = await runEdit('c3.bat', ['@echo off', ':alpha', 'set x=1', 'goto :eof', ''], { lines: [3], replace: 'set x=2' })
+const byLines = await runEdit('c3.bat', ['@echo off', ':alpha', 'set x=1', 'goto :eof', ''], { lines: [3], expect: 'set x=1', replace: 'set x=2' })
 check(byLines.error === null && byLines.after.includes('set x=2'), 'C3 同一文件改用 lines= 仍可编辑', byLines.error === null ? '' : String(byLines.error.code))
 
 // C5：审计条件 1 的形态——多参箭头函数必须整段替换（旧引擎只换签名行）

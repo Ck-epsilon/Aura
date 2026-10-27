@@ -157,6 +157,8 @@ const mkCtx = () => ({
 })
 readPlugin.apply(mkCtx())
 editPlugin.apply(mkCtx())
+// 本套件钉的是字节保真语义，走未注册的 legacy edit 描述符；公开 apply 的行号断言由 entity-apply 覆盖。
+editTool = editPlugin.lastLegacyTools.edit
 const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
 const read = (file, args = {}) => readTool.execute({ file_path: file, ...args }, exec)
 const edit = (file, hunks) => editTool.execute({ file_path: file, hunks }, exec)
@@ -352,6 +354,7 @@ say('=== H. 无 writeText 的后端 + 混合行尾 ⇒ 拒绝，而不是静默�
   const legacy = { ...fsService, writeText: undefined }
   readPlugin.apply({ ...mkCtx(), fs: legacy })
   editPlugin.apply({ ...mkCtx(), fs: legacy })
+  editTool = editPlugin.lastLegacyTools.edit
   const mixedFile = path.join(tmp, 'h_mixed.md')
   fs.writeFileSync(mixedFile, bytesOf('alpha\r\nbeta\ngamma\r\ndelta\r\n'))
   const beforeMixed = readBytesFile(mixedFile)
@@ -379,6 +382,7 @@ say('=== H. 无 writeText 的后端 + 混合行尾 ⇒ 拒绝，而不是静默�
   // 后续段回到带 writeText 的后端
   readPlugin.apply(mkCtx())
   editPlugin.apply(mkCtx())
+  editTool = editPlugin.lastLegacyTools.edit
 }
 
 // ── B 段：15 种形态的令牌两两不同 ───────────────────────────────────────────

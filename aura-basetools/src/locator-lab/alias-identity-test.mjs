@@ -179,6 +179,8 @@ const mkCtx = () => ({
 })
 readPlugin.apply(mkCtx())
 editPlugin.apply(mkCtx())
+// 本套件钉的是别名/路径身份归一，走未注册的 legacy edit 描述符；公开 apply 的行号断言由 entity-apply 覆盖。
+editTool = editPlugin.lastLegacyTools.edit
 /** 真 `exec` 形状：壳读 `exec.agent.session.header.cwd`、`exec.signal`（见两个壳的 execute）。 */
 const mkExec = () => ({ agent: { session: { header: { cwd: tmp } } }, signal: undefined })
 

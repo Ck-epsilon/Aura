@@ -882,8 +882,8 @@ say('MT-H 多目标写：CLI --targets（真落盘/零写入/同文件合并/dry
       'edit',
       '--targets',
       JSON.stringify([
-        { file_path: 'm.md', hunks: [{ lines: [1, 1], replace: 'ONE' }] },
-        { file_path: 'm.md', hunks: [{ lines: [3, 3], replace: 'THREE' }] },
+        { file_path: 'm.md', hunks: [{ lines: [1, 1], expect: 'one', replace: 'ONE' }] },
+        { file_path: 'm.md', hunks: [{ lines: [3, 3], expect: 'three', replace: 'THREE' }] },
       ]),
     ]),
   )
@@ -996,8 +996,8 @@ say('MT-H 多目标写：CLI --targets（真落盘/零写入/同文件合并/dry
   await observed(oneProvider, one.dir, ['m.md'])
   const oneEnv = await editMany(oneProvider, {
     targets: [
-      { file_path: path.join(one.dir, 'm.md'), hunks: [{ lines: [1, 1], replace: 'ONE' }] },
-      { file_path: path.join(one.dir, 'm.md'), hunks: [{ lines: [3, 3], replace: 'THREE' }] },
+      { file_path: path.join(one.dir, 'm.md'), hunks: [{ lines: [1, 1], expect: 'one', replace: 'ONE' }] },
+      { file_path: path.join(one.dir, 'm.md'), hunks: [{ lines: [3, 3], expect: 'three', replace: 'THREE' }] },
     ],
   })
   check(

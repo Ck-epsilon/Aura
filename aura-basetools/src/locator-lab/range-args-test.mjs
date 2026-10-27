@@ -687,7 +687,7 @@ try {
     let threw = null
     let txn = null
     try {
-      txn = await edit.execute({ file_path: file, hunks: [{ lines: [1, 1], replace: 'A' }, { lines: [99, 99], replace: 'B' }] }, exec)
+      txn = await edit.execute({ file_path: file, hunks: [{ lines: [1, 1], expect: 'alpha one', replace: 'A' }, { lines: [99, 99], expect: 'not here', replace: 'B' }] }, exec)
     } catch (e) {
       threw = e
     }

@@ -205,7 +205,7 @@ say('=== I. apply 的其他 op：write / patch / convert ===')
   const patchMcp = mcpCall([
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
     { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'aura_basetools_read', arguments: { file_path: writePath, mode: 'lines', lines: [1, 2] } } },
-    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aura_basetools_apply', arguments: { op: 'patch', file_path: writePath, hunks: [{ lines: [2, 2], replace: 'TWO' }] } } },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aura_basetools_apply', arguments: { op: 'patch', file_path: writePath, hunks: [{ lines: [2, 2], expect: 'two', replace: 'TWO' }] } } },
   ])
   const patched = envOf(patchMcp, 3)
   check(patched.ok === true && fs.readFileSync(writePath, 'utf8').includes('TWO'), 'I2 apply op=patch 走既有编辑路径', JSON.stringify(patched).slice(0, 120))
@@ -218,6 +218,189 @@ say('=== I. apply 的其他 op：write / patch / convert ===')
   ])
   const converted = envOf(convertMcp, 2)
   check(converted.ok === true && fs.readFileSync(utf16, 'utf8').includes('hello'), 'I3 apply op=convert 转 UTF-16LE → UTF-8', JSON.stringify(converted).slice(0, 120))
+}
+
+say('')
+say('=== J. anchor 只覆盖行内片段：拒绝且零写入；old 片段只换命中列 ===')
+{
+  const envOf = (replies, id) => JSON.parse(replies.get(id)?.result?.content?.[0]?.text ?? '{}')
+  const fragmentFile = write(
+    'anchor-fragment.js',
+    'function f() {\n    walk(put(g, deer({ i: 2 }), 2.4, 0.1, 2.6, -0.4), { speed: 0.25 });\n}\n',
+  )
+  const before = fs.readFileSync(fragmentFile, 'utf8')
+  const refusedCall = mcpCall([
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+    {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'aura_basetools_apply',
+        arguments: {
+          op: 'patch',
+          file_path: fragmentFile,
+          hunks: [{ anchor: '2.4, 0.1, 2.6, -0.4', replace: '2.4, 0.27, 2.6, -0.4' }],
+        },
+      },
+    },
+  ])
+  const refused = envOf(refusedCall, 2)
+  check(refused.ok === false && refused.code === 'PATCH_ANCHOR_FRAGMENT', 'J1 片段 anchor 写前拒绝 PATCH_ANCHOR_FRAGMENT', JSON.stringify(refused).slice(0, 220))
+  check(fs.readFileSync(fragmentFile, 'utf8') === before, 'J2 拒绝时磁盘一字未写')
+
+  const inlineCall = mcpCall([
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+    {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'aura_basetools_apply',
+        arguments: {
+          op: 'patch',
+          file_path: fragmentFile,
+          hunks: [{ old: '2.4, 0.1, 2.6, -0.4', replace: '2.4, 0.27, 2.6, -0.4' }],
+        },
+      },
+    },
+  ])
+  const inline = envOf(inlineCall, 2)
+  const after = fs.readFileSync(fragmentFile, 'utf8')
+  check(inline.ok === true, 'J3 同一片段改用 old 成功', JSON.stringify(inline).slice(0, 180))
+  check(
+    after.includes('    walk(put(g, deer({ i: 2 }), 2.4, 0.27, 2.6, -0.4), { speed: 0.25 });'),
+    'J4 old 只换命中列，整行前缀/后缀逐字保留',
+    JSON.stringify(after),
+  )
+}
+
+say('')
+say('=== K. 行号写：必须带 expect，dry_run 可先看 actual ===')
+{
+  const envOf = (replies, id) => JSON.parse(replies.get(id)?.result?.content?.[0]?.text ?? '{}')
+  const batchFile = write('lines-batch.js', 'alpha\nbravo\ncharlie\n')
+  const before = fs.readFileSync(batchFile, 'utf8')
+  const singleFile = write('lines-single.js', 'alpha\nbravo\n')
+  const singleBefore = fs.readFileSync(singleFile, 'utf8')
+  const singleBlind = mcpCall([
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+    {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'aura_basetools_apply',
+        arguments: { op: 'patch', file_path: singleFile, hunks: [{ lines: [1, 1], replace: 'ALPHA' }] },
+      },
+    },
+  ])
+  const singleRefused = envOf(singleBlind, 2)
+  check(singleRefused.ok === false && singleRefused.code === 'PATCH_LINES_NEED_EXPECT', 'K0a 单 hunk 纯行号写同样拒绝', JSON.stringify(singleRefused).slice(0, 220))
+  check(fs.readFileSync(singleFile, 'utf8') === singleBefore, 'K0b 单 hunk 拒绝时磁盘一字未写')
+  const blind = mcpCall([
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+    {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'aura_basetools_apply',
+        arguments: {
+          op: 'patch',
+          file_path: batchFile,
+          hunks: [
+            { lines: [1, 1], replace: 'ALPHA' },
+            { lines: [3, 3], replace: 'CHARLIE' },
+          ],
+        },
+      },
+    },
+  ])
+  const refused = envOf(blind, 2)
+  check(refused.ok === false && refused.code === 'PATCH_LINES_NEED_EXPECT', 'K1 多 hunk 纯行号写拒绝 PATCH_LINES_NEED_EXPECT', JSON.stringify(refused).slice(0, 220))
+  check(fs.readFileSync(batchFile, 'utf8') === before, 'K2 拒绝时磁盘一字未写')
+
+  const preview = mcpCall([
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+    {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'aura_basetools_apply',
+        arguments: {
+          op: 'patch',
+          file_path: batchFile,
+          dry_run: true,
+          hunks: [
+            { lines: [1, 1], replace: 'ALPHA' },
+            { lines: [3, 3], replace: 'CHARLIE' },
+          ],
+        },
+      },
+    },
+  ])
+  const previewed = envOf(preview, 2)
+  check(previewed.ok === true && previewed.result?.dryRun === true, 'K3 预演允许无 expect：先看 actual 再补断言', JSON.stringify(previewed).slice(0, 180))
+  check(fs.readFileSync(batchFile, 'utf8') === before, 'K4 预演不落盘')
+
+  const asserted = mcpCall([
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+    {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'aura_basetools_apply',
+        arguments: {
+          op: 'patch',
+          file_path: batchFile,
+          hunks: [
+            { lines: [1, 1], expect: 'alpha', replace: 'ALPHA' },
+            { lines: [3, 3], expect: 'charlie', replace: 'CHARLIE' },
+          ],
+        },
+      },
+    },
+  ])
+  const applied = envOf(asserted, 2)
+  check(applied.ok === true && fs.readFileSync(batchFile, 'utf8') === 'ALPHA\nbravo\nCHARLIE\n', 'K5 带 expect 后成功，未涉及行保持原样', JSON.stringify(applied).slice(0, 180))
+}
+
+say('')
+say('=== L. 多目标平铺形状与 line 单数：展开后仍走同一条行号规则 ===')
+{
+  const envOf = (replies, id) => JSON.parse(replies.get(id)?.result?.content?.[0]?.text ?? '{}')
+  const flatFile = write('flat-targets.js', 'one\ntwo\n')
+  const flatCall = (args) =>
+    mcpCall([
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'aura_basetools_apply', arguments: { op: 'patch', ...args } } },
+    ])
+  const flatOk = envOf(
+    flatCall({ targets: [{ file_path: flatFile, start_line: 1, end_line: 1, expect: 'one', replace: 'ONE' }] }),
+    2,
+  )
+  check(flatOk.ok === true && fs.readFileSync(flatFile, 'utf8') === 'ONE\ntwo\n', 'L1 多目标元素用平铺形状 ⇒ 展开后真的落盘', JSON.stringify(flatOk).slice(0, 180))
+
+  const flatBlindFile = write('flat-targets-blind.js', 'one\ntwo\n')
+  const flatBlindBefore = fs.readFileSync(flatBlindFile, 'utf8')
+  const flatBlind = envOf(
+    flatCall({ targets: [{ file_path: flatBlindFile, start_line: 1, end_line: 1, replace: 'ONE' }] }),
+    2,
+  )
+  check(flatBlind.ok === false && flatBlind.code === 'PATCH_LINES_NEED_EXPECT', 'L2 平铺多目标没有 expect ⇒ 同样拒绝', JSON.stringify(flatBlind).slice(0, 180))
+  check(fs.readFileSync(flatBlindFile, 'utf8') === flatBlindBefore, 'L3 平铺多目标拒绝时磁盘一字未写')
+
+  const singularFile = write('line-singular.js', 'one\ntwo\n')
+  const singularBefore = fs.readFileSync(singularFile, 'utf8')
+  const singular = envOf(
+    flatCall({ file_path: singularFile, hunks: [{ line: 2, replace: 'TWO' }] }),
+    2,
+  )
+  check(singular.ok === false && singular.code === 'PATCH_NO_ADDRESS', 'L4 line 单数（无 handle）仍报 PATCH_NO_ADDRESS，不被行号 expect 规则顶替', JSON.stringify(singular).slice(0, 180))
+  check(fs.readFileSync(singularFile, 'utf8') === singularBefore, 'L5 line 单数拒绝时磁盘一字未写')
 }
 
 say('')

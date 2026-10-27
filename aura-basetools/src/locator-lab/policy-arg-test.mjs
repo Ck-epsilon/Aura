@@ -86,7 +86,7 @@ say('=== 1. 存在 sandboxPolicy 服务：策略必须传到 mutation ===')
   applyEdit(ctx)
   const exec = { agent: { session: SESSION }, signal: 'SIG' }
 
-  await reg.execute({ file_path: target, hunks: [{ lines: [1], replace: 'export const a = 2;' }] }, exec)
+  await reg.execute({ file_path: target, hunks: [{ lines: [1], expect: 'export const a = 1;', replace: 'export const a = 2;' }] }, exec)
   // 写回原语自 C12 起是 writeText（提供方级 CAS 的整份写）；此处**不加 `?? editText` 兜底**：
   // 兜底会让“退回旧原语”这类回归静默通过，而 byte-fidelity 段D 正靠“两者行为不同”成立。
   const call = seen.find((s) => s.call === 'writeText')
@@ -114,7 +114,7 @@ say('=== 2. 不部署沙箱：软取失败必须降级而不是报错 ===')
   applyEdit(ctx)
   const exec = { agent: { session: { header: { cwd: tmp } } }, signal: undefined }
 
-  await reg.execute({ file_path: target, hunks: [{ lines: [1], replace: 'export const b = 9;' }] }, exec)
+  await reg.execute({ file_path: target, hunks: [{ lines: [1], expect: 'export const b = 1;', replace: 'export const b = 9;' }] }, exec)
   const call = seen.find((s) => s.call === 'writeText')
 check('writeText 收到 policy=undefined', call !== undefined && call.sandboxPolicy === undefined)
   check('写入仍然生效', fs.readFileSync(target, 'utf8') === 'export const b = 9;\n')
@@ -201,7 +201,7 @@ say('=== 5. 相对路径要相对策略的 workspaceRoot 解析 ===')
   applyEdit(ctx)
 
   await reg.execute(
-    { file_path: 'e.js', hunks: [{ lines: [1], replace: 'export const e = 2;' }] },
+    { file_path: 'e.js', hunks: [{ lines: [1], expect: 'export const e = 1;', replace: 'export const e = 2;' }] },
     { agent: { session: { header: { cwd: sessionCwd } } } },
   )
   check('resolve 用的是策略的 workspaceRoot', resolveOpts?.cwd === policyRoot, String(resolveOpts?.cwd))

@@ -2,6 +2,10 @@
 
 给 AI coding agent 用的读写工具：`aura_basetools_read`（按意图取景：符号目录 / 接口 / 窗口 / 文本搜索；`entity` 给定义+引用+证据；目录给地图或仓库级 grep；图片给元数据+内容）、
 `aura_basetools_apply`（实体优先写：`replace-body` / `rename`，外加 `patch` / `write` / `convert` / `tx`；证据校验、原子写、落盘后回读）。
+**1.0.1 起行号写必须带内容断言**：`apply op=patch` 用 `lines` / `start_line`+`end_line` 时
+必须同时给 `expect`（该区间当前文本），单 hunk 与批量一致；`anchor` 只接受整行原文，
+行内片段会被拒绝，行内替换用 `old`。
+
 **1.0.0 起公开面只有这两个工具**（0.7.0 起引擎/适配器是两个 npm 包）：
 
 - `aura-basetools`：引擎 + CLI + MCP，**不依赖 DSH**；

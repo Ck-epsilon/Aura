@@ -1230,6 +1230,28 @@ function fragmentNoteFor(line, startCol, endCol, text) {
     `the rest of the line is kept byte-for-byte. Replaced text: ${quoteForMessage(text, line)}`
   )
 }
+
+/**
+ * `anchor` 是不是只引用了命中区域的一部分？
+ *
+ * `anchor` 走 {@link locate} 的行窗口（`anchor-core`），命中结果 `actual` 是**整行**；
+ * 因此调用方给一段行内文字当锚点时，`replace` 会顶掉整行，行内其余字节被静默吞掉。
+ * 这与 C13 给 `old` 片段层立的规矩相反（那里只换命中跨度自己），也是 2026-10-27
+ * 真实会话里 5 次截断的成因：`{anchor:"2.4, 0.1, 2.6, -0.4", replace:"2.4, 0.27, ..."}`
+ * 打在整行 `walk(put(...), 2.4, 0.1, ...)` 上，回执 `actual` 整行、`replaced` 片段，
+ * 磁盘上只剩片段。
+ *
+ * 判据只认**归一化后是命中区域的真子串**：整行锚点、以及容错层接住的改写整行
+ * （归一化后不是子串）都不受影响；`old` 的片段层本来就走另一条路。
+ * 返回 true 时调用方必须**零写入**并改用 `old` 或补全整行，不许替调用方猜“它想换行内”。
+ */
+function anchorIsPartialLine(anchorText, actual) {
+  const normalize = (text) =>
+    normSpace(addressRows(String(text).replace(/\r\n/g, '\n')).join('\n')).replace(/^\n+|\n+$/g, '')
+  const anchor = normalize(anchorText)
+  const region = normalize(actual)
+  return anchor.length > 0 && anchor.length < region.length && region.includes(anchor)
+}
 /**
  * `context` 是否落在某个候选的**邻域**里。
  *
@@ -2885,6 +2907,22 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
           /** `LOCATOR_LINE_SHARED` 的“被谁占了”证据（符号兄弟之外的 import/尾随语句）。 */
           ...(found.shared === undefined ? {} : { shared: found.shared }),
         })
+      }
+      /**
+       * 锚点是整行地址：只引用行内一段时，`replace` 会把整行顶掉（见 {@link anchorIsPartialLine}）。
+       * 在规划阶段拒绝，磁盘一个字节都不动；改用 `old` 才会只替换被引用的那段。
+       * 条件里的 `!hasTarget && range === undefined && !hasCue` 就是 `request.anchor` 的成立条件——
+       * 其余地址在场时锚点本来就不决定位置，不能拿它来判这次替换。
+       */
+      if (hasAnchor && !hasTarget && range === undefined && !hasCue && anchorIsPartialLine(hunk.anchor, found.actual)) {
+        throw new PatchError(
+          `\`anchor\` addresses whole lines, but this anchor matches only part of line ${found.startLine}: ` +
+            `\`replace\` would overwrite the entire line and the rest of it would be lost. Nothing was written. ` +
+            `Use \`old\` with the same text for an in-line replacement, or pass the complete line(s) as the anchor ` +
+            `(or use \`lines\`). The line is: ${quoteForMessage(found.actual, found.startLine)}`,
+          'PATCH_ANCHOR_FRAGMENT',
+          { line: found.startLine, actual: found.actual },
+        )
       }
       hits = [{
         startLine: found.startLine,

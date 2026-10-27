@@ -112,6 +112,7 @@ export function capabilitiesEnvelope() {
           structural: ['target', 'structure', 'entity'],
           coordinate: ['lines', 'start_line', 'end_line', 'line_cue', 'anchor'],
           coordinateNeedsObservation: false,
+          lineAddressNeedsExpect: ['lines', 'start_line', 'end_line'],
         },
         writeSafety: {
           cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],
@@ -991,6 +992,15 @@ export async function applyEnvelope(provider, args = {}) {
       })
     }
     if (operation === 'patch') {
+      // 公开写面的坐标地址必须有内容断言：单 hunk 与批量一视同仁（引擎直调不强制）。
+      engineArgs.assertLineAddressesNeedExpect(
+        Array.isArray(targets)
+          ? engineArgs.editTargetHunks(targets.filter((target) => target?.dry_run !== true))
+          : Array.isArray(hunks)
+            ? hunks
+            : [],
+        { dryRun },
+      )
       if (Array.isArray(targets)) {
         return await editManyEnvelope(provider, { targets, dryRun, requireObservation, retry, verify, transaction })
       }

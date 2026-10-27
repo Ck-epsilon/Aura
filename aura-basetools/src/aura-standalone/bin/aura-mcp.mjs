@@ -31,7 +31,7 @@ const SERVER_INSTRUCTIONS = [
   'Prefer the aura_basetools_* tools over built-in Read/Edit/Write/Grep for file work when they are available.',
   'Read with aura_basetools_read: pass `entity` to view one definition + references, a directory path with `search` for repository-wide grep, or an image path for metadata + image content.',
   'Write with aura_basetools_apply: op=replace-body or rename is the default for code (pass the `evidence` from an entity read; ambiguity or staleness writes nothing). op=patch (raw hunks), write (whole file), convert (encoding), and tx (cross-call transaction) cover the remaining write paths.',
-  'Keep tool arguments small — long, deeply nested JSON is what the provider\'s stream parser fails on (MALFORMED_RESPONSE). For a single raw change pass the hunk FLAT at the top level (`old`+`replace`, or `start_line`+`end_line`+`replace`, or a `handle` from a previous read + `replace`); use `hunks: [...]` only for several changes. If you already hold a `handle`, do not repeat the old text in `old`.',
+  'Keep tool arguments small — long, deeply nested JSON is what the provider\'s stream parser fails on (MALFORMED_RESPONSE). For a single raw change pass the hunk FLAT at the top level (`old`+`replace`, or `start_line`+`end_line`+`replace`+`expect`, or a `handle` from a previous read + `replace`); use `hunks: [...]` only for several changes. Every line-number-addressed hunk must carry `expect` (the text you believe is at those lines) or it is refused; a coordinate is not a content check. If you already hold a `handle`, do not repeat the old text in `old`.',
   'For changes spanning multiple calls use aura_basetools_apply with op=tx begin -> writes with transaction -> commit; rollback on failure.',
   'These tools preserve BOM and per-line endings, gate only the addressed region for staleness, verify writes, and keep multi-target edits atomic.',
   'If your client can enforce provider-side strict tool schemas (DeepSeek `/beta` + `strict: true` per function, OpenAI strict), enable it: strict decoding makes malformed tool-call JSON impossible instead of merely rarer. The schemas convert cleanly with `locator-lab/strict-schema.mjs` (toStrictSchema / strictToolList); `aura basetools doctor` prints the recipe.',
@@ -115,12 +115,16 @@ const HUNK_SCHEMA = {
         { type: 'integer' },
         { type: 'object', additionalProperties: true },
       ],
-      description: '行号区间 [起, 止]（1-based，闭区间）；也接受 "4,6"、单个 4 或 {start,end}。推荐改用 start_line + end_line',
+      description: '行号区间 [起, 止]（1-based，闭区间）；也接受 "4,6"、单个 4 或 {start,end}。推荐改用 start_line + end_line。纯行号地址必须同时给 `expect`（该区间当前文本），否则整条拒绝（PATCH_LINES_NEED_EXPECT，零写入）；只改行内一段用 `old`',
     },
-    start_line: { type: 'integer', description: '推荐：区间起始行（1-based，闭区间）' },
-    end_line: { type: 'integer', description: '推荐：区间结束行（1-based，闭区间）；省略则等于 start_line' },
+    start_line: { type: 'integer', description: '推荐：区间起始行（1-based，闭区间）。纯行号地址必须同时给 `expect`' },
+    end_line: { type: 'integer', description: '推荐：区间结束行（1-based，闭区间）；省略则等于 start_line。纯行号地址必须同时给 `expect`' },
     line_cue: { type: 'string', description: '该行上唯一的词' },
-    anchor: { type: 'string', description: '记得的原文，容忍空白漂移与改写' },
+    anchor: {
+      type: 'string',
+      description:
+        '整行地址：记得的整行（或连续几行）原文，容忍空白漂移与改写；`replace` 替换命中到的整行。只改行内一段请用 `old`（片段层只换命中跨度）。锚点只是行内片段时整条拒绝（PATCH_ANCHOR_FRAGMENT，零写入）。',
+    },
     old: {
       type: 'string',
       description:
@@ -546,7 +550,13 @@ async function callTool(provider, name, args = {}) {
       const refusal = unknownArgsRefusal(args, allowed, name)
       if (refusal !== undefined) return refusal
       if (multi && Array.isArray(args.targets)) {
-        const elementAllowed = allowed.filter((key) => key !== 'targets')
+        /**
+         * 写侧元素的合法键用 `MT_EDIT_ELEMENT_KEYS`（与 DSH/CLI 同一份）：它包含**平铺 hunk**
+         * 的 `start_line`/`replace` 等。此前这里用 apply 顶层 allowed 过滤，平铺元素被误报
+         * unknown arguments——参数面收下一个形状、运行期却永远走不到。
+         */
+        const writeTargets = name === 'aura_basetools_apply' || name === 'aura_basetools_edit'
+        const elementAllowed = writeTargets ? MT_EDIT_ELEMENT_KEYS : allowed.filter((key) => key !== 'targets')
         for (const [index, element] of args.targets.entries()) {
           if (element === null || typeof element !== 'object' || Array.isArray(element)) continue
           const elementRefusal = unknownArgsRefusal(element, elementAllowed, `${name} targets[${index}]`)

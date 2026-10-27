@@ -1,4 +1,4 @@
-# aura-tools 版本变更表（0.6.2 → 1.0.0）
+# aura-tools 版本变更表（0.6.2 → 1.0.1）
 
 > **这份表是补记的**：`docs/aura-tools-<版本>.md` 只覆盖到 0.6.1，然后直接跳到 0.6.16/0.6.17；
 > 中间的 0.6.2–0.6.15 与 0.6.18 当时只写在交接单与工作单里。C72 收口审计把这 15 个版本的**一句话变更 + 读数**
@@ -7,6 +7,24 @@
 > - 详细施工记录：`.polaris/读写工具重做-交接单.md`（§三 波1–19、§八 句柄化、§九 多目标、§十 判定内联、§十二 回执准确化）
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
+
+## 1.0.1：坐标写必须带内容断言 · anchor 片段拒绝
+
+- **行号写必须带 `expect`**：公开写面（MCP / DSH / CLI 的 `apply op=patch`）在规划前检查，
+  单 hunk 与批量一视同仁。纯行号地址（`lines` / `start_line` / `end_line`）没有 `expect`
+  ⇒ `PATCH_LINES_NEED_EXPECT`，磁盘一个字节不动。实测事故：一次 5-hunk 调用全用 `start_line`，
+  模型从 `sed` 输出手数行号整体偏一行，4 个演员行被新行覆盖、1 个 subject 行被顶掉；
+  回执虽然给了 `actual` 与 `unverified_region`，但写已经发生。`dry_run` 例外：可以先看 `actual` 再补断言。
+- **`anchor` 片段拒绝**：`anchor` 是整行地址，只引用行内一段时 `replace` 会顶掉整行
+  （实测 5 处 spec 行被截断）⇒ `PATCH_ANCHOR_FRAGMENT` 零写入；行内替换改用 `old`。
+- **多目标平铺元素修复**：`targets` 元素直接写 `start_line`/`replace` 时，旧实现只读 `element.hunks`
+  ⇒ 参数面收下、引擎得到空 hunk；现在与单目标共用 `flatHunk` 展开，行号断言也读同一份展开。
+  MCP 的元素未知键守卫改用 `MT_EDIT_ELEMENT_KEYS`，不再误拒平铺元素。
+- **`line` 单数不再被误判为绝对行号**：`line` 是句柄的段内相对键，单独给仍报 `PATCH_NO_ADDRESS`。
+- **契约**：`capabilities.addressSafety.lineAddressNeedsExpect` 声明行号写必须带内容断言；
+  MCP/DSH 的 `lines` / `start_line` / `end_line` 描述与 `agent-guide` 同步。
+- **判据**：`node build/release-check.mjs` exit 0（57 件闸内实跑 + 拆包 75/75 + src↔dist 33 文件）；
+  `entity-apply` 51/51（含单 hunk 拒绝、批量拒绝、预演放行、多目标平铺、`line` 单数优先级）。
 
 ## 1.0.0：entity-first · 两工具面 · 三层测试
 

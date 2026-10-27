@@ -64,6 +64,7 @@ export function buildCapabilities() {
           structural: ['target', 'structure', 'entity'],
           coordinate: ['lines', 'start_line', 'end_line', 'line_cue', 'anchor'],
           coordinateNeedsObservation: false,
+          lineAddressNeedsExpect: ['lines', 'start_line', 'end_line'],
         },
         writeSafety: {
           cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'byte-verify'],

@@ -211,7 +211,7 @@ const USAGE = [
   '  aura basetools capabilities [--pretty] 能力清单：读模式/地址档/语言/限制（JSON）',
   '  aura --help | --version',
   '',
-      'hunks 形状：[{"target":"符号名"|"lines":[a,b]|"line_cue":"唯一词"|"anchor":"记得的原文",',
+      'hunks 形状：[{"target":"符号名"|"lines":[a,b]|"line_cue":"唯一词"|"anchor":"记得的整行原文"（整行替换；行内改用 old）,',
   '              "replace":"替换文本","expect":"该处应是什么","near":行号}]',
   '',
   '例：',
