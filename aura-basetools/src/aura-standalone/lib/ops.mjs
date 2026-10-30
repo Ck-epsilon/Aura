@@ -161,6 +161,7 @@ export const inferReadMode = engineArgs.inferReadMode
 export const lineRangeOf = engineArgs.lineRangeOf
 export const normalizeReadRequest = engineArgs.normalizeReadRequest
 export const flatHunk = engineArgs.flatHunk
+export const inferApplyOp = engineArgs.inferApplyOp
 export const applyEditToProvider = writePath.applyEditToProvider
 
 /**
@@ -1020,27 +1021,6 @@ export async function editEnvelope(provider, request) {
   } catch (error) {
     return transactionError(error)
   }
-}
-
-/**
- * `apply` 的操作推断（唯一一份）：显式 op 优先；否则按在场字段判定。
- * 语句顺序即优先级；新增操作时只改这里。
- *
- * 导出是为了让那句“唯一一份”成立：CLI 面原先自己抄了一遍同样的 if 链，而且**顺序不一样**
- * （它把 `content` 排在 `to`/`action` 前面），于是 `--content X --to Y` 在 CLI 推成 write、
- * 在 MCP 推成 convert。入参读的是**引擎请求形状**（驼峰：`newName`），不是调用方拼写——
- * 读 `new_name` 的那一版永远匹配不上任何面递下来的值，`{entity, new_name}` 静默推成
- * replace-body（回执是 `replace-body needs \`change\``，2026-10-30 实测）。
- */
-export function inferApplyOp(args) {
-  if (typeof args.action === 'string') return 'tx'
-  if (typeof args.to === 'string') return 'convert'
-  if (typeof args.content === 'string') return 'write'
-  if (Array.isArray(args.targets)) return 'patch'
-  if (Array.isArray(args.hunks) || typeof args.create === 'string') return 'patch'
-  if (args.entity !== undefined && typeof args.newName === 'string') return 'rename'
-  if (args.entity !== undefined) return 'replace-body'
-  return undefined
 }
 
 /**

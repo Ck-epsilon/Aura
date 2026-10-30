@@ -1,4 +1,4 @@
-# aura-tools 版本变更表（0.6.2 → 1.0.2）
+# aura-tools 版本变更表（0.6.2 → 1.0.4）
 
 > **这份表是补记的**：`docs/aura-tools-<版本>.md` 只覆盖到 0.6.1，然后直接跳到 0.6.16/0.6.17；
 > 中间的 0.6.2–0.6.15 与 0.6.18 当时只写在交接单与工作单里。C72 收口审计把这 15 个版本的**一句话变更 + 读数**
@@ -7,6 +7,19 @@
 > - 详细施工记录：`.polaris/读写工具重做-交接单.md`（§三 波1–19、§八 句柄化、§九 多目标、§十 判定内联、§十二 回执准确化）
 > - 逐件工作单与回执：`.polaris/workorders/fs-contract-v2.*.json`
 > - **口径提醒**：本表里的数字都是**当时实测**；要看当前读数请跑对应探针（交接单 §四 有命令表）。
+
+## 1.0.4：DSH apply 回执与参数契约
+
+- `applied[].note` 进入共享回执 schema：行区间替换以换行结尾时，引擎给出的空行提示不再被
+  DSH 的 `additionalProperties:false` 顶掉整条成功回执。
+- apply 的 convert 结果把 `bom` 声明为 boolean；多目标规划中止的 `aborted` 声明为 string。
+- DSH apply 的 `file_path` 改为运行期二选一：单目标 require，`targets` 批量允许省略；
+  `presentCall` 也识别批量调用。
+- apply op 推断下沉到纯引擎 `args.mjs`，CLI / MCP / DSH 共用同一优先级；
+  `content + to` 现在一致判为 convert。
+- 单目标 DSH `retry` 真正复用 `write-path.mjs:rebaseHunks`，回执声明并返回 `rebased`。
+- 新增 `aura-edit/apply-contract` 接口套件（29 条），用真实 DSH 注册工具与
+  `@deepseek-ai/dsh-tools` 输出校验器覆盖上述分支。
 
 ## 1.0.2：写只覆盖交付过的行 · convert 源编码显式
 

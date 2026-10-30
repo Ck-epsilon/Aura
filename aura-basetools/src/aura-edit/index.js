@@ -31,7 +31,7 @@ import { locate, directoryHint } from '../locator-lab/locator-api.mjs'
 import { normSpace } from '../locator-lab/anchor-core.mjs'
 // 单个 hunk 的“平铺形状”容错**只有一份**（住在 args.mjs，与行区间收敛同一层）：
 // DSH 壳与 CLI 共用它。同一套容错规则写两处，就一定会有一处与另一处不一致。
-import { MT_EDIT_ELEMENT_KEYS, assertEditTargets, assertKnownArgs, assertLineAddressesNeedExpect, assertTargetShape, editTargetHunks, flatHunk } from '../locator-lab/args.mjs'
+import { MT_EDIT_ELEMENT_KEYS, assertEditTargets, assertKnownArgs, assertLineAddressesNeedExpect, assertTargetShape, editTargetHunks, flatHunk, inferApplyOp } from '../locator-lab/args.mjs'
 // BOM 的字符形态与字节判据都住在引擎里：读路径（aura_basetools_read 的令牌）与写路径（这里）共用一份，
 // 否则"令牌说没 BOM、写回却带 BOM"这类不自洽会两处各修一遍。
 import {
@@ -39,6 +39,7 @@ import {
   BYTE_ORDER_MARK_BYTES,
   contentToken,
   countByteOrderMarks,
+  ledgerIdentityKey,
   latestObservation,
   leadingByteOrderMarks,
   readWith,
@@ -68,6 +69,7 @@ import {
   CARRIAGE_RETURN,
   LINE_FEED,
   providerView,
+  rebaseHunks,
   firstDifference,
   lineEndingCensus,
   verifyWriteBack,
@@ -274,6 +276,20 @@ const APPLIED_ITEM_SCHEMA = {
     handle: { type: 'string' },
     after: { type: 'string' },
     afterTruncated: { type: 'boolean' },
+    note: { type: 'string' },
+  },
+}
+
+/** Evidence that a stale address was replayed at its current, unique location. */
+const REBASED_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      from: { type: 'array', required: true, items: { type: 'integer' } },
+      to: { type: 'array', required: true, items: { type: 'integer' } },
+    },
   },
 }
 
@@ -1700,7 +1716,10 @@ function registerTools(ctx, sandbox) {
         'The single write tool. op=replace-body (entity + change) or rename (entity + new_name) is the default for code: pass the evidence from an entity read; ambiguity/staleness writes nothing; the tool observes the current revision itself, writes atomically and verifies. ' +
         'The same tool covers op=patch (raw hunks/create), op=write (whole file) and op=convert (encoding/line endings). Comments and string literals are never renamed.',
       parameters: {
-        file_path: { type: 'string', required: true, description: 'Path to change, resolved by the filesystem backend.' },
+        file_path: {
+          type: 'string',
+          description: 'Path to change for single-target operations, resolved by the filesystem backend; omit for a `targets` batch.',
+        },
         entity: {
           oneOf: [{ type: 'string' }, { type: 'object', additionalProperties: true }],
           description: 'Entity selector: `function:apply`, `Class/method`, or {kind,name,file}. Required for entity ops.',
@@ -1790,17 +1809,18 @@ function registerTools(ctx, sandbox) {
             operation: { type: 'string' },
             from: { type: 'string' },
             to: { type: 'string' },
-            bom: { type: 'string' },
+            bom: { type: 'boolean' },
             bytes_before: { type: 'integer' },
             bytes_after: { type: 'integer' },
             verified: { type: 'boolean' },
             bytes: { type: 'integer' },
             targets: { type: 'integer' },
             summary: { type: 'string' },
+            rebased: REBASED_SCHEMA,
             edits: { type: 'array', items: { type: 'object', additionalProperties: true } },
             landed_paths: { type: 'array', items: { type: 'string' } },
             not_landed_paths: { type: 'array', items: { type: 'string' } },
-            aborted: { type: 'boolean' },
+            aborted: { type: 'string' },
             partial: { type: 'boolean' },
             // Entity-first half of the receipt (absent on argument-level failures).
             entity: {
@@ -1843,9 +1863,15 @@ function registerTools(ctx, sandbox) {
       },
       async execute(args, exec) {
         assertKnownArgs(args, APPLY_ARG_KEYS, 'aura_basetools_apply')
-        if (typeof args.file_path !== 'string' || args.file_path.trim().length === 0) {
-          throw new PatchError('apply needs `file_path` as a non-empty string', 'APPLY_BAD_ARGS')
-        }
+        /**
+         * Apply 与 edit 共用同一条目标形状判据。这里必须在分派前调用：
+         * `file_path` 与 `targets` 同时在场时不能挑一个执行，而要让两个壳
+         * 与 MCP/CLI 统一得到 `ARGS_SHAPE_EXCLUSIVE`、零写入。
+         */
+        const batchTargets = assertEditTargets(args, {
+          toolName: 'aura_basetools_apply',
+          elementKeys: MT_EDIT_ELEMENT_KEYS,
+        })
         // verify/transaction exist on the CLI/MCP envelope only; refusing beats silently dropping them.
         if (args.verify !== undefined || args.transaction !== undefined) {
           throw new PatchError(
@@ -1864,25 +1890,16 @@ function registerTools(ctx, sandbox) {
          * 这份归一后的列表同时喂给下面的闸门与执行（一个形状，一个真值）。
          */
         const patchHunks = hunkListOf(args)
-        const op =
-          args.op ??
-          (args.action !== undefined
-            ? 'tx'
-            : Array.isArray(args.targets)
-              ? 'patch'
-              : typeof args.content === 'string'
-                ? 'write'
-                : typeof args.to === 'string'
-                  ? 'convert'
-                  : args.hunks !== undefined || args.create !== undefined
-                    ? 'patch'
-                    : typeof args.new_name === 'string'
-                      ? 'rename'
-                      : args.entity === undefined && args.change === undefined && patchHunks !== null
-                        ? 'patch'
-                        : 'replace-body')
+        const op = args.op ?? inferApplyOp(args)
         if (op === 'tx') {
           throw new PatchError('op=tx is MCP/CLI only — this surface has no transaction log; nothing was written', 'APPLY_UNSUPPORTED_OPTION')
+        }
+        if (op !== 'replace-body' && op !== 'rename' && op !== 'patch' && op !== 'write' && op !== 'convert') {
+          throw new PatchError(`unknown apply op ${JSON.stringify(op)}; expected replace-body | rename | patch | write | convert`, 'APPLY_BAD_ARGS')
+        }
+        const singleTarget = op === 'patch' ? batchTargets === undefined : true
+        if (singleTarget && (typeof args.file_path !== 'string' || args.file_path.trim().length === 0)) {
+          throw new PatchError('apply needs `file_path` as a non-empty string for a single target', 'APPLY_BAD_ARGS')
         }
         if (op === 'write') {
           const result = await writeTool.execute(
@@ -1907,13 +1924,13 @@ function registerTools(ctx, sandbox) {
         }
         if (op === 'patch') {
           // 公开写面的坐标地址必须有内容断言：单 hunk 与批量一视同仁；预演不写盘，放行。
-          const applyHunks = Array.isArray(args.targets)
-            ? editTargetHunks(args.targets.filter((target) => target?.dry_run !== true))
+          const applyHunks = batchTargets !== undefined
+            ? editTargetHunks(batchTargets.filter((target) => target?.dry_run !== true))
             : (patchHunks ?? [])
           assertLineAddressesNeedExpect(applyHunks, { dryRun })
-          const result = Array.isArray(args.targets)
+          const result = batchTargets !== undefined
             ? await editTool.execute(
-                definedArgs({ targets: args.targets, dry_run: dryRun, require_observation: args.require_observation, require_delivered: true, retry: args.retry }),
+                definedArgs({ targets: batchTargets, dry_run: dryRun, require_observation: args.require_observation, require_delivered: true, retry: args.retry }),
                 exec,
               )
             : await editTool.execute(
@@ -2070,9 +2087,13 @@ function registerTools(ctx, sandbox) {
       },
       presentCall: (args) => ({
         card: 'generic',
-        title: `Apply ${args.op ?? (args.new_name !== undefined ? 'rename' : 'replace-body')} ${typeof args.entity === 'string' ? args.entity : ''} in ${args.file_path}`,
+        title: Array.isArray(args.targets)
+          ? `Apply patch to ${args.targets.length} targets`
+          : `Apply ${args.op ?? (args.new_name !== undefined ? 'rename' : 'replace-body')} ${typeof args.entity === 'string' ? args.entity : ''} in ${args.file_path}`,
         kind: 'edit',
-        rawInput: { entity: args.entity, op: args.op, scope: args.scope, dry_run: args.dry_run },
+        rawInput: Array.isArray(args.targets)
+          ? { targets: args.targets.length, op: args.op, dry_run: args.dry_run }
+          : { entity: args.entity, op: args.op, scope: args.scope, dry_run: args.dry_run },
       }),
     }),
   )
@@ -2305,6 +2326,7 @@ function registerTools(ctx, sandbox) {
             // 整批正文（逐项正文按输入顺序拼接）。单目标那条路**不发**这个字段：
             // 它的正文由 `render` 从单目标回执现算（同一个 `receiptBody`）。
             text: { type: 'string' },
+            rebased: REBASED_SCHEMA,
             landed_paths: { type: 'array', items: { type: 'string' } },
             not_landed_paths: { type: 'array', items: { type: 'string' } },
             aborted: { type: 'string' },
@@ -2578,6 +2600,32 @@ function registerTools(ctx, sandbox) {
             byteOrderMark: byteOrderMarks > 0,
           })
         }
+        /**
+         * `retry` 在单目标面也必须真执行——此前这里只把开关声明给模型，
+         * 真正送入引擎的只有多目标 `applyEditTargets`。地址漂移时，调用方收到的
+         * 是普通 stale 拒绝，而不像声明所说的“按上次原文重放”。
+         *
+         * 重定位判据只有一个：`write-path.mjs:rebaseHunks`。这里只取账本里
+         * 与当前身份键一致的最后一次观测，并把纯函数结果继续交给同一条规划/闸门。
+         */
+        let planningHunks = hunks
+        let rebased = null
+        if (args.retry === true) {
+          const observed = latestObservation(
+            ledgerIdentityKey(
+              target.displayPath,
+              typeof target.targetKey === 'string' && target.targetKey.length > 0 ? target.targetKey : undefined,
+            ),
+            { source: content },
+          )
+          if (observed !== null && typeof observed.source === 'string') {
+            const replay = rebaseHunks(hunks, observed.source, content)
+            if (replay !== null) {
+              planningHunks = replay.hunks
+              rebased = replay.rebased
+            }
+          }
+        }
         let planned
         try {
           /**
@@ -2592,7 +2640,7 @@ function registerTools(ctx, sandbox) {
            * 与 `identityKey: target.targetKey`）——两处必须同源，否则同一份文件在"闸门"与"句柄核对"
            * 里会有两种身份。判据：段G 三档端到端（普通 / BOM / 别名路径），mutation 去掉本参数即变红。
            */
-          planned = planHunks(content, hunks, target.displayPath, {
+          planned = planHunks(content, planningHunks, target.displayPath, {
             byteOrderMark: byteOrderMarks > 0,
             ...(typeof target.targetKey === 'string' && target.targetKey.length > 0
               ? { identityKey: target.targetKey }
@@ -2619,7 +2667,7 @@ function registerTools(ctx, sandbox) {
            * 第四态那句"这次没写盘"不需要任何回滚去兼。也正因此这里**不**刷新观测账本
            * （`rememberRead`）：什么都没写，就没有"自己刚写的内容"要记。
            */
-          const already = secondExitEvidence(error, content, hunks)
+          const already = secondExitEvidence(error, content, planningHunks)
           const verdict = intentVerdict(error, already)
           if (verdict !== null) {
             /**
@@ -2692,19 +2740,22 @@ function registerTools(ctx, sandbox) {
          * 归一化只有一处实现：引擎的 `read-core.mjs` 的 `ledgerIdentityKey`（`regionGate`
          * 内部走它）。这里不重复实现，只把宿主已有的事实递进去。
          */
-        const gate = regionGate(hunks, content, planned, target.displayPath, {
-          byteOrderMark: byteOrderMarks > 0,
-          ...(typeof target.targetKey === 'string' && target.targetKey.length > 0
-            ? { identityKey: target.targetKey }
-            : {}),
-        })
+        const gate =
+          rebased !== null
+            ? { clean: true, basis: 'fresh' }
+            : regionGate(planningHunks, content, planned, target.displayPath, {
+                byteOrderMark: byteOrderMarks > 0,
+                ...(typeof target.targetKey === 'string' && target.targetKey.length > 0
+                  ? { identityKey: target.targetKey }
+                  : {}),
+              })
         if (!gate.clean) throw new PatchError(gate.message, 'PATCH_STALE_REGION', gate.extras)
         /**
          * 交付覆盖闸（1.0.2）：`require_delivered` 由公开写面（apply）传进来。
          * 与陈旧闸门同一条位置纪律——规划之后、预演之前、落盘之前。
          */
         if (args.require_delivered === true) {
-          const unseen = coverageGate(hunks, planned, content, target.displayPath, {
+          const unseen = coverageGate(planningHunks, planned, content, target.displayPath, {
             byteOrderMark: byteOrderMarks > 0,
             ...(typeof target.targetKey === 'string' && target.targetKey.length > 0
               ? { identityKey: target.targetKey }
@@ -2714,7 +2765,13 @@ function registerTools(ctx, sandbox) {
         }
         // 闸门过了才轮到预演：此刻“预演通过”与“真写会成功”是同一句话。
         if (args.dry_run === true) {
-          return { path: target.displayPath, outcome: 'applied', applied, dryRun: true }
+          return {
+            path: target.displayPath,
+            outcome: 'applied',
+            applied,
+            dryRun: true,
+            ...(rebased === null ? {} : { rebased }),
+          }
         }
 
         // 本次读取就是一次合法观测，先记上：策略随后对**其它**改动方仍然有效，
@@ -2796,6 +2853,7 @@ function registerTools(ctx, sandbox) {
           applied,
           dryRun: false,
           write_verify: verification,
+          ...(rebased === null ? {} : { rebased }),
           // 没有基准（从未观测过 / 基准已被淘汰）时如实标注，与 CLI 侧同一句话：
           // "没核对过"与"核对过且没变"必须是两句话，否则回执在撒谎。
           ...(gate.basis === 'none' ? { unverified_region: true } : {}),

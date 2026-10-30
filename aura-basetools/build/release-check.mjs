@@ -187,6 +187,7 @@ const SUITES = [
   ['range-bytes', 'src/aura-standalone/test/range-bytes-test.mjs', 217],
   ['aura-read/outcome', 'src/aura-read/outcome-test.mjs', 79],
   ['aura-edit/outcome', 'src/aura-edit/outcome-test.mjs', 172],
+  ['aura-edit/apply-contract', 'src/aura-edit/apply-contract-test.mjs', 29],
   ['aura-read/load', 'src/aura-read/load-test.mjs', 81],
   ['aura-edit/load', 'src/aura-edit/load-test.mjs', 99],
   ['aura-edit/align', 'src/aura-edit/align-test.mjs', 12],

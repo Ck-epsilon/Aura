@@ -75,6 +75,28 @@ export function flatHunk(source) {
 }
 
 /**
+ * `aura_basetools_apply` 的操作推断——所有调用面共用这一份。
+ *
+ * 参数里同时出现多个可推断字段时，顺序就是语义：`action` > `to` >
+ * `content` > `targets` > `hunks`/`create`/平铺 hunk > `new_name` > `entity`。
+ * 特别是 `content + to` 必须推断成 convert；此前 DSH 壳把 content 排在 to 前面，
+ * 同一份载荷在 DSH 会变成整文件 write，在 CLI/MCP 却变成 convert。
+ *
+ * `newName` 是独立面的规范形状，`new_name` 是工具参数形状；两者都认，避免把
+ * “参数拼写适配”再次变成第二套操作推断。
+ */
+export function inferApplyOp(args = {}) {
+  if (typeof args.action === 'string') return 'tx'
+  if (typeof args.to === 'string') return 'convert'
+  if (typeof args.content === 'string') return 'write'
+  if (Array.isArray(args.targets)) return 'patch'
+  if (Array.isArray(args.hunks) || typeof args.create === 'string' || flatHunk(args) !== null) return 'patch'
+  if (args.entity !== undefined && typeof (args.newName ?? args.new_name) === 'string') return 'rename'
+  if (args.entity !== undefined) return 'replace-body'
+  return undefined
+}
+
+/**
  * 单次读请求的**统一收敛**（单目标与 `targets` 元素共用）。
  *
  * 旧版 `readManyTarget` 手写字段转发，`offset` / `limit` / `context` / `kind` / `budget`

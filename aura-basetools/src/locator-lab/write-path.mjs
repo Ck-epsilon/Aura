@@ -3498,7 +3498,7 @@ export function requireObservedRevision({ displayPath, identityKey, content, byt
  * 相似度会把“改错了地方”卖成“改对了”。找不到 / 找到多处 ⇒ 该 hunk 原样留下，
  * 闸门照旧判它陈旧。纯函数（无 IO）：旧观测与当前内容都由调用方递进来。
  */
-function rebaseHunks(hunks, observedSource, freshContent) {
+export function rebaseHunks(hunks, observedSource, freshContent) {
   const oldLines = observedSource.split(/\r?\n/)
   const freshLines = freshContent.split(/\r?\n/)
   const rebased = []
