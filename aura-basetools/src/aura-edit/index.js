@@ -453,6 +453,16 @@ export const EDIT_ARG_KEYS = [
 /**
  * `aura_basetools_apply` 的顶层参数名（唯一一份，供未知参数守卫用）。
  * 它与 `EDIT_ARG_KEYS` **分开**：apply 接受 entity/op/change，edit 不接受（反过来也一样）。
+ *
+ * hunk 那一段与 `EDIT_ARG_KEYS` 同源（`Object.keys(HUNK_PROPERTIES)`），不手抄：手抄那一份漏了
+ * 全部平铺键，守卫于是拒掉 `hunkListOf()` 本来就在执行的形状——2026-10-30 在本仓直接调 execute
+ * 量到：`{file_path,start_line,end_line,expect,replace}` 报 `ARGS_UNKNOWN_KEY`，同一负载包进
+ * `hunks:[…]` 却落盘成功。`expect`/`eol` 原先在这里各抄一遍，随派生去掉；两份名单必然漂，
+ * 而漂开的代价就是这一格。
+ *
+ * `repair_double_encoding` 已从这份名单与 apply 的 schema 一起**删掉**（不是留着"以后支持"）：
+ * 这一面的 convert 走 `ctx.fs` + `TextDecoder`，全程没读过这个参数，声明它等于让模型传一个
+ * 会被静默丢掉的开关——本仓对这类键的处置是删除声明，让它回到 `ARGS_UNKNOWN_KEY` 那条大声的路。
  */
 export const APPLY_ARG_KEYS = [
   'file_path',
@@ -465,21 +475,19 @@ export const APPLY_ARG_KEYS = [
   'dry_run',
   'verify',
   'transaction',
-  'expect',
   'hunks',
   'create',
   'content',
   'no_overwrite',
   'allow_unobserved',
-  'eol',
   'to',
   'from',
   'bom',
-  'repair_double_encoding',
   'require_observation',
   'retry',
   'action',
   'targets',
+  ...Object.keys(HUNK_PROPERTIES),
 ]
 
 /** Drop undefined values before handing args to a nested defineTool: it validates lossless JSON. */
@@ -1653,7 +1661,7 @@ function registerTools(ctx, sandbox) {
             'Pass `expect` (the text you believe is at that location) on every hunk when you address by `lines`, `start_line`/`end_line`, or `line_cue`: if the file shifted since you read it, `expect` turns a silent wrong-line write into a loud failure, and it costs nothing on edits that do not move lines. A line-number-only hunk without `expect` is refused (PATCH_LINES_NEED_EXPECT, nothing written), single hunk or batch alike.',
             // 1.0.2：覆盖闸。同一类事故的另一种形态——读了半份（probe/map，或 full 被预算截断）
             // 然后整份覆写／整段替换，没看过的行静默消失。判据在引擎，这里只把恢复路径说清。
-            'You may only replace lines you were actually given. A probe/map/digest read, or a `full` cut at the content budget, does not entitle you to rewrite the rest: such a hunk is refused (PATCH_UNSEEN_REGION) with the exact undelivered range. Read that range with mode=lines and retry, address it by content (`old`/`anchor`), or pass `allow_unobserved: true` for a deliberate whole-file overwrite (the receipt then says `unverified_region`).',
+            'You may only replace lines you were actually given. A probe/map/digest read, or a `full` cut at the content budget, does not entitle you to rewrite the rest: such a hunk is refused (PATCH_UNSEEN_REGION) with the exact undelivered range. Read that range with mode=lines and retry, or address it by content (`old`/`anchor`). There is no blind-write switch on this surface — `allow_unobserved` belongs to the whole-file write only.',
             // 刻意**不再**写"未知扩展名请用内置 edit"。那句话是错的：只有 `target` 需要语言配置
             // （符号表只对已索引的扩展名存在），而 `lines`／`line_cue`／`anchor` 三种寻址根本不看语言，
             // 创建路径更是与寻址无关。它恰好在工具可用的地方把模型赶回内置工具。
@@ -1700,7 +1708,7 @@ function registerTools(ctx, sandbox) {
         op: {
           type: 'string',
           enum: ['replace-body', 'rename', 'patch', 'write', 'convert', 'tx'],
-          description: 'Omitted: action→tx; content→write; to→convert; hunks/create→patch; new_name→rename; entity→replace-body.',
+          description: 'Omitted: action→tx; content→write; to→convert; hunks/create/one flat hunk at the top level→patch; new_name→rename; entity→replace-body.',
         },
         change: { type: 'string', description: 'replace-body: the complete new body of the entity (signature and trailing newline included).' },
         new_name: { type: 'string', description: 'rename: the new identifier.' },
@@ -1728,6 +1736,17 @@ function registerTools(ctx, sandbox) {
           type: 'string',
           description: 'Cross-call transaction id. This surface has no transaction log: providing it is refused, use the CLI/MCP apply.',
         },
+        // ── 单个 hunk 的键**也**在顶层声明（平铺形状），与 aura_basetools_edit 用同一份表 ──
+        //
+        // 实装早就在（`hunkListOf()`），缺的只是声明：2026-10-29 经真宿主实测，平铺负载在参数层就被
+        // `additionalProperties: false` 拒（`params must NOT have additional properties`），一次都没进
+        // 到 execute；在本仓直接调 execute 也照样停在守卫上（`ARGS_UNKNOWN_KEY`，2026-10-30 量到）。
+        // 所以这里补的是声明，不是能力。
+        // 必须展开剥过 `required` 的那一份（整表展开会把 `replace` 提升成顶层必填，`hunks`/`create`/
+        // 实体三条正常路一起被拒——理由逐字见 edit 工具里同名的 `...HUNK_PROPERTIES_OPTIONAL` 那段）。
+        // 位置也讲究：这段必须在 `expect`/`eol` **之前**——顶层那两份更宽（`expect` 还兼 replace-body
+        // 的断言，`eol` 多一个 `keep`），后写的字面量才盖得住摊进来的那份。
+        ...HUNK_PROPERTIES_OPTIONAL,
         expect: { type: 'string', description: 'replace-body: assert what the entity span currently holds; a mismatch fails the call.' },
         hunks: {
           type: 'array',
@@ -1743,7 +1762,6 @@ function registerTools(ctx, sandbox) {
         to: { type: 'string', description: 'op=convert: target encoding (utf-8 on this surface).' },
         from: { type: 'string', description: 'op=convert: source encoding; omit only for valid UTF-8.' },
         bom: { type: 'string', enum: ['keep', 'yes', 'no'], description: 'op=convert: BOM policy.' },
-        repair_double_encoding: { type: 'boolean', description: 'op=convert: repair reversible double encoding.' },
         action: { type: 'string', enum: ['begin', 'commit', 'rollback', 'status'], description: 'op=tx: MCP/CLI only; this surface refuses it.' },
         require_observation: { type: 'boolean', description: 'op=patch: require a prior read of this file.' },
         retry: { type: 'boolean', description: 'op=patch: rebase a stale address from the last read.' },
@@ -1836,6 +1854,16 @@ function registerTools(ctx, sandbox) {
           )
         }
         const dryRun = args.dry_run === true
+        /**
+         * 平铺形状也算 patch（`hunks`/`create` 之外的第三种补丁写法）。
+         *
+         * 补上声明之前，这条推断里没有平铺那一臂：`{file_path,start_line,end_line,expect,replace}`
+         * 落到最后的兜底 ⇒ 被判成 replace-body ⇒ 回执是 `apply needs an \`entity\` selector`，
+         * 与真正的原因（这条补丁没被认出来）两回事。这一臂排在 `new_name` 之后、并且只在
+         * `entity`/`change` 都不在场时接管：实体两条路（含它们今天那两句大声报错）逐字不变。
+         * 这份归一后的列表同时喂给下面的闸门与执行（一个形状，一个真值）。
+         */
+        const patchHunks = hunkListOf(args)
         const op =
           args.op ??
           (args.action !== undefined
@@ -1850,7 +1878,9 @@ function registerTools(ctx, sandbox) {
                     ? 'patch'
                     : typeof args.new_name === 'string'
                       ? 'rename'
-                      : 'replace-body')
+                      : args.entity === undefined && args.change === undefined && patchHunks !== null
+                        ? 'patch'
+                        : 'replace-body')
         if (op === 'tx') {
           throw new PatchError('op=tx is MCP/CLI only — this surface has no transaction log; nothing was written', 'APPLY_UNSUPPORTED_OPTION')
         }
@@ -1879,7 +1909,7 @@ function registerTools(ctx, sandbox) {
           // 公开写面的坐标地址必须有内容断言：单 hunk 与批量一视同仁；预演不写盘，放行。
           const applyHunks = Array.isArray(args.targets)
             ? editTargetHunks(args.targets.filter((target) => target?.dry_run !== true))
-            : (hunkListOf(args) ?? [])
+            : (patchHunks ?? [])
           assertLineAddressesNeedExpect(applyHunks, { dryRun })
           const result = Array.isArray(args.targets)
             ? await editTool.execute(
@@ -1889,7 +1919,12 @@ function registerTools(ctx, sandbox) {
             : await editTool.execute(
                 definedArgs({
                   file_path: args.file_path,
-                  hunks: args.hunks,
+                  // 闸门与执行读**同一份**归一列表：这里先前转发 `args.hunks`，平铺调用于是
+                  // "计划看得见 hunk、执行看不见"——`undefined` 递下去，报回的是
+                  // `hunks must be a non-empty array`，而闸门已经认下了那条 hunk。
+                  // `hunks:[…]` 形状下 `hunkListOf` 原样返回那个数组，`?? args.hunks` 再保住
+                  // `hunks: []` 与 `create` 两条路今天的回执——所以只有平铺那一条的行为变了。
+                  hunks: patchHunks ?? args.hunks,
                   create: args.create,
                   dry_run: dryRun,
                   require_observation: args.require_observation,

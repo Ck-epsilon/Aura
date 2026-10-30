@@ -31,6 +31,16 @@ MCP 客户端只写一段配置（agent 自己就能加）。`aura basetools mcp
 {"mcpServers":{"aura":{"command":"npx","args":["-y","--package","aura-basetools","aura","basetools","mcp"]}}}
 ```
 
+**接线要接到宿主自己身上**：同一个 registry 产物可以接多个宿主，但每个宿主得钉**自己**的工作区根——优先级 `--cwd` > `AURA_ROOT` > 进程 cwd。
+
+```json
+{"mcpServers":{"aura":{"command":"npx","args":["-y","--package","aura-basetools","aura","basetools","mcp","--cwd","/path/to/project"],"env":{"AURA_ROOT":"/path/to/project"}}}}
+```
+
+不钉的后果不是报错，是"能连上、工具也能跑，只是读写落在别的目录"（实测有宿主把 cwd 给成它自己的安装目录）：
+相对路径解析进安装包，workspace 锁与事务按假根分桶，不同项目共用一把锁。`aura basetools doctor` 把两格都打出来——
+`root` 是算出来的根，`root-echoed` 是从子进程 `initialize.instructions` 反读回来的服务中的根，两格一致才说明旋钮接到了 provider。
+
 **可选：在 provider 侧开 strict——把“工具参数不是合法 JSON”归零**
 
 模型输出的工具参数坏掉时（`MALFORMED_RESPONSE`：`tool input is invalid JSON`），请求在到达工具之前就失败了：
@@ -148,8 +158,8 @@ src/aura-read/         DSH 工具壳（aura_basetools_read）
 src/aura-edit/         DSH 工具壳（aura_basetools_edit）
 src/locator-lab/       引擎：框架无关、不许用 node:fs（结构 / 读 / 锚点 / 写路径）
 src/aura-standalone/   独立面：CLI + MCP + node:fs 提供方 + 落盘观测缓存 + 自带验收
-build/make-bundle.mjs  构建：dist/aura-basetools/（拆包中间产物）；
-                       --pack 时派生 dist/npm/ 的两个 npm 包与 capabilities.json
+build/make-bundle.mjs  构建：dist/aura-basetools/（拆包中间产物）+ 刷新 capabilities.json；
+                       --pack 时再派生 dist/npm/ 的两个 npm 包
 build/bundle-layout.mjs 包内运行时文件的**唯一清单**：打包按它复制，发布闸按它比对 src↔dist
 build/make-split-packages.mjs 从组合产物派生 aura-basetools（核心）/ aura-basetools-dsh（DSH 适配器）
 build/split-package-test.mjs  拆包的**安装级**验收：离线装两个 tgz，从装出来的那份跑 CLI/MCP/npx，
@@ -198,7 +208,7 @@ node build/release-check.mjs                       # 发布前必跑：全量测
 node build/task-bench.mjs                          # 任务级基准：8 个读+改任务对照基线（SLO 闸）
 node build/post-publish-check.mjs                  # 发布物验证 + dist/release-scorecard.json（--registry 用于发布后）
 node build/perf-gate.mjs                           # 性能包线：1k/10k/100k 行冷/热读 + 10k 编辑（绝对上限 + 规模比值）
-node build/capabilities.mjs --write                # 能力清单 dist/capabilities.json（make-bundle --pack 会自动跑）
+node build/capabilities.mjs --write                # 能力清单 dist/capabilities.json（make-bundle 每次都会跑它）
 node dist/aura-basetools/test/standalone-test.mjs  # 包内自带验收：测"要发出去的那一份"
 ```
 
@@ -225,6 +235,8 @@ aura basetools edit --file a.js --lines 10 --replace 'const x = 1'
   （`applied:0` / `landed:false` / `landed_paths:[]` / `rolled_back:true`）。回滚有冲突时标 `recovery_required`。
 - 同一工作区的并发编辑由 `~/.aura/locks/<workspace>.lock` 串行化；`AURA_NO_LOCK=1` 可关闭，`AURA_LOCK_TIMEOUT_MS` / `AURA_LOCK_STALE_MS` 可调。
 - `AURA_CACHE_DIR` 同时覆盖观测缓存、事务日志和锁目录。
+- `AURA_ROOT` 钉工作区根（相对路径的解析基准，也是上面那把锁的分桶键）；优先级 `--cwd` > `AURA_ROOT` > 进程 cwd，
+  CLI 与 MCP 共用同一份口径（`lib/ops.mjs:workspaceRootPin`）。接多个宿主时按宿主各钉各的——见"接线要接到宿主自己身上"。
 
 ## 写入边界（0.6.19）
 

@@ -32,7 +32,7 @@ const SERVER_INSTRUCTIONS = [
   'Read with aura_basetools_read: pass `entity` to view one definition + references, a directory path with `search` for repository-wide grep, or an image path for metadata + image content.',
   'Write with aura_basetools_apply: op=replace-body or rename is the default for code (pass the `evidence` from an entity read; ambiguity or staleness writes nothing). op=patch (raw hunks), write (whole file), convert (encoding), and tx (cross-call transaction) cover the remaining write paths.',
   'Keep tool arguments small — long, deeply nested JSON is what the provider\'s stream parser fails on (MALFORMED_RESPONSE). For a single raw change pass the hunk FLAT at the top level (`old`+`replace`, or `start_line`+`end_line`+`replace`+`expect`, or a `handle` from a previous read + `replace`); use `hunks: [...]` only for several changes. Every line-number-addressed hunk must carry `expect` (the text you believe is at those lines) or it is refused; a coordinate is not a content check. If you already hold a `handle`, do not repeat the old text in `old`.',
-  'A write may only replace lines you were actually given: a file read with probe/map/digest, or a `full` that was cut at the content budget, does not entitle you to rewrite the rest. Such a hunk is refused with PATCH_UNSEEN_REGION naming the missing range — read that range (mode=lines) and retry, or address it by content (`old`/`anchor`), or pass `allow_unobserved: true` for a deliberate whole-file overwrite (the receipt will say unverified_region). convert refuses a guessed source encoding: pass `from` unless the file is UTF-8 or carries a BOM.',
+  'A write may only replace lines you were actually given: a file read with probe/map/digest, or a `full` that was cut at the content budget, does not entitle you to rewrite the rest. Such a hunk is refused with PATCH_UNSEEN_REGION naming the missing range — read that range (mode=lines) and retry, or address it by content (`old`/`anchor`). `allow_unobserved: true` is a whole-file switch: it travels with op=write, not with a patch. convert refuses a guessed source encoding: pass `from` unless the file is UTF-8 or carries a BOM.',
   'For changes spanning multiple calls use aura_basetools_apply with op=tx begin -> writes with transaction -> commit; rollback on failure.',
   'These tools preserve BOM and per-line endings, gate only the addressed region for staleness, verify writes, and keep multi-target edits atomic.',
   'If your client can enforce provider-side strict tool schemas (DeepSeek `/beta` + `strict: true` per function, OpenAI strict), enable it: strict decoding makes malformed tool-call JSON impossible instead of merely rarer. The schemas convert cleanly with `locator-lab/strict-schema.mjs` (toStrictSchema / strictToolList); `aura basetools doctor` prints the recipe.',
@@ -40,6 +40,9 @@ const SERVER_INSTRUCTIONS = [
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   openProvider,
+  // 钉根口径与它进 instructions 的那一行：诊断面（doctor）读的是同一个函数，见 `lib/ops.mjs`。
+  workspaceRootPin,
+  instructionsWithRoot,
   readEnvelope,
   editEnvelope,
   applyEnvelope,
@@ -90,13 +93,20 @@ const SUPPORTED_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
  * 元素内部**不在 schema 层细化**：读侧元素就是上面那套单目标参数、写侧元素就是 `{file_path, hunks}`，
  * 判据由运行期那两份（`assertReadTargets` / `assertEditTargets`）给，与 DSH 壳一字不差。
  */
-const TARGETS_SCHEMA = {
+/**
+ * `targets` 的声明。元素键名单**从守卫那两份导出名生成**，不写“每个元素就是上面那套单目标
+ * 参数”——那句话以前是假的：读侧的 `entity`/`encoding`、写侧的 `retry`/`transaction` 在元素里
+ * 都不生效，而模型照那句文案写出的载荷会撞 `ARGS_UNKNOWN_KEY`，从报错里看不出“哪半套不能用”。
+ * 声明里把可用键逐个点名，判据与文案就只剩一份（改守卫 → 文案自己跟着变）。
+ */
+const targetsSchema = (elementKeys) => ({
   type: 'array',
   items: { type: 'object' },
   description:
-    '一次调用读/改多个目标（与 `file_path` 互斥，最多 32 项）：每个元素就是上面那套单目标参数（读：file_path/mode/lines…；写：file_path/hunks/create）。' +
+    `一次调用读/改多个目标（与 \`file_path\` 互斥，最多 32 项）：元素只认这些键 — ${[...elementKeys].sort().join(', ')}；` +
+    '其余顶层键（实体/事务/编码那类）写在元素里会被拒绝，请分别调用。' +
     '一次调用、逐项回执、输出按输入序；一个目标失败不连坐其余（写侧例外：先全部规划，任一规划失败 ⇒ 一个字都不写）。',
-}
+})
 
 /**
  * 为什么 `lines` 用 `anyOf` 而不是 `oneOf`：
@@ -182,6 +192,24 @@ const HUNK_SCHEMA = {
   required: ['replace'],
 }
 
+/**
+ * 平铺形状（一个 hunk 直接写在顶层）的顶层声明——从上面那份 `HUNK_SCHEMA.properties` 摊开，
+ * 不在这里手抄第二遍。
+ *
+ * 为什么要补：1.0.2 实测（Qoder Desktop 接 registry 产物，2026-10-29）`{file_path,start_line,
+ * end_line,expect,replace}` 在**宿主本地**就被 schema 校验拒掉（`params must NOT have additional
+ * properties`），工具一次都没被调用；而 instructions 与 `docs/agent-guide.md` §2.3 推荐的正是这个
+ * 形状，`flatHunk()` 也早就实现了它。同一个负载包进 `hunks:[…]` 或放进 `targets:[…]` 都能落盘——
+ * 失败面精确到"只有单目标顶层这一种写法没声明"。
+ *
+ * 两处刻意不摊：`expect`/`eol` 顶层已有**更宽**的定义（expect 还兼 replace-body 的断言，eol 多一个
+ * `keep`），摊下来会把顶层收窄；`required` 不带上来，否则 `replace` 成了顶层必填，
+ * `hunks`/`create`/实体三条正常路一起被拒（DSH 壳 `aura-edit/index.js` 那段注释记过同一次变红）。
+ */
+const FLAT_HUNK_TOP_LEVEL = Object.fromEntries(
+  Object.entries(HUNK_SCHEMA.properties).filter(([key]) => key !== 'expect' && key !== 'eol'),
+)
+
 const ALL_TOOLS = [
   {
     name: 'aura_basetools_read',
@@ -239,7 +267,7 @@ const ALL_TOOLS = [
         },
         offset: { type: 'integer', description: '与 limit 同用：0-based 行偏移（内置 Read 的分页形状）；与 lines 互斥' },
         limit: { type: 'integer', description: '与 offset 同用：返回行数（默认 2000）；与 lines 互斥' },
-        targets: TARGETS_SCHEMA,
+        targets: targetsSchema(MT_READ_ELEMENT_KEYS),
       },
       /**
        * `required` 里**不写** `file_path`：单目标（`file_path`）与多目标（`targets`）必居其一，
@@ -280,7 +308,7 @@ const ALL_TOOLS = [
         transaction: { type: 'string', description: '跨调用事务 id（tx begin 返回）；本次修改追加到该事务的回滚日志。**写入立即可见**（tx 不是隔离事务，pending 期间盘上已是新字节），commit 只做 afterVersion 校验与可选 verify' },
         create: { type: 'string', description: '文件不存在时用它创建（整份内容）' },
         encoding: { type: 'string', description: '源编码覆盖（默认自动探测）；猜不准时写会拒绝，用它显式指定。只对本次调用生效。' },
-        targets: TARGETS_SCHEMA,
+        targets: targetsSchema(MT_EDIT_ELEMENT_KEYS),
         /**
          * 平铺形状：单个 hunk 的键**也**声明在顶层（与 DSH 壳、CLI 同一份容错）。
          *
@@ -313,10 +341,11 @@ const ALL_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...FLAT_HUNK_TOP_LEVEL,
         op: {
           type: 'string',
           enum: ['replace-body', 'rename', 'patch', 'write', 'convert', 'tx'],
-          description: '省略时按字段推断：entity+new_name→rename；entity→replace-body；hunks/create→patch；content→write；to→convert；action→tx',
+          description: '省略时按字段推断：entity+new_name→rename；entity→replace-body；hunks/create/平铺地址→patch；content→write；to→convert；action→tx',
         },
         file_path: { type: 'string', description: '要修改的文件路径（tx begin/status 可省略）' },
         entity: {
@@ -328,25 +357,26 @@ const ALL_TOOLS = [
         scope: { type: 'string', enum: ['span', 'file'], description: 'rename 的替换范围：span = 实体跨度，file = 整份文件（默认 file）' },
         evidence: {
           type: 'object',
-          description: '上次实体读回执里的 evidence（{spanHash, contentHash, version}）：与当前不一致 ⇒ PATCH_ENTITY_STALE，零写入',
+          description: '上次实体读回执里的 evidence：比对的是 `spanHash`（有则优先）或 `contentHash`——对不上 ⇒ PATCH_ENTITY_STALE，零写入。`version` 只是同一份内容的令牌，随回执原样带回即可，不单独判新旧',
         },
-        expect: { type: 'string', description: 'replace-body：断言当前实体跨度应是什么；对不上则整个失败' },
+        expect: { type: 'string', description: 'replace-body：断言当前实体跨度应是什么；对不上则整个失败。平铺形状下它同时是这次 hunk 的内容断言；写成 `hunks:[…]` 时**必须放进对应那一条 hunk 里**，顶层那份不会被摊进数组' },
         hunks: { type: 'array', items: HUNK_SCHEMA, description: 'op=patch：原始 hunk 数组（逃生口；单处修改优先用平铺字段或实体 op）' },
-        targets: TARGETS_SCHEMA,
+        targets: targetsSchema(MT_EDIT_ELEMENT_KEYS),
         create: { type: 'string', description: 'op=patch：整份内容建文件' },
         require_observation: { type: 'boolean', description: 'op=patch：要求本会话已读过该文件' },
         retry: { type: 'boolean', description: 'op=patch：地址过期时按上次读到的原文重放' },
         content: { type: 'string', description: 'op=write：整份 UTF-8 文本' },
         no_overwrite: { type: 'boolean', description: 'op=write：文件已存在则拒绝' },
-        allow_unobserved: { type: 'boolean', description: 'op=write：允许未读即覆写（显式逃生口）' },
-        eol: { type: 'string', enum: ['auto', 'preserve', 'lf', 'crlf', 'keep'], description: 'op=write/convert：行尾策略' },
+        allow_unobserved: { type: 'boolean', description: 'op=write：允许未读即覆写（显式逃生口）。只对整份写入有效——op=patch 传它不会放行任何未读区间，补丁的出路是把地址换成 `old`/`anchor` 或先读那段' },
+        eol: { type: 'string', enum: ['auto', 'preserve', 'lf', 'crlf', 'keep'], description: '行尾策略。patch（含平铺形状）只认 auto/preserve/lf/crlf；write 同一套；convert 另认 keep（默认，不动行尾）。给错组合是 PATCH_BAD_EOL，零写入' },
+        encoding: { type: 'string', description: '源编码覆盖（默认自动探测）：gb18030 / shift_jis / euc-kr / big5 / utf-16le / utf-16be / windows-1252。只对本次调用生效；写非 UTF-8 文件时这是让 ENCODING_AMBIGUOUS 不再复发的唯一按调用出口。' },
         to: { type: 'string', description: 'op=convert：目标编码（如 utf-8 / gb18030）' },
         from: { type: 'string', description: 'op=convert：源编码。省略时只接受合法 UTF-8 或带 BOM 的 UTF-16；其余必须显式给（CONVERT_FROM_REQUIRED，零写入）' },
         bom: { type: 'string', enum: ['keep', 'yes', 'no'], description: 'op=convert：BOM 策略' },
         repair_double_encoding: { type: 'boolean', description: 'op=convert：修复可逆的双重编码' },
         action: { type: 'string', enum: ['begin', 'commit', 'rollback', 'status'], description: 'op=tx：事务动作' },
         transaction: { type: 'string', description: 'op=tx/写入：跨调用事务 id（begin 时不需要）' },
-        verify: { type: 'string', description: '写后验证命令（op=patch/write/tx commit；显式给出才执行）' },
+        verify: { type: 'string', description: '写后验证命令（op=patch/write/tx commit；显式给出才执行）：在**工作区根**跑，超时取 `AURA_VERIFY_TIMEOUT_MS`（默认 120s，夹在 1s–600s）；非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED。能不能等到回包由宿主的 MCP 调用超时决定，与服务端无关' },
         dry_run: { type: 'boolean', description: '只规划不落盘（tx 与实体 op 不写）' },
       },
       additionalProperties: false,
@@ -375,7 +405,7 @@ const ALL_TOOLS = [
         },
         verify: {
           type: 'string',
-          description: '写后验证命令（显式给出才执行；在**工作区根目录**执行；无超时参数——MCP 传输上限约 30s，慢命令不要放进来；非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED）。',
+          description: '写后验证命令（显式给出才执行；在**工作区根**执行；超时取 `AURA_VERIFY_TIMEOUT_MS`，默认 120s、夹在 1s–600s；非零退出 ⇒ 自动回滚并返回 PATCH_VERIFY_FAILED）。回包能否等到由宿主的 MCP 调用超时决定，服务端不裁这个数。',
         },
         transaction: { type: 'string', description: '跨调用事务 id（tx begin 返回）；本次修改追加到该事务的回滚日志。**写入立即可见**（tx 不是隔离事务），commit 只做 afterVersion 校验与可选 verify' },
       },
@@ -412,7 +442,7 @@ const ALL_TOOLS = [
       properties: {
         action: { type: 'string', enum: ['begin', 'commit', 'rollback', 'status'] },
         transaction: { type: 'string', description: 'tx begin 返回的事务 id（begin 时不需要）' },
-        verify: { type: 'string', description: 'commit 时的写后验证命令（在**工作区根目录**执行、无超时参数；MCP 传输上限约 30s）；失败 ⇒ 整个事务回滚' },
+        verify: { type: 'string', description: 'commit 时的写后验证命令（在**工作区根**执行；超时取 `AURA_VERIFY_TIMEOUT_MS`，默认 120s、夹在 1s–600s）；失败 ⇒ 整个事务回滚' },
       },
       required: ['action'],
     },
@@ -633,6 +663,12 @@ async function callTool(provider, name, args = {}) {
     })
   }
   if (name === 'aura_basetools_apply') {
+    /**
+     * 平铺形状在这里也必须拼好：`apply` 是公开写面，而 1.0.2 之前只有 `edit` 那条分支调
+     * `flatHunk`——于是 schema 一摊开、顶层键进得来、引擎却永远收不到那一条 hunk，
+     * 报错从"未知参数"变成"缺 hunks"，比原来更看不懂。拼装规则仍然只有 `flatHunk` 那一份。
+     */
+    const applyFlat = Array.isArray(args.hunks) ? null : flatHunk(args)
     return await applyEnvelope(provider, {
       file: args.file_path,
       entity: args.entity,
@@ -645,7 +681,8 @@ async function callTool(provider, name, args = {}) {
       verify: args.verify,
       transaction: args.transaction,
       expect: args.expect,
-      hunks: args.hunks,
+      encoding: args.encoding,
+      hunks: Array.isArray(args.hunks) ? args.hunks : applyFlat === null ? args.hunks : [applyFlat],
       targets: args.targets,
       create: args.create,
       content: args.content,
@@ -676,8 +713,21 @@ async function callTool(provider, name, args = {}) {
   return { ok: false, error: `unknown tool ${JSON.stringify(name)}`, code: 'UNKNOWN_TOOL' }
 }
 
-export async function serve() {
-  const provider = openProvider()
+export async function serve(rootOverride) {
+  /**
+   * 工作区根：显式传入（CLI 的 `mcp --cwd`）> `AURA_ROOT` > 进程 cwd——口径住在
+   * `ops.mjs:workspaceRootPin`，与 `doctor` 共用一份（doctor 报的根必须就是服务的根）。
+   *
+   * 为什么必须补这一半（2026-10-29 实测，Qoder Desktop 接 registry 产物）：宿主拉起 stdio 服务时给的
+   * cwd 不一定等于它当前打开的项目——这一家给的是**它自己的安装目录**，于是相对路径解析进安装包、
+   * workspace 锁与事务按这个假根分桶（不同项目共用一把锁）。同一个产物要接多个宿主，接线就得有一个
+   * 按宿主写的旋钮；只有 `cwd` 可用时，接错的宿主看起来是"能连上"，坏的是闸门记账。
+   *
+   * `AURA_ROOT` 是给"只能填命令行、不能改 cwd"的接线用的（宿主自己的 MCP 配置形状各异）；
+   * CLI 那条 `mcp --cwd` 以前**声明了但没读**——旗标在名单里、值没人取。
+   */
+  const pin = workspaceRootPin(rootOverride)
+  const provider = openProvider(pin.root)
   let buffer = ''
   let chain = Promise.resolve()
 
@@ -715,7 +765,7 @@ export async function serve() {
           supportedProtocolVersions: SUPPORTED_PROTOCOLS,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: 'aura-basetools', version: VERSION },
-          instructions: SERVER_INSTRUCTIONS,
+          instructions: instructionsWithRoot(SERVER_INSTRUCTIONS, pin),
         })
       }
       if (method === 'ping') return reply(id, {})

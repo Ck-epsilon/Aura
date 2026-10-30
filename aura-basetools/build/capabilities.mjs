@@ -3,11 +3,18 @@
  *
  * 为什么需要：README 与 schema 各说一部分能力（地址档、读模式、语言数、限制），
  * 消费方（agent / 插件市场 / 评测）只能从散文里猜。这里把**可枚举的事实**从源码直接导出：
+ *   · 工具表（读模式 / op / 地址档 / 寻址安全 / 三面写闸）与命令表：直接取运行期那一份
+ *     （`ops.mjs:capabilitiesEnvelope`，CLI `basetools capabilities` 对外报的就是它），构建期不再抄第二遍；
  *   · `langs` 来自 `struct-core` 的 `LANGS`（不手抄语言数）；
  *   · 地址档来自 `args.mjs` 的 `FLAT_ADDRESS_KEYS` + 内容地址/句柄从属键；
  *   · 读模式来自 `read-core` 的 `MODES`；
- *   · 限制来自 `args` / `read-core` / `handle-core` 的导出常量。
- * 任何一处源码变了而清单没重建，`capabilities-test` 会红。
+ *   · 限制来自 `args` / `read-core` / `handle-core` 的导出常量；
+ *   · 文档类型来自 `doc-structure` 的 `DOC_KINDS` 取值，编码词表来自 `encoding` 的 `SUPPORTED_ENCODINGS`。
+ * 两个方向都会被 `capabilities-test` 夹住：源码变了而清单没重建 ⇒ 红；清单派生好了但**落盘那份**
+ * 是旧的（`dist/capabilities.json` 只在构建里刷新）⇒ 同样红（D1），而且点名到 `tools.1.operations.6` 这一级。
+ *
+ * 构建期**只**补这三样（运行期拿不到或不该由运行期说）：编码词表、`map` 认的文档类型、
+ * dist 清单里的打包事实（核心包是否 DSH-free）。
  *
  * 跑法：
  *   node build/capabilities.mjs            # 打印摘要
@@ -17,16 +24,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { LANGS } from '../src/locator-lab/struct-core.mjs'
-import { FLAT_ADDRESS_KEYS, MT_MAX_TARGETS, MT_POOL } from '../src/locator-lab/args.mjs'
-import {
-  CONTENT_BUDGET,
-  DEFAULT_ENVELOPE_ALLOWANCE,
-  DEFAULT_PRUNE_BUDGET,
-  MODES,
-} from '../src/locator-lab/read-core.mjs'
-import { HANDLE_MAX_PER_RECEIPT } from '../src/locator-lab/handle-core.mjs'
+import { CONTENT_BUDGET } from '../src/locator-lab/read-core.mjs'
+import { DOC_KINDS } from '../src/locator-lab/doc-structure.mjs'
 import { SUPPORTED_ENCODINGS } from '../src/aura-standalone/lib/encoding.mjs'
+// 工具表/命令表/语言表只有一份：运行时那份（`ops.mjs:capabilitiesEnvelope`）就是 CLI `capabilities`
+// 与 MCP 面出去的读数，这里在它上面加只有构建期才知道的字段（版本、打包、编码表）。
+// 以前是手抄两份，而抄来的那两份会漂：`views` 在两边都写着 `entity`/`grep`/`image`，
+// 读起来像 `mode` 取值、实际三个都不在 enum 里（照它发就是 `READ_BAD_MODE`）——删掉之后
+// 这种词表只在引擎的导出里存在，构建期与运行期不可能各说一套。
+import { capabilitiesEnvelope } from '../src/aura-standalone/lib/ops.mjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -43,57 +49,30 @@ export function buildCapabilities() {
   const dshDeps = core === null
     ? null
     : Object.keys({ ...core.dependencies, ...core.peerDependencies, ...core.optionalDependencies }).filter((name) => name.startsWith('@deepseek-ai/'))
+  const envelope = capabilitiesEnvelope()
   return {
     tool: 'aura-basetools',
     version,
     generatedAt: new Date().toISOString(),
-    tools: [
-      {
-        name: 'aura_basetools_read',
-        modes: ['auto', ...MODES],
-        reads: ['text', 'directory', 'image'],
-        views: ['map', 'digest', 'full', 'around', 'lines', 'search', 'changed', 'probe', 'entity', 'grep', 'image'],
-      },
-      {
-        name: 'aura_basetools_apply',
-        operations: ['replace-body', 'rename', 'patch', 'write', 'convert', 'tx'],
-        options: ['evidence', 'dry_run', 'verify', 'transaction', 'replace_all', 'require_observation', 'retry', 'eol', 'no_overwrite', 'allow_unobserved'],
-        addressKinds: [...new Set([...FLAT_ADDRESS_KEYS, 'old', 'context', 'position'])],
-        addressSafety: {
-          contentVerified: ['old', 'handle'],
-          structural: ['target', 'structure', 'entity'],
-          coordinate: ['lines', 'start_line', 'end_line', 'line_cue', 'anchor'],
-          coordinateNeedsObservation: false,
-          lineAddressNeedsExpect: ['lines', 'start_line', 'end_line'],
-        },
-        writeSafety: {
-          cli: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'delivered-coverage', 'byte-verify'],
-          mcp: ['workspace-lock', 'stale-region-gate', 'observation-gate', 'delivered-coverage', 'byte-verify'],
-          dsh: ['stale-region-gate', 'observation-gate', 'delivered-coverage', 'byte-verify'],
-        },
-      },
-    ],
-    commands: ['basetools read', 'basetools apply', 'basetools mcp', 'basetools doctor', 'basetools capabilities', '--version', '--help'],
-    langs: Object.keys(LANGS).sort(),
-    langsCount: Object.keys(LANGS).length,
-    // 可读可写的编码（实测过的探测 + 回编码）。非 UTF-8 不再拒绝；不可逆/猜不准时**写**拒绝。
+    // 工具表 / 命令表 / 语言表 / 限额都取自运行期那一份（CLI `basetools capabilities` 与
+    // MCP 面出去的就是它）——以前两件事各抄一遍，抄漏的那格就是 `views`：
+    // 构建清单和运行时都写着 `entity`/`grep`/`image`，读起来像 `mode` 的取值，
+    // 而三个都不在 enum 里（照它发 ⇒ `READ_BAD_MODE`）。现在这类词表只有一份，
+    // 而且由引擎导出（`MODES` / `FLAT_ADDRESS_KEYS` / `LANGS`），构建期无从再编一套。
+    ...envelope,
+    // 只有构建期才知道的三件：编码词表、`map` 认的文档类型、dist 清单里的打包事实。
     textEncodings: [...SUPPORTED_ENCODINGS],
-    // `map` 能给出结构目录的文档/配置类型（代码语言看 `langs`）。
-    docKinds: ['markdown', 'json', 'yaml', 'toml'],
+    // 文档类型从引擎那张分发表派生（`DOC_KINDS` 的值集）——手抄的四个名字正是 `views` 的形态：
+    // 表里多一个/改一个，`mode=map` 就退化成 `no structure index for …`，而清单仍宣称支持它。
+    docKinds: [...new Set(Object.values(DOC_KINDS))],
     limits: {
-      multiTargetsMax: MT_MAX_TARGETS,
-      multiTargetPool: MT_POOL,
-      defaultPruneBudget: DEFAULT_PRUNE_BUDGET,
-      envelopeAllowance: DEFAULT_ENVELOPE_ALLOWANCE,
-      contentBudget: CONTENT_BUDGET,
-      // `full` = up to budget（反馈 D5）：能被 `budget` 顶大，但没有“一次给全”的保证。
+      ...envelope.limits,
+      // `full` = up to budget（反馈 D5）：能被 `budget` 顶大，但没有"一次给全"的保证。
       defaultContentBudget: CONTENT_BUDGET,
       maxContentBudget: null,
-      handlesPerReceipt: HANDLE_MAX_PER_RECEIPT,
     },
     packaging: {
-      corePackage: 'aura-basetools',
-      adapterPackage: 'aura-basetools-dsh',
+      ...envelope.packaging,
       coreDshFree: dshDeps === null ? null : dshDeps.length === 0,
       ...(dshDeps === null ? {} : { coreDshImports: dshDeps }),
     },

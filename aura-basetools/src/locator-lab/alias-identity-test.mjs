@@ -577,8 +577,9 @@ say('=== F. 登记与退出码：本文件自己表态（闸侧登记在 build/r
   check(/通过|失败/.test(text), 'F2 本套件自带通过/失败汇总行（闸的 §⑩ 普查按形态收它）')
   const ledgerText = fs.readFileSync(path.join(pkgRoot, 'build', 'release-check.mjs'), 'utf8')
   check(
-    /alias-identity-test\.mjs/.test(ledgerText),
-    'F3 本套件已登记进闸（SUITES）—— 没登记等于不存在',
+    // 只认"文件名在这个文件里"会被注释/单据骗过；要求整条登记行、且第三格是条数基线。
+    /\[\s*'[^']*'\s*,\s*'src\/locator-lab\/alias-identity-test\.mjs'\s*,\s*\d+\s*\]/.test(ledgerText),
+    'F3 本套件已登记进闸（SUITES，带条数基线）—— 没登记等于不存在',
     /alias-identity-test\.mjs/.test(ledgerText) ? 'found' : 'missing',
   )
   /**

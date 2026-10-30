@@ -122,6 +122,10 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
 - 猜不准（medium/low）或编码不可逆时，**写会被拒绝**（`ENCODING_AMBIGUOUS` / `ENCODING_NOT_ROUNDTRIP_SAFE`）；
   用 `AURA_ENCODING=gb18030`（或服务配置的 env）显式指定即可继续。
 - 目标编码表示不了的字符（如 GBK 里没有的扩展区汉字）⇒ `ENCODING_UNREPRESENTABLE`，零写入。
+- **探测词表 ≠ 可用词表**：上面那五个是探测候选（`windows-1252` 是兜底，任何字节都能解），
+  显式指定时能读写的是 `capabilities.textEncodings` 那 23 个（其余单字节代码页不进探测候选——
+  单字节解码永不失败，会抢掉 CJK 的判决）。DSH 工具面的 `convert` 只写 UTF-8（宿主 `writeText` 的契约），
+  `from` 交平台的 `TextDecoder`，解不出时给出可执行的拒绝并指向 CLI。
 
 ## 3. 看回执：不要回读，直接用句柄
 
@@ -167,9 +171,22 @@ CLI `aura basetools write --file <路径> --content <文本|@文件>` / MCP 与 
 
 ## 6. 诊断
 
-装完先跑 `aura basetools doctor --json`：Node/版本/MCP 握手/缓存与锁目录。MCP 侧可用 `aura_basetools_read` /
-`aura_basetools_edit` / `aura_basetools_write` 三个工具自检。
-DSH 面提供 `aura_basetools_read` / `aura_basetools_edit` / `aura_basetools_write` 三个工具（没有事务/undo 入口）。
+装完先跑 `aura basetools doctor --json`：Node/版本/MCP 握手/服务根/缓存与锁目录，任一失败 exit 2。
+公开面只有两个工具（`aura_basetools_read` / `aura_basetools_apply`）——`edit`/`write`/`convert`/`tx` 是隐藏的历史名，
+`tools/list` 默认不列（`AURA_TEST_EXPOSE_LEGACY=1` 才列），别按三个工具自检。
+
+**接线要接到宿主自己身上**：一个产物可以接多个宿主，但每个宿主的 stdio 服务必须钉**它自己**的工作区根。
+症状是"能连上、工具也能跑，只是读写落在别的目录"——实测有宿主把 cwd 给成它自己的安装目录，
+于是相对路径解析进安装包、workspace 锁与事务按假根分桶（不同项目共用一把锁），坏的是闸门记账而不是报错。
+
+- 优先级：`--cwd` > `AURA_ROOT` > 进程 cwd（`lib/ops.mjs:workspaceRootPin`，CLI 与 MCP 共用一份）。
+- 两种形状，按宿主的配置形状挑：
+  - env：`AURA_ROOT=/path/to/project`（只能填命令行、改不了 cwd 的宿主用这条）
+  - 命令行：`aura basetools mcp --cwd "/path/to/project"`
+- 验它接没接上：`doctor` 的 `root` 报"算出来的根"，`root-echoed` 报"服务中的根"（从子进程
+  `initialize.instructions` 反读）——两格一致才说明旋钮真的到了 provider；连上之后那一行本来就写在
+  `initialize.instructions` 末尾，客户端能看到。显式钉到一个不存在的目录 ⇒ `root` 红、exit 2；
+  没钉（落在进程 cwd）不判红，那是"还没接"而不是"接错"。
 
 ## 7. 硬约束（不要交易）
 

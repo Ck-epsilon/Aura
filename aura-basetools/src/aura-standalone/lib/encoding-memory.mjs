@@ -20,6 +20,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { isKnownEncodingName, normalizeEncodingName } from './encoding.mjs'
 
 const MAX_ENTRIES = 500
 
@@ -61,6 +62,7 @@ function stampOf(stat) {
 /** 记住一个文件的编码（UTF-8 不记：它是默认值，记住只会让表变脏）。 */
 export function rememberEncoding(displayPath, encoding, stat) {
   if (typeof displayPath !== 'string' || typeof encoding !== 'string') return
+  if (!isKnownEncodingName(encoding)) return
   if (encoding === 'utf-8') return
   const stamp = stampOf(stat)
   if (stamp === null) return
@@ -78,10 +80,22 @@ export function rememberEncoding(displayPath, encoding, stat) {
 /** 取回记忆的编码；指纹对不上返回 undefined。 */
 export function recallEncoding(displayPath, stat) {
   if (typeof displayPath !== 'string') return undefined
-  const entry = readAll()[path.resolve(displayPath)]
+  const key = path.resolve(displayPath)
+  const all = readAll()
+  const entry = all[key]
   if (entry === undefined || typeof entry.encoding !== 'string') return undefined
+  /**
+   * 表里这个词表外的名字**只可能来自旧版本**（现在写侧已经挡住了）。留着它，
+   * 这个文件的每一次调用都会解码失败，而失败原因藏在表里看不见——所以直接抹掉这条，
+   * 回到探测。记忆是加速器：**认不出来的记忆必须等于没有记忆**。
+   */
+  if (!isKnownEncodingName(entry.encoding)) {
+    delete all[key]
+    writeAll(all)
+    return undefined
+  }
   const stamp = stampOf(stat)
   if (stamp === null) return undefined
   if (entry.size !== stamp.size || entry.mtimeMs !== stamp.mtimeMs) return undefined
-  return entry.encoding
+  return normalizeEncodingName(entry.encoding)
 }

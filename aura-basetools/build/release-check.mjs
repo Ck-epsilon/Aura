@@ -11,6 +11,10 @@
  *   ⑤ **拆包**（两个 npm 包装起来真能用）⑥ 版本一致性 ⑦ DSH 就绪 ⑧ **普查完整性**（C32）
  *
  * 它只汇总与判定，不替任何套件做判断：每个套件自己打印汇总行并以退出码表态。
+ * **但"自报成绩"要能被核对**（1.0.3 补）：退出码只说明"没有失败"，管不了"判据少了一条"。
+ * 因此每件套件在 `SUITES` 行里带一条**判据条数基线**，自跳必须登记在 `SKIP_OK` 并写明理由，
+ * 子进程环境由闸自己决定（剔除 `AURA_*` / `NODE_OPTIONS`）—— 否则开发机 shell 里的一个变量
+ * 就能让闸量到另一份产品，而输出与 CI 一模一样。
  * 明确不在检查范围的一件事：**DSH 工具面要重启宿主才生效**（那是人的动作，不是构建产物的问题）。
  *
  * ⑩ 是 C32 加的，因为 ① 的清单是**人手抄的**：`byte-fidelity.mjs` 自带 102 条断言与退出码，
@@ -38,23 +42,67 @@ const rows = []
  *  这件事本身。 */
 const ranSuites = []
 /**
- * 这些套件在闸内**必须真的跑出断言**。它们跳过时按失败计（`⏭` 仍显示，但闸红）；
- * 环境依赖型（缺 peer / 缺 dist / 平台不支持硬链接）的其他套件跳过只记 `⏭`，不算通过。
+ * 允许自报 `0/0 通过（已跳过）` 的套件：**每一条都要写清"为什么这台机器上跑不了它"**。
+ * 不在这张表里而自跳 ⇒ 闸红 —— 旧版反过来（非 CRITICAL_SUITES 跳过只记 ⏭），于是**默认值就是
+ * 静默放行**：新加一个套件，跳过它不需要任何人的决定。
  */
-const CRITICAL_SUITES = new Set([
-  'write-verify', 'stale-gate', 'byte-fidelity', 'encoding-fidelity', 'span-fidelity', 'arg-shape', 'read-schema', 'range-args', 'standalone', 'write', 'replace-all', 'observation-gate', 'verify-edit', 'tx-session', 'argument-surface', 'single-line-target', 'observation-concurrency', 'range-bytes', 'aura-read/load', 'aura-edit/load', 'capabilities', 'public-surface', 'ci-contract', 'entity-apply', 'docs-surface',
+const SKIP_OK = new Map([
+  ['installed-package', '本机没装全局包时自跳（`~/.aura/pkg/node_modules/aura-basetools` 不存在）；CI 不装全局包，安装形态由 split-package 从 tgz 覆盖'],
+  ['read2', '本机解析不到 DSH 语料时自跳（`dshModulesRoot()` 返回 null）；CI 装宿主 peer，闸内覆盖'],
+  ['real-framework', '本机解析不到宿主 peer（dsh-tools / schemastery）时自跳；CI 装 peer，闸内覆盖'],
 ])
-const run = (relative, args = []) =>
-  spawnSync(process.execPath, [path.join(root, relative), ...args], { cwd: root, encoding: 'utf8', timeout: 1800000 })
+/**
+ * 子进程环境：剔除一切**能改变被测面**的注入。
+ *
+ * 为什么：`AURA_TEST_EXPOSE_LEGACY=1` 会让 MCP 面多出历史工具（argument-surface 测的就不再是
+ * 公开面），`AURA_ENCODING` 会让编码拒绝不再发生（encoding-refusal 静默变绿），`AURA_ROOT` 会让
+ * 相对路径落到别的树。这些只要在**开发机 shell** 里存在，闸就会量到另一份产品——而输出与 CI 一模一样。
+ * 所以闸自己决定子进程环境：只留系统变量，AURA_* 与 NODE_OPTIONS 一律不传，并在报告里点名剔除了谁。
+ */
+const SCRUBBED_ENV_KEYS = Object.keys(process.env).filter((key) => /^AURA_/.test(key) || key === 'NODE_OPTIONS')
+const CHILD_ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => !SCRUBBED_ENV_KEYS.includes(key)))
+const run = (relative, args = [], cwd = root) =>
+  spawnSync(process.execPath, [path.join(root, relative), ...args], { cwd, encoding: 'utf8', timeout: 1800000, env: CHILD_ENV })
+/**
+ * 从套件自报的汇总行里取判据条数。两种写法都要认得（仓里各套件都在用）：
+ *   `--- 61/61 通过 ---`（分子/分母）与 `--- 5 通过 / 0 失败 ---`（分开写）。
+ * 认不出 ⇒ null（闸按失败处理：**没有可核对的数字**就不是一个可核对的套件）。
+ */
+function parseSummary(text) {
+  if (typeof text !== 'string' || text.length === 0) return null
+  const pair = text.match(/(\d+)\s*\/\s*(\d+)/)
+  if (pair !== null) return { pass: Number(pair[1]), total: Number(pair[2]), fail: Number(pair[2]) - Number(pair[1]) }
+  const passWord = text.match(/(\d+)\s*通过/)
+  if (passWord === null) return null
+  const failWord = text.match(/(\d+)\s*失败/)
+  return { pass: Number(passWord[1]), total: null, fail: failWord === null ? 0 : Number(failWord[1]) }
+}
 
-/** 跑一个"自报成绩"的套件：取最后一行含"通过"的文本作为摘要，退出码为准。 */
-function suite(name, relative, group = '套件') {
-  ranSuites.push(relative)
+/**
+ * 跑一个"自报成绩"的套件：**退出码 + 汇总行 + 判据条数基线**三样一起判。
+ *
+ * 为什么单有退出码不够（这是本轮补的那只眼睛）：退出码只说明"没有断言失败"，**管不了
+ * 断言少了不少**。把 `check(...)` 删掉一行、把一段塞进 `if (fs.existsSync(...))` 里、把整个
+ * 循环的数组清空 —— 三种都是 exit 0、汇总行照印"38/38 通过"，而 `suite()` 旧版看到的就是 ✅。
+ * 现在每个套件在 `SUITES` 行里带一个**基线**（它必须跑到的判据条数）：
+ *   · 条数 < 基线 ⇒ 红（真删了 / 静默跳过了 —— 两者在输出上不可区分，所以按红处理）；
+ *   · 条数 > 基线 ⇒ 也红，并提示"把基线抬上去"：多出来的判据要经过一次人的确认才算数，
+ *     否则"今天 38、明天 12、基线还在 38"这种漂移在下一次减条时会被当成正常而放过；
+ *   · 汇总行自报 `失败 > 0` ⇒ 红（防止套件自己吞掉失败只 exit 0）；
+ *   · 汇总行认不出 / 没有汇总行 ⇒ 红（没有数字就没有可核对的对象）。
+ * 跳过（`0/0 通过（已跳过）`）只对 `SKIP_OK` 里逐条写明理由的套件放行，其余记红。
+ *
+ * 抓不到（已知盲区，写在这里而不是假装没有）：**条数不变而判定力下降** —— 把
+ * `check(a === b)` 改成 `check(true)`、把断言的期望值改成实际值，条数一模一样。那是每件套件
+ * 自己的事（与 §⑩ 的“登记了不等于判得动”同一条边界），机检只能保证"少了一条会被看见"。
+ */
+function suite(name, relative, baseline, group = '套件', { cwd = root, census = true } = {}) {
+  if (census) ranSuites.push(relative)
   if (!fs.existsSync(path.join(root, relative))) {
     rows.push({ group, name, status: 'missing', summary: '(文件不存在)' })
     return
   }
-  const res = run(relative)
+  const res = run(relative, [], cwd)
   const outputLines = (res.stdout ?? '').trim().split('\n').filter((line) => line.trim() !== '')
   const summary = outputLines.filter((line) => line.includes('通过') || line.includes('失败')).pop()
   // 失败时把子进程里有信息量的行带出来。否则 CI 上只能看到“N/M 通过”，
@@ -62,117 +110,157 @@ function suite(name, relative, group = '套件') {
   const failedLines = outputLines.filter((line) => /✗|FAIL|not found|ENOENT|Error|错误/i.test(line))
   const failTail = (failedLines.length > 0 ? failedLines : outputLines).slice(-3).map((line) => line.trim()).join(' | ')
   const stderrTail = (res.stderr ?? '').trim().split('\n').filter(Boolean).slice(-2).join(' | ')
-  /**
-   * 跳过 ≠ 通过。若干套件在缺 DSH peer / 缺 dist / 平台不允许硬链接时自报
-   * `--- 0/0 通过（已跳过）---` 并以 exit 0 结束；旧版把它们记成 ✅。
-   * 现在统一记 `skipped`，可执行的部分由 `CRITICAL_SUITES` 兜底。
-   */
-  const skipped = res.status === 0 && /0\/0|已跳过|skipped/i.test(summary ?? '')
-  const isCritical = CRITICAL_SUITES.has(name)
-  const status = res.status !== 0 ? 'fail' : skipped ? (isCritical ? 'fail' : 'skipped') : 'ok'
+  const skipText = /0\/0|已跳过|skipped/i.test(summary ?? '')
+  const parsed = parseSummary(summary)
+  let status = 'ok'
+  let note = ''
+  if (typeof baseline !== 'number') {
+    status = 'fail'
+    note = '这一行没有登记判据条数基线（SUITES 行的第三格）—— 没有基线就查不出"判据少了一条"'
+  } else if (res.status !== 0) {
+    status = 'fail'
+  } else if (skipText) {
+    const why = SKIP_OK.get(name)
+    status = why === undefined ? 'fail' : 'skipped'
+    note = why === undefined ? '自报了跳过，但不在 SKIP_OK 里：要么让它真跑，要么在 SKIP_OK 写下这台机器为什么跑不了它' : why
+  } else if (parsed === null) {
+    status = 'fail'
+    note = '没有可解析的汇总行（形如 `--- N/M 通过 ---` 或 `--- N 通过 / M 失败 ---`）'
+  } else if (parsed.fail !== 0) {
+    status = 'fail'
+    note = `汇总行自报失败 ${parsed.fail} 条`
+  } else if (parsed.pass !== baseline) {
+    status = 'fail'
+    note = `判据条数 ${parsed.pass} ≠ 基线 ${baseline}（少了：真删或静默跳过；多了：确认后把基线抬上去）`
+  }
   rows.push({
     group,
     name,
     status,
-    summary: skipped && isCritical
-      ? `critical suite skipped: ${(summary ?? '').trim()}`
-      : status === 'fail'
-        ? `${(summary ?? '').trim()}${failTail ? ` | ${failTail}` : ''}${stderrTail ? ` | stderr: ${stderrTail}` : ''}`
-        : (summary ?? '').trim(),
+    summary: status === 'fail'
+      ? `${(summary ?? '(无汇总行)').trim()} | ${note}${failTail ? ` | ${failTail}` : ''}${stderrTail ? ` | stderr: ${stderrTail}` : ''}`
+      : status === 'skipped'
+        ? `${(summary ?? '').trim()}（SKIP_OK：${note}）`
+        : `${(summary ?? '').trim()} · 基线 ${baseline}`,
     stderr: (res.stderr ?? '').trim().split('\n').slice(0, 2).join(' | '),
   })
 }
 
-// ① 既有套件（顺序固定：先引擎、再工具壳）
+// ① 既有套件（顺序固定：先引擎、再工具壳）。第三格 = **判据条数基线**（见 `suite()` 的注释：
+// 删一条、静默跳过、汇总写死都会在条数上现形）。基线是**实测值**，不是估计值 ——
+// 往套件里加判据之后，闸会红并告诉你新读数，照它改这一格；**降基线需要说明理由**，
+// 因为那等于取消一层保护（唯一正当情况：判据被合并成等价的一条，而不是被删掉）。
 const SUITES = [
   // 测试分层（2026-10-27 起）：只保留 interface / integration / system 三层。
   // 单元层已从闸门移除并归档到 docs/archive/unit-tests（不运行、不发货）。
   // 新增套件必须属于三层之一；纯函数/单内部函数断言不进这里。
-  ['write-verify', 'src/locator-lab/write-verify-test.mjs'],
-  ['stale-gate', 'src/locator-lab/stale-gate-test.mjs'],
-  ['byte-fidelity', 'src/locator-lab/byte-fidelity-test.mjs'],
-  ['encoding-fidelity', 'src/locator-lab/encoding-fidelity.mjs'],
-  ['span-fidelity', 'src/locator-lab/span-fidelity.mjs'],
-  ['policy-arg', 'src/locator-lab/policy-arg-test.mjs'],
-  ['read-schema', 'src/locator-lab/aura-read-schema-test.mjs'],
-  ['read2', 'src/locator-lab/read-test2.mjs'],
-  ['adapters', 'src/locator-lab/adapters.mjs'],
-  ['arg-shape', 'src/locator-lab/arg-shape-test.mjs'],
-  ['real-framework', 'src/locator-lab/real-framework-smoke-test.mjs'],
-  ['public-surface', 'src/locator-lab/public-surface-test.mjs'],
-  ['embeddability', 'src/locator-lab/embeddability-test.mjs'],
-  ['cli-mcp-e2e', 'src/locator-lab/cli-mcp-e2e-test.mjs'],
-  ['schema-portability', 'src/locator-lab/schema-portability-test.mjs'],
-  ['encoding', 'src/locator-lab/encoding-test.mjs'],
-  ['preflight', 'src/locator-lab/preflight-test.mjs'],
-  ['retry', 'src/locator-lab/retry-test.mjs'],
-  ['coverage', 'src/locator-lab/coverage-test.mjs'],
-  ['structure', 'src/locator-lab/structure-test.mjs'],
-  ['probe', 'src/locator-lab/probe-test.mjs'],
-  ['surface-parity', 'src/locator-lab/surface-parity-test.mjs'],
-  ['interrupt-posture', 'probes/interrupt-matrix.mjs'],
-  ['installed-package', 'src/locator-lab/installed-package-test.mjs'],
-  ['range-args', 'src/locator-lab/range-args-test.mjs'],
-  ['range-error-lifecycle', 'src/locator-lab/range-error-lifecycle-test.mjs'],
-  ['standalone', 'src/aura-standalone/test/standalone-test.mjs'],
-  ['argument-surface', 'src/aura-standalone/test/argument-surface-test.mjs'],
-  ['observation-concurrency', 'src/aura-standalone/test/observation-concurrency-test.mjs'],
-  ['write', 'src/aura-standalone/test/write-test.mjs'],
-  ['range-bytes', 'src/aura-standalone/test/range-bytes-test.mjs'],
-  ['aura-read/outcome', 'src/aura-read/outcome-test.mjs'],
-  ['aura-edit/outcome', 'src/aura-edit/outcome-test.mjs'],
-  ['aura-read/load', 'src/aura-read/load-test.mjs'],
-  ['aura-edit/load', 'src/aura-edit/load-test.mjs'],
-  ['aura-edit/align', 'src/aura-edit/align-test.mjs'],
-  ['already-applied-shell', 'src/aura-edit/already-applied-shell-test.mjs'],
-  ['encoding-refusal', 'src/locator-lab/encoding-refusal-test.mjs'],
-  ['observation-store-identity', 'src/locator-lab/observation-store-identity-test.mjs'],
-  ['index-scaling', 'src/locator-lab/index-scaling-test.mjs'],
-  ['alias-identity', 'src/locator-lab/alias-identity-test.mjs'],
-  ['repair-address-shell', 'src/aura-edit/repair-address-shell-test.mjs'],
-  ['verify-edit', 'src/locator-lab/verify-edit-test.mjs'],
-  ['tx-session', 'src/locator-lab/tx-session-test.mjs'],
-  ['replace-all', 'src/locator-lab/replace-all-test.mjs'],
-  ['single-line-target', 'src/locator-lab/single-line-target-test.mjs'],
-  ['observation-gate', 'src/locator-lab/observation-gate-test.mjs'],
-  ['concurrency-crash', 'src/locator-lab/concurrency-crash-test.mjs'],
-  ['task-bench', 'build/task-bench.mjs'],
-  ['post-publish', 'build/post-publish-check.mjs'],
-  ['perf-gate', 'build/perf-gate.mjs'],
-  ['doctor', 'src/aura-standalone/test/doctor-test.mjs'],
-  ['capabilities', 'build/capabilities-test.mjs'],
-  ['docs-surface', 'src/locator-lab/docs-surface-test.mjs'],
-  ['ci-contract', 'build/ci-contract-test.mjs'],
-  ['entity-apply', 'src/aura-standalone/test/entity-apply-test.mjs'],
+  ['write-verify', 'src/locator-lab/write-verify-test.mjs', 42],
+  ['stale-gate', 'src/locator-lab/stale-gate-test.mjs', 95],
+  ['byte-fidelity', 'src/locator-lab/byte-fidelity-test.mjs', 102],
+  ['encoding-fidelity', 'src/locator-lab/encoding-fidelity.mjs', 32],
+  ['span-fidelity', 'src/locator-lab/span-fidelity.mjs', 95],
+  ['policy-arg', 'src/locator-lab/policy-arg-test.mjs', 15],
+  ['read-schema', 'src/locator-lab/aura-read-schema-test.mjs', 87],
+  ['read2', 'src/locator-lab/read-test2.mjs', 59],
+  ['adapters', 'src/locator-lab/adapters.mjs', 32],
+  ['arg-shape', 'src/locator-lab/arg-shape-test.mjs', 33],
+  ['real-framework', 'src/locator-lab/real-framework-smoke-test.mjs', 41],
+  ['public-surface', 'src/locator-lab/public-surface-test.mjs', 43],
+  ['embeddability', 'src/locator-lab/embeddability-test.mjs', 21],
+  ['cli-mcp-e2e', 'src/locator-lab/cli-mcp-e2e-test.mjs', 23],
+  ['schema-portability', 'src/locator-lab/schema-portability-test.mjs', 5],
+  ['encoding', 'src/locator-lab/encoding-test.mjs', 63],
+  ['preflight', 'src/locator-lab/preflight-test.mjs', 29],
+  ['retry', 'src/locator-lab/retry-test.mjs', 24],
+  ['coverage', 'src/locator-lab/coverage-test.mjs', 7],
+  ['structure', 'src/locator-lab/structure-test.mjs', 16],
+  ['probe', 'src/locator-lab/probe-test.mjs', 21],
+  ['surface-parity', 'src/locator-lab/surface-parity-test.mjs', 14],
+  ['interrupt-posture', 'probes/interrupt-matrix.mjs', 21],
+  ['installed-package', 'src/locator-lab/installed-package-test.mjs', 19],
+  ['range-args', 'src/locator-lab/range-args-test.mjs', 78],
+  ['range-error-lifecycle', 'src/locator-lab/range-error-lifecycle-test.mjs', 6],
+  ['standalone', 'src/aura-standalone/test/standalone-test.mjs', 215],
+  ['argument-surface', 'src/aura-standalone/test/argument-surface-test.mjs', 26],
+  ['observation-concurrency', 'src/aura-standalone/test/observation-concurrency-test.mjs', 9],
+  ['write', 'src/aura-standalone/test/write-test.mjs', 61],
+  ['range-bytes', 'src/aura-standalone/test/range-bytes-test.mjs', 217],
+  ['aura-read/outcome', 'src/aura-read/outcome-test.mjs', 79],
+  ['aura-edit/outcome', 'src/aura-edit/outcome-test.mjs', 172],
+  ['aura-read/load', 'src/aura-read/load-test.mjs', 81],
+  ['aura-edit/load', 'src/aura-edit/load-test.mjs', 99],
+  ['aura-edit/align', 'src/aura-edit/align-test.mjs', 12],
+  ['already-applied-shell', 'src/aura-edit/already-applied-shell-test.mjs', 85],
+  ['encoding-refusal', 'src/locator-lab/encoding-refusal-test.mjs', 57],
+  ['observation-store-identity', 'src/locator-lab/observation-store-identity-test.mjs', 29],
+  ['index-scaling', 'src/locator-lab/index-scaling-test.mjs', 21],
+  ['alias-identity', 'src/locator-lab/alias-identity-test.mjs', 47],
+  ['repair-address-shell', 'src/aura-edit/repair-address-shell-test.mjs', 6],
+  ['verify-edit', 'src/locator-lab/verify-edit-test.mjs', 17],
+  ['tx-session', 'src/locator-lab/tx-session-test.mjs', 24],
+  ['replace-all', 'src/locator-lab/replace-all-test.mjs', 36],
+  ['single-line-target', 'src/locator-lab/single-line-target-test.mjs', 27],
+  ['observation-gate', 'src/locator-lab/observation-gate-test.mjs', 32],
+  ['concurrency-crash', 'src/locator-lab/concurrency-crash-test.mjs', 12],
+  ['task-bench', 'build/task-bench.mjs', 8],
+  ['post-publish', 'build/post-publish-check.mjs', 25],
+  ['perf-gate', 'build/perf-gate.mjs', 7],
+  ['doctor', 'src/aura-standalone/test/doctor-test.mjs', 19],
+  ['capabilities', 'build/capabilities-test.mjs', 36],
+  ['docs-surface', 'src/locator-lab/docs-surface-test.mjs', 11],
+  ['ci-contract', 'build/ci-contract-test.mjs', 21],
+  ['entity-apply', 'src/aura-standalone/test/entity-apply-test.mjs', 63],
 ]
-for (const [name, relative] of SUITES) suite(name, relative)
+for (const [name, relative, baseline] of SUITES) suite(name, relative, baseline)
+
+// ①b 被测面干净吗：闸**替子进程决定环境**，不继承开发机 shell 里能改变判决的那些变量。
+// 这一行只读数、恒 ✅，作用是让"这次量的到底是哪一份产品"当场可见 —— 剔除了谁、跑在哪个 Node 上，
+// 都写在这里。Node 版本为什么也要露出来：本闸的绿只对**这一个版本**负责，包声明的
+// `engines.node` 下限（>=18）由 split-package 的 API 表静态核对，18/20 的真跑在 CI smoke 里。
+// 它本身也可以被证伪：设 AURA_TEST_EXPOSE_LEGACY=1 跑一次闸，这一行会点名，而套件读数不变。
+rows.push({
+  group: '闸门',
+  name: '环境',
+  status: 'ok',
+  summary:
+    `${SCRUBBED_ENV_KEYS.length === 0 ? '子进程环境未剔除任何键（本机 shell 里没有 AURA_*/NODE_OPTIONS）' : `已剔除 ${SCRUBBED_ENV_KEYS.length} 个可能改变被测面的键：${SCRUBBED_ENV_KEYS.join(', ')}`}` +
+    `；运行时 Node ${process.version}（本闸的绿只对它负责；声明下限由 split-package 的 API 表核对，18/20 由 CI smoke 真跑）`,
+})
 
 // ② 三套靶场（range-all 自己做汇总与退出码）
+//
+// 旧版只看它打印的 ✅/❌ 行，**没看退出码** —— 一个在末尾抛异常（exit 1）却已经把三行 ✅ 打完的
+// range-all，会被记成三项 ✅。而它恰恰是"靶场"这一层的唯一执行者：退出码是它自己的表态通道，
+// 不读它等于把这一层的判决权交给文本。现在两样一起要：退出码 0 + 三个靶场名逐个在场。
 {
+  const EXPECTED = ['字节形态', '参数形态', '错误闭环']
   const res = run('build/range-all.mjs')
   const lines = (res.stdout ?? '').trim().split('\n')
   for (const line of lines.filter((l) => /[✅❌⚪]/.test(l))) {
     const status = line.includes('✅') ? 'ok' : line.includes('⚪') ? 'missing' : 'fail'
     rows.push({ group: '靶场', name: line.replace(/[✅❌⚪]/g, '').trim().split(/\s{2,}/)[0], status, summary: '' })
   }
-  if (rows.filter((r) => r.group === '靶场').length === 0) {
-    rows.push({ group: '靶场', name: '(range-all 没有输出)', status: 'fail', summary: (res.stderr ?? '').trim().slice(0, 120) })
+  const seen = new Set(rows.filter((r) => r.group === '靶场').map((r) => r.name))
+  const absent = EXPECTED.filter((name) => !seen.has(name))
+  if (res.status !== 0 || absent.length > 0) {
+    rows.push({
+      group: '靶场',
+      name: '(range-all 自身)',
+      status: 'fail',
+      summary: `exit=${res.status}${absent.length > 0 ? `；缺席的靶场：${absent.join(',')}` : ''}${(res.stderr ?? '').trim() !== '' ? `；stderr: ${(res.stderr ?? '').trim().split('\n').slice(0, 2).join(' | ')}` : ''}`,
+    })
   }
 }
 
-// ③ 包内自带验收（发出去的那一份）
+// ③ 包内自带验收（发出去的那一份）：走与 ① 完全相同的判决（退出码 + 汇总行 + 条数基线）。
+// 它和 ① 的 `standalone` 是同一份源、**不同字节**的两份产物（dist 里那份多一条"我在包里"的判据），
+// 所以基线分开记：源侧 215、包内 216。
 {
   const manifest = path.join(root, 'dist', 'aura-basetools', 'package.json')
   if (!fs.existsSync(manifest)) {
     rows.push({ group: '包内', name: 'standalone-test', status: 'missing', summary: '(dist/aura-basetools 还没构建)' })
   } else {
-    const res = spawnSync(process.execPath, [path.join(root, 'dist', 'aura-basetools', 'test', 'standalone-test.mjs')], {
-      cwd: path.join(root, 'dist', 'aura-basetools'),
-      encoding: 'utf8',
-      timeout: 600000,
-    })
-    const summary = (res.stdout ?? '').trim().split('\n').filter((l) => l.includes('通过')).pop()
-    rows.push({ group: '包内', name: 'standalone-test', status: res.status === 0 ? 'ok' : 'fail', summary: (summary ?? '').trim() })
+    suite('dist/standalone-test', 'dist/aura-basetools/test/standalone-test.mjs', 216, '包内', { cwd: path.join(root, 'dist', 'aura-basetools'), census: false })
   }
 }
 
@@ -186,13 +274,22 @@ for (const [name, relative] of SUITES) suite(name, relative)
   const pairs = runtimePairs()
   const sha = (p) => (fs.existsSync(path.join(root, p)) ? crypto.createHash('sha256').update(fs.readFileSync(path.join(root, p))).digest('hex') : null)
   // `runtimePairs()` 的第二格是**包内相对路径**（与 make-bundle 的 out 目录对齐），
-  // 所以这里补上 `dist/aura-basetools/` 前缀——少了它会把每个文件都读成不存在。
+  // 所以下面要补上 `dist/aura-basetools/` 前缀——少了它会把每个文件都读成不存在（旧版就在这里栽过）。
+  // 两个真空绿的口子，顺手一起堵上：
+  //   ① `pairs` 为空 ⇒ `drift.length === 0` 成立，打印「0 个运行时文件逐字节一致」并通过；
+  //   ② 同一路径在**两边都不存在** ⇒ `sha(source) === sha(bundled)` 都是 null，判成"一致"。
+  // 现在的判据是"每一对**都真实存在**且哈希相等"，并把缺席的路径逐个点出来。
+  const missing = pairs.filter(([source, bundled]) => !fs.existsSync(path.join(root, source)) || !fs.existsSync(path.join(root, 'dist/aura-basetools', bundled))).map(([source]) => source)
   const drift = pairs.filter(([source, bundled]) => sha(source) !== sha(`dist/aura-basetools/${bundled}`)).map(([source]) => source)
+  const problems = []
+  if (pairs.length === 0) problems.push('runtimePairs() 是空的 —— 清单坏了，这一项什么都没比')
+  if (missing.length > 0) problems.push(`清单里的文件不存在：${missing.join(', ')}`)
+  if (drift.length > 0) problems.push(`不一致：${drift.join(', ')}（改源没重建？）`)
   rows.push({
     group: '一致性',
     name: 'src↔dist',
-    status: drift.length === 0 ? 'ok' : 'fail',
-    summary: drift.length === 0 ? `${pairs.length} 个运行时文件逐字节一致` : `不一致：${drift.join(', ')}（改源没重建？）`,
+    status: problems.length === 0 ? 'ok' : 'fail',
+    summary: problems.length === 0 ? `${pairs.length} 个运行时文件逐字节一致（两份都在场）` : problems.join('；'),
   })
 }
 
@@ -202,7 +299,7 @@ for (const [name, relative] of SUITES) suite(name, relative)
 // （核心包没有 DSH 依赖、适配器按包名 import 核心）。CI 原先只断言核心的 package.json
 // 里没有 DSH 字段 —— 那是**声明**，不是"装起来真能用"。本套件离线装两个 tgz，
 // 从装出来的那份跑 CLI / MCP / npx，并核对适配器的 import 全部解析到核心包。
-suite('split-package', 'build/split-package-test.mjs', '拆包')
+suite('split-package', 'build/split-package-test.mjs', 82, '拆包')
 
 // ⑦ 源侧版本位点：这一份清单是**唯一**的，`make-bundle.mjs` 的 `SHELLS` 必须与它同集合。
 //
@@ -435,6 +532,10 @@ const CENSUS_EXEMPT = [
   ['src/locator-lab/recoverable.mjs', '读数探针：量“失败回执附符号目录”的可救率，无判据'],
   ['src/aura-standalone/lib/transaction-store.mjs', '事务日志/回滚实现：内部用 throw 表达拒绝，没有套件的 ✓/✗ 汇总；行为由 standalone-test 的 O1–O8 覆盖'],
   ['src/aura-standalone/lib/ops.mjs', 'CLI/MCP 共用产品库：`ok` 字段是回执，不是判据/汇总；行为由 standalone/write/verify-edit/cli-mcp-e2e 覆盖'],
+  // 2026-10-30：编码词表守卫 `assertEncodingName` 命中了 S1 的 `assert(` 形态。这两件是产品库，
+  // 守卫用 throw 表达拒绝（与 transaction-store 同形），没有 ✓/✗ 汇总也没有退出码。
+  ['src/aura-standalone/lib/encoding.mjs', '编码探测/解码/回编码库：`assertEncodingName` 是对内的参数守卫（抛错带 code），不是套件判据；行为由 encoding-test / encoding-refusal-test / byte-fidelity 与 argument-surface 的 C2 编码臂覆盖'],
+  ['src/aura-standalone/lib/fs-provider.mjs', '本机文件系统提供方：`setEncodingHint` 调同一份词表守卫（抛错带 code），无汇总行与退出码；行为由 standalone-test 与 argument-surface 覆盖'],
   // ── probes/：C37 逐件定性 —— 写这句时命中形态 18 件（3 件已登记进 `SUITES`，收件理由写在
   //    那边；其余 15 件逐条写在这里，每条都注明它为什么"不是回归线"，口径见文件头 §⑩）。
   //    这三个数都是**当时快照**、不是现值：真值来源是闸输出「归属·probes」那一行的四格
@@ -785,6 +886,10 @@ const CENSUS_EXEMPT = [
   )
 
   const problems = []
+  // 真空绿：0 = 0 也满足"两个数相符"。三个数各自必须非零，否则这一项什么都没量。
+  if (auditedFiles.length === 0) problems.push('扫描根一件 .mjs/.js 都没扫到 —— 普查在空转（谓词/扫描根坏了，不是"没有未登记"）')
+  if (ranSuites.length === 0) problems.push('闸内实跑套件 0 件 —— 枚举名单是空的，普查在空转')
+  if (hits.size === 0) problems.push('没有任何文件命中断言形态 —— 形态谓词坏了，不是"全仓都没有判据"')
   if (unregistered.length > 0) {
     problems.push(
       `未登记：${unregistered.join(', ')}（自带判据/汇总却不在普查名单里：要么加进 SUITES 让它真跑，要么写进 CENSUS_EXEMPT 说明它不是套件）`,

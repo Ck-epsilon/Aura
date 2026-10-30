@@ -6,7 +6,7 @@
  *   F directory grep / G image (CLI metadata + MCP image content) / H tools/list
  *
  * USED BY:
- *   build/release-check.mjs SUITES + CRITICAL_SUITES ('entity-apply')
+ *   build/release-check.mjs SUITES ('entity-apply'，基线 63)
  *
  * 真 CLI / 真 MCP 进程；缓存与夹具都在 os.tmpdir()，不碰 ~/.aura、不碰外网。
  * 运行：node src/aura-standalone/test/entity-apply-test.mjs

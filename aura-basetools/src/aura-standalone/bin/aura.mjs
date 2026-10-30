@@ -20,6 +20,8 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
   openProvider,
+  workspaceRootPin,
+  parsePinnedRootFromInstructions,
   readEnvelope,
   editEnvelope,
   applyEnvelope,
@@ -35,6 +37,7 @@ import {
   writeEnvelope,
   diagnoseEnvelope,
   convertEnvelope,
+  inferApplyOp,
   assertReadTargets,
   assertEditTargets,
   assertKnownArgs,
@@ -94,8 +97,10 @@ const COMMAND_FLAGS = {
     bool: ['pretty', 'coverage', 'structure-handle', 'regex', 'case-sensitive', 'ignore-case'],
   },
   apply: {
-    value: ['cwd', 'file', 'entity', 'op', 'change', 'new-name', 'scope', 'evidence', 'verify', 'transaction', 'expect', 'hunks', 'targets', 'create', 'content', 'to', 'from', 'bom', 'eol', 'action'],
-    bool: ['pretty', 'dry-run', 'no-overwrite', 'allow-unobserved', 'repair-double-encoding', 'require-observation', 'retry'],
+    // 平铺地址旗标与 `edit` 同一张表（`flatHunkFromFlags`）：只在一个动词里收的新地址写法，
+    // 到另一个动词就成了「参数没成形」——那张表因此不能有两份。
+    value: ['cwd', 'file', 'entity', 'op', 'change', 'new-name', 'scope', 'evidence', 'verify', 'transaction', 'expect', 'hunks', 'targets', 'create', 'content', 'to', 'from', 'bom', 'eol', 'action', 'encoding', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'structure', 'line', 'position', 'replace', 'near'],
+    bool: ['pretty', 'dry-run', 'no-overwrite', 'allow-unobserved', 'repair-double-encoding', 'require-observation', 'retry', 'replace-all'],
   },
   edit: {
     value: ['cwd', 'file', 'targets', 'hunks', 'hunks-file', 'create', 'target', 'lines', 'start-line', 'end-line', 'line-cue', 'anchor', 'old', 'context', 'handle', 'structure', 'line', 'position', 'replace', 'expect', 'near', 'eol', 'verify', 'tx', 'encoding'],
@@ -200,6 +205,10 @@ const USAGE = [
   '  aura basetools apply --file <路径> --entity <选择器> [--op replace-body|rename] [--change <正文|@文件>] [--new-name <名字>] [--scope span|file]',
   '             [--evidence <json|@文件>] [--dry-run] [--verify "命令"] [--transaction <id>] [--expect <原文>]',
   '             （replace-body = 换整个实体正文；rename = 只换 ident 词元，注释/字符串不动；apply 自己建立新鲜观测）',
+  // 平铺写法与 edit 同一组旗标、同一个归一（flatHunk）；只写一边就等于叫用户猜哪个动词收得下它。
+  "  aura basetools apply --file <路径> (--hunks '<json>' | 平铺 --target | --lines <a,b> | --start-line <n> --end-line <n> | --line-cue <词> | --anchor <整行> | --handle <h…> | --old <原文>，外加 --replace [--expect <原文>] [--near <n>] [--replace-all])",
+  '             [--create <文本|@文件>] [--targets <json|@文件>] [--content <文本|@文件>] [--to <编码>] [--action begin|commit|rollback|status] [--encoding <编码>]',
+  '             （按行号定位的平铺 hunk 必须带 --expect，否则 PATCH_LINES_NEED_EXPECT、零写入）',
   '  aura basetools tx begin               开一个跨调用事务（后续 edit/write 用 --tx <id> 加入）',
   '  aura basetools tx commit --id <id> [--verify "命令"]  提交；verify 失败/文件被外部改过 ⇒ 拒绝并回滚',
   '  aura basetools tx rollback --id <id>  回滚整个事务（按 afterVersion 校验）',
@@ -224,6 +233,7 @@ const USAGE = [
   '  aura basetools read --file a.mjs --entity function:alpha                        # 读一个实体 + 引用 + 证据',
   '  aura basetools apply --file a.mjs --entity function:alpha --op rename --new-name omega',
   '  aura basetools apply --file a.mjs --entity function:alpha --change @body.js     # 换整个实体正文',
+  '  aura basetools apply --file a.mjs --start-line 2 --end-line 2 --replace X --expect Y  # 一个 hunk 平铺，不必先包成 JSON 数组',
   '',
   'PowerShell 两个已踩过的坑：',
   '  · 反引号 `n 写进 JSON 字符串会变成控制字符（JSON 不允许）⇒ 用 --hunks-file 或单引号 heredoc；',
@@ -330,6 +340,45 @@ const refuseShape = (where, error) =>
     1,
   )
 
+/**
+ * 平铺旗标 → 一个 hunk（`edit` 与 `apply` 共用这一张「旗标名 → 键名」表）。
+ *
+ * 单个 hunk 也可以**平铺成旗标**：`--lines 5,8 --replace 'X'`。
+ * 与 DSH 壳那边容错同一个形状（那边实测 27 次失败是 `{file_path,start_line,end_line,replace}`）。
+ * CLI 这边本来就是人/脚本在用，但“一个 hunk 不必先包成 JSON 数组”对脚本更友好：
+ * 现在 `--lines 5 --replace X` 就能改一行，不必再手写转义过的 JSON。
+ *
+ * 组装规则**不在这里**：它是引擎的 `flatHunk`（`locator-lab/args.mjs`），两个动词各调一次同一个函数。
+ * 这里只剩旗标名到键名的映射，而它必须只有一份：某一边新收了一种地址写法、另一边没跟上，
+ * 结果就是同一个 hunk 在 `edit` 落盘、在 `apply` 变成 `unknown op`——正是本项目最忌的分叉。
+ */
+const flatHunkFromFlags = () =>
+  flatHunk({
+    target: flag('target'),
+    lines: flag('lines'),
+    start_line: flag('start-line'),
+    end_line: flag('end-line'),
+    line_cue: flag('line-cue'),
+    anchor: flag('anchor'),
+    // 句柄（fs-contract-v2 / HD2）：`handle` 是地址键，`line` / `position` 是它的**从属键**。
+    // 后两个照 `target`/`lines`/`line_cue`/`anchor` 同形递进去（旗标值就是字符串，`line` 由引擎的
+    // `toLineNumber` 收敛）。**这里不判“单独给算不算地址”**——那是 `FLAT_ADDRESS_KEYS` /
+    // `HANDLE_SHAPE_KEYS` 的语义（`flatHunk` 只看地址键），CLI 另判一份就是第二份判据。
+    handle: flag('handle'),
+    structure: flag('structure'),
+    line: flag('line'),
+    position: flag('position'),
+    // 内容地址（0.10.2）：平铺 CLI 也能直接给逐字原文；`--replace-all` 用它改全部出现。
+    old: flag('old'),
+    context: flag('context'),
+    replace: flag('replace'),
+    expect: flag('expect'),
+    eol: flag('eol'),
+    replace_all: has('replace-all') ? true : undefined,
+    // 旗标值天然是字符串：`--near 42` ⇒ `'42'`。收敛层只认整数，所以在这里转一次
+    near: typeof flag('near') === 'string' && flag('near').trim() !== '' ? Number(flag('near')) : flag('near'),
+  })
+
 if (command === undefined || command === '--help' || command === '-h') emit({ ok: true, usage: USAGE }, 0)
 if (command === '--version' || command === '-v') emit({ ok: true, version: VERSION }, 0)
 /**
@@ -354,12 +403,16 @@ if (flagProblem !== undefined) {
 }
 if (command === 'mcp') {
   const { serve } = await import('./aura-mcp.mjs')
-  await serve()
+  // `--cwd` 在旗标名单里，值必须真的递下去：不递就又是一个"声明了但不生效"的旗标。
+  await serve(typeof flag('cwd') === 'string' && flag('cwd').length > 0 ? flag('cwd') : undefined)
   process.exit(0)
 }
 
 const encodingFlag = typeof flag('encoding') === 'string' && flag('encoding').length > 0 ? flag('encoding') : undefined
-const provider = openProvider(typeof flag('cwd') === 'string' ? flag('cwd') : process.cwd(), { encoding: encodingFlag })
+// 与 MCP 面同一个钉根口径（`--cwd` > `AURA_ROOT` > 进程 cwd）：三面各写一遍优先级时，
+// `doctor` 报的根就不是 CLI 用的那个（`--cwd=""` 以前还会把空串递进引擎当成"没给"）。
+const rootPin = workspaceRootPin(flag('cwd'))
+const provider = openProvider(rootPin.root, { encoding: encodingFlag })
 
 if (command === 'tx') {
   const action = argv[1]
@@ -455,6 +508,24 @@ if (command === 'doctor') {
   add('version', typeof VERSION === 'string' && VERSION.length > 0, VERSION)
   const mcpPath = fileURLToPath(new URL('./aura-mcp.mjs', import.meta.url))
   add('mcp-bin', fs.existsSync(mcpPath), mcpPath)
+  /**
+   * 服务根：先报它，再报别的（2026-10-30 接线实测）。
+   *
+   * 宿主拉起 stdio 服务时给的 cwd 未必是它当前打开的项目，于是相对路径、workspace 锁与事务
+   * 全按一个假根走——症状是"能连上、工具也能跑"，坏的是闸门记账。根错时后面每一格说的都不是
+   * 这个项目的情况，所以这一格必须排在握手之前。
+   *
+   * 判定按来源分档：**显式钉过**（`--cwd` / `AURA_ROOT`）的目录必须存在，那是接线打错字；
+   * 没人钉时落在进程 cwd，是"还没接"而不是"接错"，不判红（裸装完就该是绿的）。
+   */
+  const rootIsDir = (() => {
+    try {
+      return fs.statSync(rootPin.root).isDirectory()
+    } catch {
+      return false
+    }
+  })()
+  add('root', rootIsDir || rootPin.source === 'process.cwd', `${rootPin.root} (pinned by ${rootPin.source})${rootIsDir ? '' : ' — 目录不存在或不是目录'}`)
   const cacheDir = process.env.AURA_CACHE_DIR ?? path.join(os.homedir(), '.aura')
   if (fs.existsSync(mcpPath)) {
     const frames = [
@@ -467,12 +538,36 @@ if (command === 'doctor') {
       input: frames,
       encoding: 'utf8',
       timeout: 30000,
-      env: { ...process.env, AURA_CACHE_DIR: cacheDir },
+      // 把 CLI 算出的根**当成宿主给的 env** 递给子进程：只有显式钉过，子进程报回来的根
+      // 才可能是这条旋钮送进去的。不钉就继承 cwd，"旋钮是装饰"这种缺陷照样绿。
+      env: { ...process.env, AURA_CACHE_DIR: cacheDir, AURA_ROOT: rootPin.root },
     })
-    const tools = String(res.stdout ?? '').split('\n').flatMap((line) => {
+    const lines = String(res.stdout ?? '').split('\n')
+    const tools = lines.flatMap((line) => {
       try { return JSON.parse(line).result?.tools?.map((tool) => tool.name) ?? [] } catch { return [] }
     })
     add('mcp-handshake', res.status === 0 && tools.includes('aura_basetools_read') && tools.includes('aura_basetools_apply'), `exit=${res.status} tools=${tools.join(',') || '(none)'}`)
+    /**
+     * 旋钮是不是真的接在引擎上：`initialize.instructions` 里那一行由 `serve()` 用
+     * `workspaceRootPin()` 现算，与上面同一个函数、同一个进程的另一端。
+     * 两边读出的根一致 ⇒ 这个旋钮从 env 走到了 provider；解析不出来 ⇒ 那一行没进握手（红）。
+     */
+    const servedInstructions = lines
+      .flatMap((line) => {
+        try {
+          const msg = JSON.parse(line)
+          return msg?.id === 1 && typeof msg.result?.instructions === 'string' ? [msg.result.instructions] : []
+        } catch {
+          return []
+        }
+      })
+      .join('\n')
+    const echoed = parsePinnedRootFromInstructions(servedInstructions)
+    add(
+      'root-echoed',
+      echoed !== null && path.resolve(echoed.root) === rootPin.root,
+      echoed === null ? 'initialize.instructions 里没有"服务根"那一行（钉根旋钮没接到握手）' : `服务中的根：${echoed.root} (pinned by ${echoed.source})`,
+    )
   } else {
     add('mcp-handshake', false, 'skipped: mcp bin missing')
   }
@@ -508,12 +603,28 @@ if (command === 'doctor') {
     openai: 'strict: true (all properties required + additionalProperties:false)',
     note: 'strict 让模型不可能输出非法 JSON；不开时工具侧只能降低概率（P1 发生在工具被调用之前）',
   }
+  /**
+   * 接线配方（也是提示，不是检查项）：一个产物接多个宿主时，唯一按宿主写的就是服务根。
+   *
+   * 为什么写全两种形状：宿主的 MCP 配置五花八门——有的能填 env，有的只能填命令行，
+   * 有的（实测这一家）连 cwd 都给的是它自己的安装目录。少给一种形状，接的人就只能猜。
+   * 验证方式也一并给出：`root-echoed` 那一格量的是"钉进去的根真的到了 provider"。
+   */
+  const wire = {
+    root: rootPin.root,
+    pinned_by: rootPin.source,
+    env: `AURA_ROOT=${rootPin.root}`,
+    flag: `aura basetools mcp --cwd "${rootPin.root}"`,
+    verify: '`aura basetools doctor --cwd <dir> --json` 看 root / root-echoed；连上后 `initialize.instructions` 末尾也写着服务中的根',
+    note: '相对路径、workspace 锁与事务都按这个根分桶；宿主给的 cwd 未必是它打开的项目，所以每台宿主各钉各的',
+  }
   const report = {
     ok,
     version: VERSION,
     node: process.versions.node,
     checks,
     strict,
+    wire,
     ...(process.env.AURA_NO_LOCK === '1' ? { notes: ['AURA_NO_LOCK=1: workspace lock is disabled'] } : {}),
   }
   if (has('json')) {
@@ -522,6 +633,10 @@ if (command === 'doctor') {
   }
   process.stdout.write(`aura basetools doctor: ${ok ? 'ok' : 'FAILED'} (${VERSION}, node ${process.versions.node})\n`)
   for (const check of checks) process.stdout.write(`  ${check.ok ? '✓' : '✗'} ${check.id}: ${check.detail}\n`)
+  process.stdout.write(`  • 接线：这台宿主的相对路径落在 ${wire.root}（${rootPin.source} 钉的）——\n`)
+  process.stdout.write(`    env 形状:   ${wire.env}\n`)
+  process.stdout.write(`    命令行形状: ${wire.flag}\n`)
+  process.stdout.write(`    ${wire.verify}｜${wire.note}\n`)
   process.stdout.write(`  • strict: schemas 可转成 provider strict 变体（全 required + nullable + anyOf）——\n`)
   process.stdout.write(`    DeepSeek: ${strict.deepseek}\n`)
   process.stdout.write(`    OpenAI:   ${strict.openai}\n`)
@@ -608,38 +723,10 @@ if (command === 'edit') {
   const file = flag('file')
   if (typeof file !== 'string') emit({ ok: false, error: 'edit 需要 --file <路径>', code: 'USAGE' }, 1)
   /**
-   * 单个 hunk 也可以**平铺成旗标**：`--lines 5,8 --replace 'X'`。
-   *
-   * 与 DSH 壳那边容错同一个形状（那边实测 27 次失败是 `{file_path,start_line,end_line,replace}`）。
-   * CLI 这边本来就是人/脚本在用，但“一个 hunk 不必先包成 JSON 数组”对脚本更友好：
-   * 现在 `--lines 5 --replace X` 就能改一行，不必再手写转义过的 JSON。
-   * 两边**共用同一个 `flatHunk`**（引擎里），不是各写一份容错规则。
+   * 平铺旗标那一组走 `flatHunkFromFlags()`（与 `apply` 同一张表、引擎同一个 `flatHunk`），
+   * 判据不在 CLI 里另长一份。
    */
-  const flat = flatHunk({
-    target: flag('target'),
-    lines: flag('lines'),
-    start_line: flag('start-line'),
-    end_line: flag('end-line'),
-    line_cue: flag('line-cue'),
-    anchor: flag('anchor'),
-    // 句柄（fs-contract-v2 / HD2）：`handle` 是地址键，`line` / `position` 是它的**从属键**。
-    // 后两个照 `target`/`lines`/`line_cue`/`anchor` 同形递进去（旗标值就是字符串，`line` 由引擎的
-    // `toLineNumber` 收敛）。**这里不判“单独给算不算地址”**——那是 `FLAT_ADDRESS_KEYS` /
-    // `HANDLE_SHAPE_KEYS` 的语义（`flatHunk` 只看地址键），CLI 另判一份就是第二份判据。
-    handle: flag('handle'),
-    structure: flag('structure'),
-    line: flag('line'),
-    position: flag('position'),
-    // 内容地址（0.10.2）：平铺 CLI 也能直接给逐字原文；`--replace-all` 用它改全部出现。
-    old: flag('old'),
-    context: flag('context'),
-    replace: flag('replace'),
-    expect: flag('expect'),
-    eol: flag('eol'),
-    replace_all: has('replace-all') ? true : undefined,
-    // 旗标值天然是字符串：`--near 42` ⇒ `'42'`。收敛层只认整数，所以在这里转一次
-    near: typeof flag('near') === 'string' && flag('near').trim() !== '' ? Number(flag('near')) : flag('near'),
-  })
+  const flat = flatHunkFromFlags()
   const hunksFile = typeof flag('hunks-file') === 'string' ? flag('hunks-file') : undefined
   /**
    * 读 hunks 来源，并把错误报到**真正的来源**上。
@@ -737,8 +824,8 @@ if (command === 'apply') {
       emit({ ok: false, error: `--entity 不是合法 JSON：${error.message}；也可以直接给选择器字符串（如 function:alpha）`, code: 'USAGE' }, 1)
     }
   }
-  const fileOrValue = (value) =>
-    typeof value === 'string' && value.startsWith('@') ? readArgumentFile(value.slice(1), 'apply') : value
+  const fileOrValue = (name, value) =>
+    typeof value === 'string' && value.startsWith('@') ? readArgumentFile(value.slice(1), `--${name}`) : value
   const parseJsonFlag = (name, kind) => {
     const raw = flag(name)
     if (raw === undefined) return undefined
@@ -755,35 +842,30 @@ if (command === 'apply') {
     return value
   }
   const usage = (message) => emit({ ok: false, error: message, code: 'USAGE' }, 1)
-  const change = fileOrValue(flag('change'))
-  const content = fileOrValue(flag('content'))
-  const create = fileOrValue(flag('create'))
-  const hunks = parseJsonFlag('hunks', 'array')
+  const change = fileOrValue('change', flag('change'))
+  const content = fileOrValue('content', flag('content'))
+  const create = fileOrValue('create', flag('create'))
+  /**
+   * 平铺一组地址旗标就是**一个 hunk**：与 `edit` 同一条归一（`flatHunkFromFlags` → 引擎 `flatHunk`）。
+   *
+   * 只在这一层收形状，判据还是一个都不自造：`--start-line 2 --end-line 2 --replace X --expect Y`
+   * 过去在这儿是 `unknown flag --start-line`，而同一组旗标一动词之隔的 `edit` 能落盘。
+   * 显式 `--hunks` 在场时照 `edit` 的规则压过平铺形状（两个来源同时给，取数组那一个）。
+   */
+  const flat = flatHunkFromFlags()
+  const hunks = parseJsonFlag('hunks', 'array') ?? (flat === null ? undefined : [flat])
   const targets = parseJsonFlag('targets', 'array')
   const evidence = parseJsonFlag('evidence', 'object')
-  const op =
-    flag('op') ??
-    (content !== undefined
-      ? 'write'
-      : flag('to') !== undefined
-        ? 'convert'
-        : hunks !== undefined || targets !== undefined || create !== undefined
-          ? 'patch'
-          : flag('action') !== undefined
-            ? 'tx'
-            : entity !== undefined
-              ? (flag('new-name') !== undefined ? 'rename' : 'replace-body')
-              : undefined)
-  if (op === undefined) usage('apply 需要 --op <replace-body|rename|patch|write|convert|tx> 或可推断的字段')
-  if ((op === 'replace-body' || op === 'rename') && (typeof file !== 'string' || typeof entity === 'undefined')) {
-    usage(`${op} 需要 --file 与 --entity`)
-  }
-  if ((op === 'write' || op === 'convert') && typeof file !== 'string') usage(`${op} 需要 --file`)
-  if (op === 'patch' && typeof file !== 'string' && targets === undefined) usage('patch 需要 --file 或 --targets')
-  const env = await applyEnvelope(provider, {
+  /**
+   * 先成形**要递给引擎的那份请求**，再拿它推 op：推断只有 `lib/ops.mjs` 的 `inferApplyOp` 一份。
+   *
+   * 这里以前自己抄了一遍 if 链，而且顺序与引擎不同（`content` 排在 `to`/`action` 前面），
+   * 于是同一个载荷在两面推出两个 op：`--content X --to Y` 在 CLI 是 write、在 MCP 是 convert。
+   * 抄一份判据的结局就是这种“两面各自都自洽、接起来是坏的”。
+   */
+  const applyRequest = {
     file,
     entity,
-    op,
     change,
     newName: flag('new-name'),
     scope: flag('scope'),
@@ -806,7 +888,24 @@ if (command === 'apply') {
     verify: flag('verify'),
     transaction: flag('transaction'),
     expect: flag('expect'),
-  })
+    // 逐调用编码覆盖：entity 那一步在 `applyEnvelope` 里自己读字节（`readFileBytes`），
+    // 不递这个参数就只有 `AURA_ENCODING` 能救它——`--encoding` 于是成了 apply 面上一个不生效的旗标。
+    encoding: encodingFlag,
+  }
+  const op = flag('op') ?? inferApplyOp(applyRequest)
+  if (op === undefined) {
+    usage(
+      'apply 需要 --op <replace-body|rename|patch|write|convert|tx>，或可推断的字段：' +
+        '--entity（配 --change / --new-name）、--hunks、--targets、--create、--content、--to、--action，' +
+        '或平铺一组地址旗标（--target / --lines / --start-line+--end-line / --line-cue / --anchor / --handle（配 --line 或 --position）/ --old，外加 --replace）',
+    )
+  }
+  if ((op === 'replace-body' || op === 'rename') && (typeof file !== 'string' || typeof entity === 'undefined')) {
+    usage(`${op} 需要 --file 与 --entity`)
+  }
+  if ((op === 'write' || op === 'convert') && typeof file !== 'string') usage(`${op} 需要 --file`)
+  if (op === 'patch' && typeof file !== 'string' && targets === undefined) usage('patch 需要 --file 或 --targets')
+  const env = await applyEnvelope(provider, { ...applyRequest, op })
   emit(env, env.ok ? 0 : 2)
 }
 

@@ -82,6 +82,11 @@ const MCP_ONLY = {
   aura_basetools_edit: ['encoding', 'transaction', 'verify'],
   aura_basetools_write: ['encoding', 'transaction', 'verify'],
   aura_basetools_read: ['encoding'],
+  // 同一条决定的实体优先名版本（1.0.3 把 `encoding` 声明上了 apply 顶层，理由与上面一字不差）。
+  // `repair_double_encoding` 也从 DSH 的 apply 名单**删掉**了（`aura-edit/index.js:463`）：
+  // 那一面的 convert 走 `ctx.fs` + `TextDecoder`，从没读过这个键。删声明而不是删功能——
+  // 留着就是"参数面收下一个开关、运行期永远不读"，本仓对这类键的处置一律回到大声拒绝。
+  aura_basetools_apply: ['encoding', 'repair_double_encoding'],
 }
 
 const dsh = [...(await dshTools('src/aura-read/index.js')), ...(await dshTools('src/aura-edit/index.js'))]

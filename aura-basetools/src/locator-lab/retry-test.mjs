@@ -131,6 +131,35 @@ say('=== 6. 预检优先 ===')
   check(refused?.ok === false && code(refused) === 'PATCH_STRUCTURE_BROKEN', 'R19 retry 也过不了结构预检', JSON.stringify({ ok: refused?.ok, code: code(refused) }))
 }
 
+// ── 7. 公开面（apply）：交付覆盖闸与 retry 的接口 ──────────────────────
+/**
+ * 上面每一节都走 `edit`——那一面不传 `require_delivered`，所以交付覆盖闸根本不在场上。
+ * 1.0.2 把这条闸挂到公开写面（apply）之后，"`retry` 换坐标、闸门认句柄/断言当证据"这条接口
+ * 就没人量过：实测 `apply` + 句柄 + `retry` 吃了 `PATCH_UNSEEN_REGION`（重定位把句柄换成了
+ * 裸行号，证据跟着丢了），而 `edit` 面同一件事是绿的（R10）——**恢复手段比不用它更坏**。
+ * 这两条臂钉的就是那个接口：形状与上面一致，只把入口换成对外那一个。
+ */
+say('')
+say('=== 7. apply 面：retry 带着证据过覆盖闸 ===')
+{
+  const p = file('r7.txt', BODY)
+  const r = run(['read', '--file', p, '--mode', 'lines', '--lines', '2,2'])
+  fs.writeFileSync(p, 'LEAD\n' + BODY)
+  const byHandle = run(['apply', '--file', p, '--handle', r?.handle, '--replace', 'BRAVO', '--retry'])
+  check(byHandle?.ok === true, 'R20 apply：句柄 + retry 不落 PATCH_UNSEEN_REGION', JSON.stringify({ ok: byHandle?.ok, code: code(byHandle), error: byHandle?.error }))
+  check(disk(p).split('\n')[2] === 'BRAVO', 'R21 apply：句柄 + retry 落点仍是搬家里的原文那一行', disk(p))
+
+  const p2 = file('r7b.txt', BODY)
+  run(['read', '--file', p2, '--mode', 'full'])
+  fs.writeFileSync(p2, 'LEAD\n' + BODY)
+  // 公开面纯行号地址必须带 `expect`（`PATCH_LINES_NEED_EXPECT`，1.0.2）——上面 `edit` 面那条臂
+  // 不带是因为那一面没有这条闸；这里带上，量的才是"重定位 + 覆盖闸"这条接口。
+  const byLines = run(['apply', '--file', p2, '--lines', '2', '--expect', 'bravo', '--replace', 'BRAVO', '--retry'])
+  check(byLines?.ok === true, 'R22 apply：行号 + retry 同样成功', JSON.stringify({ ok: byLines?.ok, code: code(byLines), error: byLines?.error }))
+  check(JSON.stringify(byLines?.result?.rebased) === JSON.stringify([{ from: [2, 2], to: [3, 3] }]), 'R23 apply 的 rebased 与 edit 面同形', JSON.stringify(byLines?.result?.rebased))
+  check(disk(p2).split('\n')[2] === 'BRAVO', 'R24 apply：行号 + retry 落点正确', disk(p2))
+}
+
 say('')
 say(`--- ${pass} 通过 / ${fail} 失败 ---`)
 fs.rmSync(tmp, { recursive: true, force: true })

@@ -72,6 +72,69 @@ export const SUPPORTED_ENCODINGS = [
 /** 不支持“回编码”的编码（Node 能解码，但这里不建表）：UTF-32 只读。 */
 const READ_ONLY_ENCODINGS = new Set(['utf-32le', 'utf-32be'])
 
+/**
+ * 调用方写的编码名 → {@link SUPPORTED_ENCODINGS} 里的规范名。
+ *
+ * 这些别名是**真实在用的写法**（GBK/GB2312 是 Windows 中文环境里 `encoding` 的默认叫法，
+ * `utf8` 是 Node 的写法），不是测试里造的字符串。
+ */
+export const ENCODING_ALIASES = {
+  utf8: 'utf-8',
+  gbk: 'gb18030',
+  gb2312: 'gb18030',
+  cp936: 'gb18030',
+  latin1: 'windows-1252',
+  'iso-8859-1': 'windows-1252',
+  utf16le: 'utf-16le',
+  utf16be: 'utf-16be',
+  sjis: 'shift_jis',
+  'shift-jis': 'shift_jis',
+  cp1251: 'windows-1251',
+  cp1252: 'windows-1252',
+}
+
+/** 规范名；不是字符串则 null（调用方自己决定“没给”还是“给错”）。 */
+export function normalizeEncodingName(name) {
+  if (typeof name !== 'string') return null
+  const lower = name.trim().toLowerCase()
+  return ENCODING_ALIASES[lower] ?? lower
+}
+
+/** 认得的编码名：能读能写的那份 + 只读的 UTF-32（写回另有一道 `ENCODING_NOT_ROUNDTRIP_SAFE`）。 */
+const KNOWN_ENCODING_NAMES = new Set([...SUPPORTED_ENCODINGS, ...READ_ONLY_ENCODINGS])
+
+/** 这个名字在不在词表里（别名先折算）。记忆库读写两侧都用它，判据只有一份。 */
+export function isKnownEncodingName(name) {
+  const normalized = normalizeEncodingName(name)
+  return normalized !== null && KNOWN_ENCODING_NAMES.has(normalized)
+}
+
+/**
+ * 编码名必须落在这张表里，否则**大声拒绝**——这是唯一的入口判据。
+ *
+ * 为什么判在探测之前（而不是让下游报错）：`hint` 不是“可以忽略的偏好”，它是调用方对
+ * 这份字节的主张。放一个不存在的名字过去，`new TextDecoder('x')` 抛 Node 的
+ * `ERR_ENCODING_NOT_SUPPORTED`，而读路径的 catch 把任何解码失败都翻成
+ * “这个文件不是 UTF-8 文本”——**报错把人推向错的方向**（该改的是参数，文案却让你去 `from`/op=convert）。
+ * 更坏的一半：这个名字会按路径 `rememberEncoding` 记下来，于是**同一个文件后面的每一次调用**
+ * 都坏，连没带 `encoding` 的调用也坏，坏因看不见（2026-10-30 由 C2 探针实测）。
+ *
+ * @param name - 调用方给的编码名（别名可以）
+ * @param where - 回执里点名的参数（`encoding` / `from` / `AURA_ENCODING`）
+ * @returns 规范名
+ * @throws {{code:'ENCODING_UNSUPPORTED'}} 词表不在表里
+ */
+export function assertEncodingName(name, where = 'encoding') {
+  const normalized = normalizeEncodingName(name)
+  if (normalized !== null && KNOWN_ENCODING_NAMES.has(normalized)) return normalized
+  throw Object.assign(
+    new Error(
+      `${where}=${JSON.stringify(name)} is not an encoding this tool knows. Supported: ${SUPPORTED_ENCODINGS.join(', ')} (aliases: ${Object.keys(ENCODING_ALIASES).join(', ')}). Nothing was read with it.`,
+    ),
+    { code: 'ENCODING_UNSUPPORTED', encoding: name },
+  )
+}
+
 const decoderCache = new Map()
 function decoderFor(encoding) {
   if (!decoderCache.has(encoding)) decoderCache.set(encoding, new TextDecoder(encoding))
@@ -302,8 +365,7 @@ const TRADITIONAL_ONLY = new Set('這個說國為時學過對給發經現點邊�
  */
 export function probeEncoding(buffer, { hint } = {}) {
   if (typeof hint === 'string' && hint.length > 0) {
-    const normalized = hint.toLowerCase()
-    const encoding = normalized === 'latin1' || normalized === 'iso-8859-1' ? 'windows-1252' : normalized
+    const encoding = assertEncodingName(hint)
     const bom = bomOf(buffer)
     return {
       encoding,

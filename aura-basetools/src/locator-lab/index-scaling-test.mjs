@@ -418,11 +418,11 @@ check(
 say('')
 say('[段E] 进闸登记与退出码接线')
 const gateSrc = fs.readFileSync(GATE, 'utf8')
-const registration = /\[\s*'[^']*'\s*,\s*'src\/locator-lab\/index-scaling-test\.mjs'\s*\]/
+const registration = /\[\s*'[^']*'\s*,\s*'src\/locator-lab\/index-scaling-test\.mjs'\s*,\s*\d+\s*\]/
 check(
   registration.test(gateSrc),
-  '段E 本套件登记在 `build/release-check.mjs` 的 `SUITES` 里（按登记行形态匹配，不靠文件名）',
-  `${path.relative(ROOT, GATE)} 里有 ['…', 'src/locator-lab/index-scaling-test.mjs']`,
+  '段E 本套件登记在 `build/release-check.mjs` 的 `SUITES` 里且带条数基线（按登记行形态匹配，不靠文件名）',
+  `${path.relative(ROOT, GATE)} 里的登记行没有第三格数字，或形状不对`,
 )
 const selfSrc = fs.readFileSync(SELF, 'utf8')
 check(

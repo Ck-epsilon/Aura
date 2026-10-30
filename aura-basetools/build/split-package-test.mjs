@@ -13,8 +13,11 @@
  * 证明不了第②条——那正是"文件在 ≠ 能加载"那一类假绿。
  *
  * 判据分段：
- *   A 产物与新鲜度：版本、核心是否是组合产物的忠实子集、DSH 壳 = 源 + 规定改写
- *   B 安装与边界：两个 tgz 离线装成功；核心不含 DSH 面，适配器不含 CLI/引擎
+ *   A 产物与新鲜度：版本、核心是否是组合产物的忠实子集、DSH 壳 = 源 + 规定改写；
+ *     非代码随包文件（README / LICENSE / THIRD-PARTY-NOTICES）也必须有**来源** ——
+ *     它们不在 `runtimePairs()` 里，旧版对"改了模板/根文件没重建"是瞎的
+ *   B 安装与边界：两个 tgz 离线装成功；核心不含 DSH 面，适配器不含 CLI/引擎；
+ *     装出来的字节不许用高于 `engines.node` 下限的 Node API（本机跑 24 证明不了 18 能起）
  *   C 从装出来的核心真用：CLI read/edit、MCP 往返、文档里的 npx 形式
  *   D 适配器：每个 `aura-basetools/` 导入都解析到核心包；有宿主 peer 时再真 import
  *
@@ -201,6 +204,35 @@ for (const [name] of SHELLS) {
   check(hooksReadme.includes('dsh/argv-shell.mjs'), '适配器 README 说明了钩子执行器的安装副本路径')
 }
 
+// A（续）非代码随包文件也必须有**来源**。
+//
+// README / LICENSE / THIRD-PARTY-NOTICES 是随包发货的字节，但都不在 `runtimePairs()`
+// （那份清单只覆盖运行时 .mjs，见 bundle-layout.mjs）—— 改模板或改根 LICENSE 后不重建，
+// 旧字节会照样进包，而 §④（src↔dist）与上面的逐字节比对都看不见它们。
+// 这和 runtimePairs 曾漏 5 个已发文件是同一课，只是挪到了非代码文件上：
+//   · README = docs/ 模板 + 版本替换（原文替换规则在 make-split-packages.mjs）；
+//   · THIRD-PARTY-NOTICES = 根目录那份的逐字副本（BSD-3-Clause 要求全文保留，不许停在旧版）；
+//   · LICENSE 正文 = 根目录那份，只许版权行按 AURA_AUTHOR 变（那条改写是设计好的，
+//     所以比对前先把版权行遮成同一个占位符 —— 不依赖本机构建时的环境变量）。
+{
+  const sourceText = (base, rel) => fs.readFileSync(path.join(base, rel), 'utf8')
+  const expectedCoreReadme = sourceText(root, 'docs/README.npm-core.md').replaceAll('{{VERSION}}', version)
+  check(sourceText(coreDir, 'README.md') === expectedCoreReadme, '核心包 README = docs/README.npm-core.md + 版本替换（模板改了没重建 ⇒ 红）')
+  const expectedDshReadme = sourceText(root, 'docs/README.npm-dsh.md').replaceAll('{{VERSION}}', version)
+  check(sourceText(dshDir, 'README.md') === expectedDshReadme, '适配器 README = docs/README.npm-dsh.md + 版本替换（模板改了没重建 ⇒ 红）')
+  check(
+    sourceText(coreDir, 'THIRD-PARTY-NOTICES.md') === sourceText(root, 'THIRD-PARTY-NOTICES.md'),
+    '核心包 THIRD-PARTY-NOTICES 与根目录那份逐字节一致（第三方声明停在旧版 = 合规缺口）',
+  )
+  const maskCopyright = (license) => license.replace(/^Copyright \(c\) 2026 .*$/m, 'Copyright (c) 2026 <holder>')
+  const coreLicense = sourceText(coreDir, 'LICENSE')
+  check(
+    maskCopyright(coreLicense) === maskCopyright(sourceText(root, 'LICENSE')),
+    '核心包 LICENSE 正文与根目录那份逐字节一致（只许版权行按 AURA_AUTHOR 变）',
+  )
+  check(sourceText(dshDir, 'LICENSE') === coreLicense, '两个包随附同一份 LICENSE')
+}
+
 // 发布元数据政策：接受环境变量传入的地址，或**已知的官方 Aura 仓库/作者**；
 // 不接受为了“看起来像发布”而临时编造的第三方地址。
 {
@@ -230,6 +262,50 @@ for (const [name] of SHELLS) {
   }
   for (const sub of ['bin', 'lib', 'locator-lab', 'test']) scan(path.join(coreDir, sub))
   check(offenders.length === 0, '核心运行时没有任何 @deepseek-ai import', offenders.join(','))
+}
+
+// B（续）声明下限要经得起**装出来的字节**。
+//
+// 包声明 `engines.node: >=18`，而闸跑在开发机的 Node（这里 24）—— 本机全绿证明不了 18 能起。
+// CI 的 node 18/20 smoke 只走 bin → lib → 引擎那条 import 链，**覆盖不到随包发的 test/**
+// （`doctor-test.mjs` 用 `import.meta.dirname`（Node 20.11+）就是这么漏出去的：装到 Node 18 上
+// 一 import 就 TypeError）。这里静态扫装出来的每个 .mjs/.js：
+//   · 表只收**名字唯一、引入版本明确**的 API —— 不是完整清单，新 API 抓不到（边界就这一句）；
+//   · 命中且声明下限 < 引入版本 ⇒ 红，并点名文件、API 与引入版本；
+//   · 下限写不清（没声明/认不出）⇒ 也红：量不出下限就量不出"越限"。
+// 注释里提到这些名字同样会命中：宁可多报一格，也不要漏掉真实调用。
+{
+  const floorOf = (range) => {
+    const m = typeof range === 'string' ? range.match(/^\s*>=\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?/) : null
+    return m === null ? null : [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)]
+  }
+  const NEWER_APIS = [
+    ['import.meta.dirname / import.meta.filename', [20, 11, 0], /import\.meta\.(?:dirname|filename)\b/],
+    ['Array.prototype.toSorted / toReversed', [20, 0, 0], /\.(?:toSorted|toReversed)\s*\(/],
+    ['String.prototype.isWellFormed / toWellFormed', [20, 0, 0], /\.(?:isWellFormed|toWellFormed)\s*\(/],
+    ['Object.groupBy / Map.groupBy', [21, 0, 0], /\b(?:Object|Map)\.groupBy\s*\(/],
+    ['Promise.withResolvers', [22, 0, 0], /\bPromise\.withResolvers\b/],
+    ['Array.fromAsync', [22, 0, 0], /\bArray\.fromAsync\b/],
+    ['process.getBuiltinModule', [22, 3, 0], /\bprocess\.getBuiltinModule\b/],
+    ['RegExp.escape', [24, 0, 0], /\bRegExp\.escape\b/],
+    ['Error.isError', [24, 0, 0], /\bError\.isError\b/],
+  ]
+  const below = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
+  const floor = floorOf(corePkg.engines?.node)
+  const offenders = []
+  for (const [label, dir] of [['核心包', coreDir], ['适配器包', dshDir]]) {
+    for (const rel of relFiles(dir)) {
+      if (!rel.endsWith('.mjs') && !rel.endsWith('.js')) continue
+      const source = fs.readFileSync(path.join(dir, rel), 'utf8')
+      for (const [api, introduced, pattern] of NEWER_APIS) {
+        if (floor !== null && below(floor, introduced) < 0 && pattern.test(source)) {
+          offenders.push(`${label} ${rel} 用 ${api}（Node ${introduced.join('.')}+）`)
+        }
+      }
+    }
+  }
+  check(floor !== null, `核心包声明了可解析的 engines.node 下限（${corePkg.engines?.node ?? '(未声明)'}）`, '下限写不清 ⇒ 下半条无法判定')
+  check(floor !== null && offenders.length === 0, `装出来的两包没有越过声明下限 ${floor === null ? '（认不出）' : `Node ${floor.join('.')}`} 的 API`, offenders.join('；'))
 }
 
 say('C. 从装出来的核心真用：CLI / MCP / npx')

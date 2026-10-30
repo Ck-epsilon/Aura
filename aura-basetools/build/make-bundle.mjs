@@ -17,8 +17,8 @@
  *
  * 产出是**派生物**：`dist/` 由本脚本生成，不要手改；改源再重跑。
  *
- *   node build/make-bundle.mjs            # 只生成 dist/aura-basetools/
- *   node build/make-bundle.mjs --pack     # 再派生 dist/npm 双包 + capabilities.json
+ *   node build/make-bundle.mjs            # 生成 dist/aura-basetools/ 并刷新 capabilities.json
+ *   node build/make-bundle.mjs --pack     # 再派生 dist/npm 双包
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -143,12 +143,15 @@ const total = copied.reduce((sum, item) => sum + item.bytes, 0)
 console.log(`生成 ${path.relative(root, out)}  （${copied.length} 个文件，${(total / 1024).toFixed(1)} KB，version=${version}）`)
 for (const c of copied) console.log(`  ${String(c.bytes).padStart(7)}  ${c.file}`)
 
+// 能力清单从**这一份**构建产物派生：语言表/地址档/限制全部读源码导出，不手抄。
+// 不挂在 --pack 上：分两条命令重建时（`make-bundle` + `make-split-packages --pack`）它会停在
+// 上一版字节上，而落盘这份才是消费方读的表——实测删掉 `views` 之后这样重建，旧表原样还在。
+console.log('\n—— 能力清单 ——')
+execFileSync(process.execPath, [path.join(root, 'build', 'capabilities.mjs'), '--write'], { cwd: root, stdio: 'inherit' })
+
 if (process.argv.includes('--pack')) {
   // 拆包产物从**刚打好的这份**派生。分成两条命令时，`dist/npm` 会静默停在旧字节上
   // （与 manifest 陈旧同形：包看起来叫 0.7.0，里面是上一版）。一条重建命令 = 一份完整产物。
   console.log('\n—— 由组合产物派生 npm 双包 ——')
   execFileSync(process.execPath, [path.join(root, 'build', 'make-split-packages.mjs'), '--pack'], { cwd: root, stdio: 'inherit' })
-  // 能力清单也从同一份构建产物派生：语言表/地址档/限制全部读源码导出，不手抄。
-  console.log('\n—— 能力清单 ——')
-  execFileSync(process.execPath, [path.join(root, 'build', 'capabilities.mjs'), '--write'], { cwd: root, stdio: 'inherit' })
 }

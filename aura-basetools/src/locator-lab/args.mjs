@@ -129,22 +129,6 @@ export function normalizeReadRequest(args, totalLines = undefined) {
 export const FLAT_ADDRESS_KEYS = ['target', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'handle', 'old', 'structure']
 
 /**
- * `targets` 元素（单目标参数）的合法键。
- *
- * 与顶层工具键**分开**：`targets` 本身不是元素参数；
- * 放进元素里只会被静默丢掉。三面（CLI / MCP / DSH）共用这一份，未知键一律
- * `ARGS_UNKNOWN_KEY`，不再只校验顶层。
- */
-export const MT_READ_ELEMENT_KEYS = [
-  'file_path', 'mode', 'around', 'lines', 'start_line', 'end_line', 'search', 'context', 'since', 'kind', 'budget', 'max_chars', 'offset', 'limit',
-]
-export const MT_EDIT_ELEMENT_KEYS = [
-  'file_path', 'hunks', 'create', 'dry_run', 'require_observation',
-  'target', 'lines', 'start_line', 'end_line', 'line_cue', 'anchor', 'old', 'context',
-  'replace', 'replace_all', 'eol', 'expect', 'near', 'handle', 'line', 'position',
-]
-
-/**
  * 句柄形状的**从属键**（fs-contract-v2 / HD2）：它们只在 `handle` 在场时有意义，
  * 因此**不算地址键**（单给一个 `line` / `position` 不构成一次编辑），但平铺时必须被带上。
  *
@@ -157,6 +141,34 @@ export const MT_EDIT_ELEMENT_KEYS = [
  * 因为入口不止一个（数组形 / 平铺形 / CLI / MCP），每个入口各自兜住就是两份判据。
  */
 export const HANDLE_SHAPE_KEYS = ['line', 'position']
+
+/**
+ * `targets` 元素（单目标参数）的合法键。
+ *
+ * 与顶层工具键**分开**：`targets` 本身不是元素参数；
+ * 放进元素里只会被静默丢掉。三面（CLI / MCP / DSH）共用这一份，未知键一律
+ * `ARGS_UNKNOWN_KEY`，不再只校验顶层。
+ *
+ * ## 写侧这份是**推出来的**，不是抄的（2026-10-30）
+ *
+ * 元素执行路径（`hunksOfEditElement` → `flatHunk`）认的地址键与句柄从属键就是
+ * {@link FLAT_ADDRESS_KEYS} / {@link HANDLE_SHAPE_KEYS} 那两个导出名，两边必须逐字相等。
+ * 手抄过一次就必然漏：`structure` 在 `FLAT_ADDRESS_KEYS` 里有、在旧元素名单里没有，
+ * 于是 `{targets:[{file_path, structure, replace}]}` 被守卫拒掉，而同一个载荷写在顶层能执行
+ * ——那正是"参数面收下一个形状、运行期永远走不到"的镜像形状。
+ *
+ * 读侧**故意不等于**顶层声明：`entity` / `coverage` / `encoding` 这些键多目标路径不读，
+ * 放进名单只会把"大声拒绝"换成"静默丢掉"。目录级地图同理，见 `MT_TARGET_IS_DIRECTORY`。
+ */
+export const MT_READ_ELEMENT_KEYS = [
+  'file_path', 'mode', 'around', 'lines', 'start_line', 'end_line', 'search', 'context', 'since', 'kind', 'budget', 'max_chars', 'offset', 'limit',
+]
+export const MT_EDIT_ELEMENT_KEYS = [
+  'file_path', 'hunks', 'create', 'dry_run', 'require_observation', 'context',
+  'replace', 'replace_all', 'eol', 'expect', 'near',
+  ...FLAT_ADDRESS_KEYS,
+  ...HANDLE_SHAPE_KEYS,
+]
 
 /**
  * 句柄参数的**形状守卫**（参数面）：非空字符串、且匹配 `HANDLE_RE` 才算成形。

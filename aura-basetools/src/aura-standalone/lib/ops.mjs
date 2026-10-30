@@ -10,13 +10,14 @@
  * （`flatHunk` 也从这里出去），于是「引擎在哪」这个问题在整棵树里只有一个答案。
  */
 import fs from 'node:fs'
+import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createNodeFsProvider, DEFAULT_MAX_TEXT_BYTES } from './fs-provider.mjs'
 import { withWorkspaceLock } from './workspace-lock.mjs'
 import { createTransaction, getTransactionMeta, openTransaction } from './transaction-store.mjs'
 import { createDiskStore } from './observation-store.mjs'
-import { probeEncoding, decodeBytes, encodeText, SUPPORTED_ENCODINGS, detectDoubleEncoding, repairDoubleEncoding as repairDoubleEncodedText } from './encoding.mjs'
+import { probeEncoding, decodeBytes, encodeText, SUPPORTED_ENCODINGS, detectDoubleEncoding, repairDoubleEncoding as repairDoubleEncodedText, normalizeEncodingName, isKnownEncodingName } from './encoding.mjs'
 import { recallEncoding, rememberEncoding } from './encoding-memory.mjs'
 import { refineWithDirectory } from './encoding-context.mjs'
 
@@ -97,10 +98,14 @@ export function capabilitiesEnvelope() {
   return {
     tools: [
       {
+        // `views` 名单删了（1.0.3）：它把 `entity`/`grep`/`image` 与八个模式平铺在一张表里，
+        // 读起来像 `mode` 的取值，而三个都不在 enum 里——照它发 `mode:"grep"` 的判决是
+        // `READ_BAD_MODE`（实测：三条全拒）。这三条能力本来就在对外描述里写对了：
+        // `SERVER_INSTRUCTIONS` 那句（`entity` 参数 / 目录 + `search` / 图片路径）与 `search` 的字段描述。
+        // 能力词表只留 `modes` 一份，而且由引擎的 `MODES` 导出——没人再手抄第二份。
         name: 'aura_basetools_read',
         modes: ['auto', ...readCore.MODES],
         reads: ['text', 'directory', 'image'],
-        views: ['map', 'digest', 'full', 'around', 'lines', 'search', 'changed', 'probe', 'entity', 'grep', 'image'],
       },
       {
         name: 'aura_basetools_apply',
@@ -301,28 +306,10 @@ export function diagnoseEnvelope(provider, { file, encoding } = {}) {
   }
 }
 
-const CONVERT_ALIASES = {
-  utf8: 'utf-8',
-  gbk: 'gb18030',
-  gb2312: 'gb18030',
-  latin1: 'windows-1252',
-  'iso-8859-1': 'windows-1252',
-  utf16le: 'utf-16le',
-  utf16be: 'utf-16be',
-  sjis: 'shift_jis',
-  'shift-jis': 'shift_jis',
-  cp1251: 'windows-1251',
-  cp1252: 'windows-1252',
-}
 const BOM_BYTES_BY_ENCODING = {
   'utf-8': [0xef, 0xbb, 0xbf],
   'utf-16le': [0xff, 0xfe],
   'utf-16be': [0xfe, 0xff],
-}
-const normalizeEncodingName = (name) => {
-  if (typeof name !== 'string') return null
-  const lower = name.trim().toLowerCase()
-  return CONVERT_ALIASES[lower] ?? lower
 }
 
 /**
@@ -337,7 +324,7 @@ export async function convertEnvelope(provider, { file, to, from, bom = 'keep', 
   }
   const target = normalizeEncodingName(to)
   if (target === null || !SUPPORTED_ENCODINGS.includes(target)) {
-    return { ok: false, error: `unsupported target encoding ${JSON.stringify(to)}`, code: 'CONVERT_BAD_ARGS' }
+    return { ok: false, error: `unsupported target encoding ${JSON.stringify(to)} — this tool writes: ${SUPPORTED_ENCODINGS.join(', ')}`, code: 'CONVERT_BAD_ARGS' }
   }
   if (!['keep', 'yes', 'no'].includes(bom)) return { ok: false, error: 'convert `bom` must be keep, yes, or no', code: 'CONVERT_BAD_ARGS' }
   if (!['keep', 'lf', 'crlf'].includes(eol)) return { ok: false, error: 'convert `eol` must be keep, lf, or crlf', code: 'CONVERT_BAD_ARGS' }
@@ -353,10 +340,14 @@ export async function convertEnvelope(provider, { file, to, from, bom = 'keep', 
    * 探测在单字节编码上会猜错还报 high（实测：windows-1251 的俄文被判成 windows-1252 high），
    * 于是"猜错的编码"会直接变成"写坏的盘"。UTF-8 与带 BOM 的 UTF-16 由字节本身锚定，可以省。
    */
-  const sourceEncoding = from === undefined || from === null ? null : normalizeEncodingName(from)
-  if (from !== undefined && from !== null && sourceEncoding === null) {
-    return { ok: false, error: `unsupported source encoding ${JSON.stringify(from)}`, code: 'CONVERT_BAD_ARGS' }
+  /**
+   * `from` 也走同一张词表（与 `to` 一个判据）：以前只挡“不是字符串”，一个拼错的字符串
+   * 会一路走到解码、再以“这个文件不是 UTF-8 文本”的名义回来——把参数错说成文件错。
+   */
+  if (from !== undefined && from !== null && !isKnownEncodingName(from)) {
+    return { ok: false, error: `unsupported source encoding ${JSON.stringify(from)} — this tool reads: ${SUPPORTED_ENCODINGS.join(', ')}`, code: 'CONVERT_BAD_ARGS' }
   }
+  const sourceEncoding = from === undefined || from === null ? null : normalizeEncodingName(from)
   const got = readFileBytes(displayPath, { encoding: sourceEncoding ?? undefined })
   if (got.error !== undefined) return got.error
   if (sourceEncoding === null) {
@@ -461,6 +452,54 @@ export function installDiskObservations() {
   }
   setObservationStore(createDiskStore())
   installed = true
+}
+
+/**
+ * 工作区根的唯一解析口径：显式 `--cwd` > `AURA_ROOT` > 进程 cwd。
+ *
+ * 为什么单独成函数、并且只有一份：接错根的症状是"能连上、工具也能跑，只是读写落在别的目录"，
+ * 而人要看的是"这台宿主现在把相对路径解析到哪儿、是谁钉的"。优先级在服务面、CLI 面和诊断面各写一遍，
+ * doctor 就能报一个另外两面不会用的根——那比没有诊断更糟。三面共调这一个函数，
+ * 读数**必然**一致（`doctor-test` 拿子进程 `initialize.instructions` 里的根对账，量的就是这条）。
+ *
+ * @param rootOverride - 显式钉根（非串/空串按未给处理）
+ * @returns {{root: string, source: ('--cwd'|'AURA_ROOT'|'process.cwd')}} `root` 一定是绝对路径
+ */
+export function workspaceRootPin(rootOverride) {
+  if (typeof rootOverride === 'string' && rootOverride.length > 0) return { root: path.resolve(rootOverride), source: '--cwd' }
+  const fromEnv = process.env.AURA_ROOT
+  if (typeof fromEnv === 'string' && fromEnv.length > 0) return { root: path.resolve(fromEnv), source: 'AURA_ROOT' }
+  return { root: path.resolve(process.cwd()), source: 'process.cwd' }
+}
+
+/**
+ * 把服务根写进 `initialize.instructions` 的尾部一行。
+ *
+ * 为什么放这儿而不是新开工具：这是 MCP 标准里服务端唯一能主动递提示的位置（见 `aura-mcp.mjs`
+ * 顶部注释），而"接错根"正是只有连上之后才暴露的那一类——第一眼能看见的地方就该有它。
+ *
+ * @param base - 原 `SERVER_INSTRUCTIONS`
+ * @param pin - {@link workspaceRootPin} 的产出
+ * @returns {string}
+ */
+export function instructionsWithRoot(base, pin) {
+  return `${base}\nWorkspace root for relative paths: ${pin.root} (pinned by ${pin.source}). Not the project you are working on? Wire it per host: \`AURA_ROOT=<dir>\` or \`aura basetools mcp --cwd <dir>\`.`
+}
+
+/**
+ * {@link instructionsWithRoot} 那一行的**反向**读法，与它写在一起（改格式时两段必然同时进视野）。
+ *
+ * 谁用它：`doctor`。它把自己算出的根递进子进程的 `AURA_ROOT`，再从子进程 `initialize` 的
+ * instructions 里读回这一行——读回来的根等于算出来的根，才证明这个旋钮是**接在引擎上的**，
+ * 不是文档里的装饰。解析不出来（返回 null）就是红，格式漂了当场暴露。
+ *
+ * @param text - `initialize.result.instructions` 全文
+ * @returns {{root: string, source: string}|null}
+ */
+export function parsePinnedRootFromInstructions(text) {
+  const line = /^Workspace root for relative paths: ([\s\S]*?) \(pinned by (.+?)\)\. Not the project/m.exec(String(text ?? ''))
+  if (line === null) return null
+  return { root: line[1], source: line[2] }
 }
 
 export function openProvider(resolveRoot, options = {}) {
@@ -986,14 +1025,20 @@ export async function editEnvelope(provider, request) {
 /**
  * `apply` 的操作推断（唯一一份）：显式 op 优先；否则按在场字段判定。
  * 语句顺序即优先级；新增操作时只改这里。
+ *
+ * 导出是为了让那句“唯一一份”成立：CLI 面原先自己抄了一遍同样的 if 链，而且**顺序不一样**
+ * （它把 `content` 排在 `to`/`action` 前面），于是 `--content X --to Y` 在 CLI 推成 write、
+ * 在 MCP 推成 convert。入参读的是**引擎请求形状**（驼峰：`newName`），不是调用方拼写——
+ * 读 `new_name` 的那一版永远匹配不上任何面递下来的值，`{entity, new_name}` 静默推成
+ * replace-body（回执是 `replace-body needs \`change\``，2026-10-30 实测）。
  */
-function inferApplyOp(args) {
+export function inferApplyOp(args) {
   if (typeof args.action === 'string') return 'tx'
   if (typeof args.to === 'string') return 'convert'
   if (typeof args.content === 'string') return 'write'
   if (Array.isArray(args.targets)) return 'patch'
   if (Array.isArray(args.hunks) || typeof args.create === 'string') return 'patch'
-  if (args.entity !== undefined && typeof args.new_name === 'string') return 'rename'
+  if (args.entity !== undefined && typeof args.newName === 'string') return 'rename'
   if (args.entity !== undefined) return 'replace-body'
   return undefined
 }

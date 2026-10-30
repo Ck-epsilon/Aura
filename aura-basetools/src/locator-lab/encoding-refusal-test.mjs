@@ -451,8 +451,10 @@ say('=== 段D 登记进闸 + 退出码接线 ===')
 {
   const gateSrc = fs.readFileSync(path.join(REPO_ROOT, 'build', 'release-check.mjs'), 'utf8')
   check(
-    /\[\s*'encoding-refusal'\s*,\s*'src\/locator-lab\/encoding-refusal-test\.mjs'\s*\]/.test(gateSrc),
-    'D1 已登记进 release-check.mjs 的 SUITES（闸内**真跑**，退出码被看）',
+    // 1.0.3：登记行多了第三格（判据条数基线），所以这里的形态判据也要**要求那一格是数字**——
+    // 只认两格的话，本套件被降级成"登记了但查不出少一条"时，这一行反而还是绿的。
+    /\[\s*'encoding-refusal'\s*,\s*'src\/locator-lab\/encoding-refusal-test\.mjs'\s*,\s*\d+\s*\]/.test(gateSrc),
+    'D1 已登记进 release-check.mjs 的 SUITES（带条数基线，闸内**真跑**、退出码被看）',
   )
   check(
     !/'src\/locator-lab\/encoding-refusal-test\.mjs'[\s\S]{0,400}?ranAs:/.test(gateSrc),

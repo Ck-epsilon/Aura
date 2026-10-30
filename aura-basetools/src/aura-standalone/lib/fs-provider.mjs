@@ -27,7 +27,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { probeEncoding, decodeBytes, encodeText, writeRefusal } from './encoding.mjs'
+import { probeEncoding, decodeBytes, encodeText, writeRefusal, assertEncodingName } from './encoding.mjs'
 import { refineWithDirectory } from './encoding-context.mjs'
 import { recallEncoding, rememberEncoding } from './encoding-memory.mjs'
 
@@ -320,9 +320,17 @@ export function createNodeFsProvider(options = {}) {
     /**
      * 逐调用覆盖编码（MCP 的 `encoding` 参数）：同一进程长驻服务，不能靠环境变量。
      * 传空值 = 清掉本次覆盖，回到环境变量/记忆。
+     *
+     * **词表外的名字当场拒掉、并且不装进状态**：这里是编码面唯一的“安装”点。放一个 `x` 进去，
+     * 本次调用报的是 Node 的解码错（还会被翻成“这个文件不是 UTF-8”），而**下一次不带
+     * `encoding` 的调用**继续沿用这份脏状态——报错的调用与被报错的调用对不上号（2026-10-30 实测）。
      */
     setEncodingHint(hint) {
-      encodingHint = typeof hint === 'string' && hint.length > 0 ? hint : process.env.AURA_ENCODING
+      if (typeof hint !== 'string' || hint.length === 0) {
+        encodingHint = process.env.AURA_ENCODING
+        return
+      }
+      encodingHint = assertEncodingName(hint, 'encoding')
     },
     /**
      * 可选方法：把文本编码成**这个文件将要用到的字节**（写后校验用它）。

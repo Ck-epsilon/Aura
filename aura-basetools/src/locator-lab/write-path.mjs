@@ -690,8 +690,8 @@ export function coverageGate(hunks, planned, content, displayPath, options = {})
     message:
       `cannot patch "${displayPath}": ${what}, yet the hunks replace ${where} — that would destroy text you have not seen. Nothing was written. ` +
       `\nnext: read the missing lines first: aura_basetools_read { file_path: "${displayPath}", mode: "lines", lines: [${first[0]}, ${first[1]}] } — then retry. ` +
-      `Addressing the region by content (\`old\` or \`anchor\`, which quote the text) is proof enough; ` +
-      `a deliberate whole-file overwrite can pass \`allow_unobserved: true\` (the receipt will say \`unverified_region\`).`,
+      `Addressing the region by content (\`old\` or \`anchor\`, which quote the text) is proof enough. ` +
+      `补丁这条路没有"我就想盲写"的开关：\`allow_unobserved\` 只跟着整份写入走——真要整份覆盖就换 op=write（回执会照样标 unverified_region）。`,
     extras: { undelivered, delivered, lines: gaps.map((gap) => ({ line: gap.line, endLine: gap.endLine })) },
   }
 }
@@ -3163,6 +3163,19 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
         endLine: afterEndLine,
       })
     }
+    /**
+     * 写下去的那段以**空行**收尾 ⇒ 在回执里说一声（1.0.3）。
+     *
+     * 行地址替换的是"这一行的内容"，行尾符本来就在文件里、不归这份 payload 管；payload 自己再带
+     * 一个 `\n`，落盘就是两行（实测 `replace:"X\n"` 打在 `2..2` ⇒ `alpha\nX\n\ngamma\n`，
+     * 回执 `delta:1`、句柄区间 2-3）。数字都对，但"我明明只改了一行"的人看见 2-3 会以为工具算错了。
+     *
+     * 这里不裁那个换行：**猜意图比留下空行更坏**（有人就是要插一个空行），也不拒绝（地址是准的）。
+     * 判据用写后区域自己长什么样（`regionText` 以 `\n` 收尾 ⇔ 末行是空行），与句柄/行号同一份读数。
+     */
+    if (newCount > 0 && regionText.endsWith('\n')) {
+      m.note = `the written region ends with an empty line (payload ended with a newline and the addressed line's own terminator follows it) — lines ${afterLine}-${afterEndLine}; drop the trailing "\\n" from \`replace\` to keep it a single line`
+    }
     drift += m.delta
   }
   /**
@@ -3208,6 +3221,7 @@ export function planHunks(content, hunks, filePath = null, options = {}) {
       ...(m.after === undefined ? {} : { after: m.after, afterTruncated: m.afterTruncated === true }),
       ...(m.handle === undefined ? {} : { handle: m.handle }),
       ...(m.eolAdapted === true ? { eolAdapted: true } : {}),
+      ...(m.note === undefined ? {} : { note: m.note }),
     }))
   return { matches, content: joinLinesWithEndings(out, outEndings), applied }
 }
@@ -3548,7 +3562,20 @@ function rebaseHunks(hunks, observedSource, freshContent) {
       continue
     }
     const { handle: _handle, ...rest } = hunk
-    out.push({ ...rest, lines: [newStart, newStart + span] })
+    /**
+     * 重定位的证据必须**跟着走下去**：这段原文在现内容里"整行精确且全文唯一"，
+     * 那就把它当内容断言（`expect`）带进新的 hunk。
+     *
+     * 为什么这是必需的（1.0.3 实测）：句柄在这一步被换掉（旧句柄指向搬家的坐标，留着更坏），
+     * 而交付覆盖闸认的证据是 `old`/`expect`/`anchor`/`handle` 四种——只换坐标不带断言，
+     * 一个本来能落盘的句柄编辑反而吃 `PATCH_UNSEEN_REGION`：**恢复手段比不用它更坏**。
+     * 带着 `expect` 下去还顺带把重定位的根据写进了这次调用本身，回执里的 `rebased` 说的是同一件事。
+     */
+    out.push({
+      ...rest,
+      ...(typeof rest.expect === 'string' && rest.expect.length > 0 ? {} : { expect: oldText }),
+      lines: [newStart, newStart + span],
+    })
     rebased.push({ from: [start, end], to: [newStart, newStart + span] })
     changed = true
   }

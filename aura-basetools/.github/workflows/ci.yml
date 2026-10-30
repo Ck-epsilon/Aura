@@ -31,8 +31,8 @@ jobs:
         run: node build/make-bundle.mjs --pack
       - name: Full release gate
         # The single source of truth: every suite, range fixtures, packaged suite,
-        # split-package install and consistency checks. Skipped optional suites are shown as ⏭;
-        # a skipped CRITICAL_SUITES entry fails the gate.
+        # split-package install and consistency checks. A suite may only self-skip if it is
+        # listed in SKIP_OK with a reason; every suite must hit its recorded check-count baseline.
         run: node build/release-check.mjs
 
   smoke:

@@ -176,8 +176,8 @@ node build/release-check.mjs    # exit 0
    - 破坏性变更（工具名、CLI 命名空间、默认安全语义）升 minor；纯修复升 patch。
 
 3. **新增/修改测试**
-   - 新套件必须登记到 `build/release-check.mjs` 的 `SUITES`。
-   - 安全/契约类套件同时加入 `CRITICAL_SUITES`，跳过时闸必须变红。
+   - 新套件必须登记到 `build/release-check.mjs` 的 `SUITES`，并带上**判据条数基线**（实测值）。
+   - 只有写进 `SKIP_OK`、逐条写明理由的套件才允许自跳；其余跳过按失败计。
    - 新文件必须被 CENSUS 扫到且归属明确（登记 / 闸内实跑 / 豁免理由）。
    - 先写能复现 bug 的断言，再改实现；禁止把当前错误输出写成黄金期望。
 
@@ -234,7 +234,7 @@ node build/release-check.mjs    # exit 0
 
 ### 7.3 测试与闸门
 
-- 跳过 ≠ 通过：看到 `0/0 通过（已跳过）` 时确认它在 `CRITICAL_SUITES` 之外。
+- 跳过 ≠ 通过：看到 `0/0 通过（已跳过）` 时确认它在 `SKIP_OK` 里——不在就是红的。
 - 不要为了提高读数删断言、放宽 `stale-gate` / `require-observation` / `write_verify`。
 - 契约确实变化时，更新旧断言并在提交说明里写清“为什么旧期望不再成立”；
   不要只改期望值让它变绿。
